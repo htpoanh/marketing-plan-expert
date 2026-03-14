@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { contentPlansTable, brandsTable } from "@workspace/db/schema";
+import { contentPlansTable, brandsTable, automationSettingsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
@@ -383,46 +383,112 @@ router.post("/:id/publish", async (req, res) => {
     const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
 
-    const makeWebhook = process.env.MAKE_WEBHOOK_URL;
-    let metricoolJobId: string | null = null;
+    const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, plan.brandId));
+    const [autoSettings] = await db.select().from(automationSettingsTable).where(eq(automationSettingsTable.brandId, plan.brandId));
 
-    if (makeWebhook) {
+    const mcToken = autoSettings?.metricoolToken ?? null;
+    const mcUserId = autoSettings?.metricoolAccountId ?? null;
+    const fullText = [plan.caption, plan.cta, plan.hashtags].filter(Boolean).join("\n\n");
+    let metricoolJobId: string | null = null;
+    let publishError: string | null = null;
+
+    if (mcToken && mcUserId) {
+      // ── DIRECT METRICOOL API ─────────────────────────────────────────────
       try {
-        const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, plan.brandId));
-        const fullCaption = [plan.caption, plan.hashtags].filter(Boolean).join("\n\n");
-        const resp = await fetch(makeWebhook, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "publish_to_metricool",
-            contentPlanId: plan.id,
-            brandName: brand?.brandName ?? "",
-            platform: plan.platform,
-            contentType: plan.contentType,
-            topic: plan.topic,
-            caption: fullCaption,
-            shortCaption: plan.shortCaption ?? "",
-            cta: plan.cta ?? "",
-            hashtags: plan.hashtags ?? "",
-            hook: plan.hook ?? "",
-            imagePrompt: plan.imagePrompt ?? "",
-            videoPrompt: plan.videoPrompt ?? "",
-            publishDate: plan.publishDate,
-            scheduledAt: plan.publishDate?.toISOString() ?? new Date().toISOString(),
-          }),
-        });
-        if (resp.ok) {
-          let data: any = {};
-          try { data = await resp.json(); } catch {}
-          metricoolJobId = data?.id ?? data?.jobId ?? `make_${Date.now()}`;
+        // Use scheduled publish date, or 30 min from now
+        const targetDate = plan.publishDate && plan.publishDate > new Date()
+          ? plan.publishDate
+          : new Date(Date.now() + 30 * 60 * 1000);
+        const dt = targetDate.toLocaleString("sv-SE", { timeZone: "Europe/Berlin" }).replace(" ", "T");
+
+        // Find brand profile
+        const profileRes = await fetch(
+          `https://app.metricool.com/api/v1.1/analytics/simpleProfiles?userId=${mcUserId}`,
+          { headers: { "X-Mc-Auth": mcToken } }
+        );
+        if (!profileRes.ok) throw new Error(`Metricool profile HTTP ${profileRes.status}`);
+        const profileData: any = await profileRes.json();
+        const profiles: any[] = Array.isArray(profileData) ? profileData : profileData.data ?? [];
+        let profile = profiles.find((p: any) => String(p.id) === String(mcUserId)) ?? profiles[0];
+        if (!profile) throw new Error("Không tìm thấy brand trong Metricool");
+
+        const internalBlogId = profile.id;
+        const realUserId = profile.userId ?? profile.ownerUserId ?? mcUserId;
+        const network = plan.platform.toLowerCase();
+        const networkAccounts: Record<string, any[]> = {
+          facebook: profile.facebookAccounts ?? [],
+          instagram: profile.instagramAccounts ?? [],
+          tiktok: profile.tiktokAccounts ?? [],
+        };
+        const accounts = networkAccounts[network] ?? [];
+        if (!accounts.length) throw new Error(`Không có tài khoản ${plan.platform} trong brand Metricool này`);
+
+        const providers = accounts.slice(0, 1).map((acc: any) => ({
+          network,
+          id: acc.id ?? acc.pageId ?? acc.accountId,
+        }));
+        const payload = {
+          text: fullText,
+          publicationDate: { dateTime: dt, timezone: "Europe/Berlin" },
+          providers,
+          autoPublish: true,
+        };
+        const schedRes = await fetch(
+          `https://app.metricool.com/api/v2/scheduler/posts?userId=${realUserId}&blogId=${internalBlogId}`,
+          { method: "POST", headers: { "Content-Type": "application/json", "X-Mc-Auth": mcToken }, body: JSON.stringify(payload) }
+        );
+        const schedData: any = await schedRes.json().catch(() => ({}));
+        if (schedRes.status === 201 || schedRes.ok) {
+          metricoolJobId = String(schedData?.data?.id ?? schedData?.id ?? `mc_${Date.now()}`);
         } else {
-          console.error("Make.com webhook failed:", resp.status, await resp.text());
+          throw new Error(`Metricool API ${schedRes.status}: ${JSON.stringify(schedData)}`);
         }
-      } catch (e) {
-        console.error("Make.com webhook error:", e);
+      } catch (e: any) {
+        publishError = e.message;
+        console.error("[publish] Metricool direct error:", e.message);
       }
+
     } else {
-      console.warn("MAKE_WEBHOOK_URL not set — skipping Make.com trigger");
+      // ── MAKE.COM WEBHOOK FALLBACK ────────────────────────────────────────
+      const makeWebhook = process.env.MAKE_WEBHOOK_URL;
+      if (makeWebhook) {
+        try {
+          const resp = await fetch(makeWebhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "publish_to_metricool",
+              contentPlanId: plan.id,
+              brandName: brand?.brandName ?? "",
+              platform: plan.platform,
+              contentType: plan.contentType,
+              topic: plan.topic,
+              caption: fullText,
+              shortCaption: plan.shortCaption ?? "",
+              cta: plan.cta ?? "",
+              hashtags: plan.hashtags ?? "",
+              hook: plan.hook ?? "",
+              imagePrompt: plan.imagePrompt ?? "",
+              videoPrompt: plan.videoPrompt ?? "",
+              publishDate: plan.publishDate,
+              scheduledAt: plan.publishDate?.toISOString() ?? new Date().toISOString(),
+            }),
+          });
+          if (resp.ok) {
+            let data: any = {};
+            try { data = await resp.json(); } catch {}
+            metricoolJobId = data?.id ?? data?.jobId ?? `make_${Date.now()}`;
+          } else {
+            publishError = `Make.com HTTP ${resp.status}`;
+          }
+        } catch (e: any) {
+          publishError = e.message;
+        }
+      }
+    }
+
+    if (publishError) {
+      return res.status(502).json({ error: `Đăng thất bại: ${publishError}` });
     }
 
     const [updated] = await db.update(contentPlansTable)

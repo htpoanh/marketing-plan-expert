@@ -7,8 +7,10 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Check, X, CheckSquare, Eye, MessageSquareWarning } from "lucide-react";
+import { Check, X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 export default function ApprovalDashboard() {
   const { data: plans, isLoading } = useListContentPlans({ status: 'review' });
@@ -17,15 +19,7 @@ export default function ApprovalDashboard() {
 
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-
-  const approveMutation = useApproveContentPlan({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListContentPlansQueryKey({ status: 'review' }) });
-        toast({ title: "Đã duyệt", description: "Bài đăng đã được chuyển sang trạng thái chờ lên lịch." });
-      }
-    }
-  });
+  const [publishingId, setPublishingId] = useState<number | null>(null);
 
   const rejectMutation = useRejectContentPlan({
     mutation: {
@@ -45,6 +39,46 @@ export default function ApprovalDashboard() {
     }
   };
 
+  // Approve + Publish to Metricool in one step
+  const handleApproveAndPublish = async (planId: number) => {
+    setPublishingId(planId);
+    try {
+      // Step 1: Approve
+      const approveRes = await fetch(`${BASE}/api/content-plans/${planId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!approveRes.ok) {
+        const err = await approveRes.json().catch(() => ({}));
+        throw new Error(err.error ?? `Approve thất bại HTTP ${approveRes.status}`);
+      }
+
+      // Step 2: Publish to Metricool
+      const pubRes = await fetch(`${BASE}/api/content-plans/${planId}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const pubData = await pubRes.json().catch(() => ({}));
+      if (!pubRes.ok) {
+        throw new Error(pubData.error ?? `Đăng thất bại HTTP ${pubRes.status}`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: getListContentPlansQueryKey({ status: 'review' }) });
+      toast({
+        title: "✅ Đã duyệt & Đăng lên Metricool",
+        description: `Bài đăng #${planId} đã được lên lịch thành công.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "❌ Đăng thất bại",
+        description: e.message,
+        variant: "destructive",
+      });
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-8">
@@ -53,7 +87,9 @@ export default function ApprovalDashboard() {
             <CheckSquare className="w-8 h-8 text-emerald-400" />
             Phê duyệt Nội dung
           </h1>
-          <p className="mt-2 text-muted-foreground">Kiểm duyệt các bài đăng do AI tạo trước khi xuất bản.</p>
+          <p className="mt-2 text-muted-foreground">
+            Kiểm duyệt các bài đăng do AI tạo trước khi xuất bản lên Metricool.
+          </p>
         </div>
 
         {isLoading ? (
@@ -114,18 +150,26 @@ export default function ApprovalDashboard() {
                   ) : (
                     <>
                       <button 
-                        onClick={() => approveMutation.mutate({ id: plan.id })}
-                        disabled={approveMutation.isPending}
-                        className="w-full py-4 rounded-xl font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                        onClick={() => handleApproveAndPublish(plan.id)}
+                        disabled={publishingId === plan.id}
+                        className="w-full py-4 rounded-xl font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
                       >
-                        <Check className="w-5 h-5" /> Duyệt bài
+                        {publishingId === plan.id ? (
+                          <><Loader2 className="w-5 h-5 animate-spin" /> Đang đăng...</>
+                        ) : (
+                          <><Send className="w-5 h-5" /> Duyệt & Đăng Metricool</>
+                        )}
                       </button>
                       <button 
                         onClick={() => setRejectingId(plan.id)}
-                        className="w-full py-3 rounded-xl font-bold bg-card border border-border hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 transition-all flex items-center justify-center gap-2"
+                        disabled={publishingId === plan.id}
+                        className="w-full py-3 rounded-xl font-bold bg-card border border-border hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
                       >
                         <X className="w-5 h-5" /> Từ chối
                       </button>
+                      <p className="text-xs text-center text-muted-foreground">
+                        Bài sẽ được lên lịch Metricool ngay khi bạn duyệt
+                      </p>
                     </>
                   )}
                 </div>

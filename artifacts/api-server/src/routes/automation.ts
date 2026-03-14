@@ -528,9 +528,9 @@ router.post("/run/:brandId", async (req, res) => {
       };
     }
 
-    // Test mode: override settings to only create 1 Facebook post
+    // Test mode: limit to 1 Facebook post, but KEEP user's autoApprove setting
     const runSettings = testMode
-      ? { ...settings, platforms: "Facebook", contentTypes: "post", autoApprove: true }
+      ? { ...settings, platforms: "Facebook", contentTypes: "post" }
       : settings;
 
     const result = await runAutomationForBrand(brand, runSettings, dryRun);
@@ -549,8 +549,9 @@ router.post("/run/:brandId", async (req, res) => {
     let webhookErrMsg = "";
     let deliveryMethod = "not_configured";
 
-    if (!dryRun && result.plans?.length > 0) {
-      // Fetch full content plan details
+    if (!dryRun && result.plans?.length > 0 && runSettings.autoApprove) {
+      // Only post to Metricool/Make.com if autoApprove is enabled
+      // (when autoApprove=false, content waits in Phê duyệt queue)
       const planDetails = await db.select({
         id: contentPlansTable.id,
         platform: contentPlansTable.platform,

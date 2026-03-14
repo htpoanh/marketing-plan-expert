@@ -231,37 +231,47 @@ Finde das BESTE Trend-Thema für heute für dieses Geschäft. Gib JSON zurück:
         story: `Schreibe einen Story-Text (max 3 Slides). Jeder Slide: kurze, knallige Aussage + Emoji. Slide 3 = klarer CTA mit Sticker-Empfehlung. Auf Deutsch.`,
       };
 
-      const contentPrompt = `Du bist ein Top-Copywriter für ${plat} im deutschsprachigen Raum.
+      const contactInfo = [
+        brand.address ?? "",
+        brand.phone ? `📞 ${brand.phone}` : "",
+        brand.businessHours ? `🕐 ${brand.businessHours}` : "",
+      ].filter(Boolean).join(" | ");
 
-LADEN: ${brand.brandName} | ${brand.industry} | ${brand.branchLocation}
-${contactBlock ? `KONTAKT: ${contactBlock}` : ""}
+      const contentPrompt = `Du bist ein professioneller ${plat}-Texter für ein deutsches Kleinunternehmen.
+
+GESCHÄFT: ${brand.brandName} | ${brand.industry} | ${brand.branchLocation}
 ZIELGRUPPE: ${brand.targetAudience}
 MARKENSTIMME: ${brand.brandVoice}
-
-HEUTIGES THEMA: "${topic}"
+THEMA HEUTE: "${topic}"
 ZIEL: ${goal}
-CONTENT-TYP: ${ct.toUpperCase()} für ${plat}
-
-${ctInstructions[ct] ?? ""}
-
 TRENDING KONTEXT: ${trendData.seasonalContext ?? ""}
-KEYWORDS ZU NUTZEN: ${trendData.keywords?.join(", ") ?? ""}
 
-Gib JSON zurück (kein Markdown):
+WICHTIGE REGELN — UNBEDINGT EINHALTEN:
+1. KEIN AIDA-Gerüst sichtbar machen — keine Beschriftungen wie "Attention:", "Interest:", "Desire:", "Action:", keine Strukturhinweise, keine Marketing-Anmerkungen im Text
+2. Text ist ein natürlicher Social-Media-Post — wie ein Mensch schreibt, nicht wie eine Vorlage
+3. Kontaktdaten NICHT in mainCaption einfügen — werden automatisch hinzugefügt
+4. Keine Klammern, keine [Platzhalter], keine Erklärungen in Klammern
+5. ${ctInstructions[ct] ?? "Normaler Post, 150-250 Wörter"}
+
+POST-FORMAT (exakt so aufbauen):
+- Zeile 1: Starker Eröffnungssatz / Headline (1 Zeile, packt sofort)
+- Leerzeile
+- Haupttext: 3-5 kurze Absätze, natürlich erzählt, Mehrwert für den Leser
+- Leerzeile  
+- Klarer Call-to-Action (z.B. "Jetzt Tisch reservieren!", "Termin buchen!")
+
+Gib JSON zurück (kein Markdown, keine Erklärungen außerhalb des JSON):
 {
-  "hook": "Eröffnungs-Hook der sofort Aufmerksamkeit erregt",
-  "mainCaption": "Haupttext vollständig ausgeschrieben",
+  "hook": "Starker Eröffnungssatz (1 Zeile)",
+  "mainCaption": "Vollständiger Post-Text im beschriebenen Format — NUR der Text, ohne Kontaktdaten, ohne AIDA-Labels",
   "shortCaption": "Kurzversion 30-50 Wörter",
-  "cta": "Konkreter Call-to-Action",
+  "cta": "Konkreter Handlungsaufruf (1 Satz)",
   "hashtags": ["#hashtag1", "#hashtag2"],
-  "imagePrompt": "Detailed English prompt for DALL-E image generation matching this content",
-  "slideTexts": ["Slide 1 Text", "Slide 2 Text", "Slide 3 CTA"]
+  "imagePrompt": "Detailed English description for AI image generation, photorealistic, no text in image"
 }
 
-Anforderungen:
-- Gesamter Content AUF DEUTSCH, natürlich und authentisch
-- hashtags: 12-20 Tags (deutsch + englisch gemischt, lokal + trending)
-- imagePrompt: auf Englisch, sehr detailliert für beste AI-Bildgenerierung`;
+hashtags: 12-18 Tags gemischt deutsch+englisch, lokal relevant für ${brand.branchLocation}
+imagePrompt: Englisch, sehr detailliert, Stil passend zum Geschäft`;
 
       const contentData = await callGeminiJSON(contentPrompt);
 

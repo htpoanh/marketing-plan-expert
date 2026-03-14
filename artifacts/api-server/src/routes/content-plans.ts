@@ -12,6 +12,19 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const router: IRouter = Router();
 
+// Strip AIDA labels + ALL markdown markers (** not rendered on Facebook/Instagram)
+function cleanPostText(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/\*{0,2}A[-‑]?ttention\*{0,2}:?\*{0,2}\s*/gi, "")
+    .replace(/\*{0,2}I[-‑]?nterest\*{0,2}:?\*{0,2}\s*/gi, "")
+    .replace(/\*{0,2}D[-‑]?esire\*{0,2}:?\*{0,2}\s*/gi, "")
+    .replace(/\*{0,2}A[-‑]?ction\*{0,2}:?\*{0,2}\s*/gi, "")
+    .replace(/\*{1,2}/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 router.post("/generate", async (req, res) => {
   try {
     const { brandId, days, platform, campaignGoal, startDate } = req.body;
@@ -380,6 +393,7 @@ router.post("/:id/reject", async (req, res) => {
 router.post("/:id/publish", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const { scheduledAt } = req.body as { scheduledAt?: string }; // user-chosen datetime
     const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
 
@@ -388,17 +402,38 @@ router.post("/:id/publish", async (req, res) => {
 
     const mcToken = autoSettings?.metricoolToken ?? null;
     const mcUserId = autoSettings?.metricoolAccountId ?? null;
-    const fullText = [plan.caption, plan.cta, plan.hashtags].filter(Boolean).join("\n\n");
+
+    // Build contact block from brand data
+    const contactParts = [
+      brand?.address ?? "",
+      brand?.phone ? `📞 ${brand.phone}` : "",
+      brand?.businessHours ? `🕐 ${brand.businessHours}` : "",
+    ].filter(Boolean);
+    const contactBlock = contactParts.join(" | ");
+
+    // Final post format: hook → caption → contact → hashtags (no AIDA labels)
+    const fullText = [
+      cleanPostText(plan.hook),
+      "",
+      cleanPostText(plan.caption),
+      contactBlock || null,
+      plan.hashtags?.trim(),
+    ].filter(v => v !== null && v !== undefined && v !== "").join("\n");
     let metricoolJobId: string | null = null;
     let publishError: string | null = null;
 
     if (mcToken && mcUserId) {
       // ── DIRECT METRICOOL API ─────────────────────────────────────────────
       try {
-        // Use scheduled publish date, or 30 min from now
-        const targetDate = plan.publishDate && plan.publishDate > new Date()
-          ? plan.publishDate
-          : new Date(Date.now() + 30 * 60 * 1000);
+        // Use user-chosen date, then plan date, or 30 min from now as fallback
+        let targetDate: Date;
+        if (scheduledAt) {
+          targetDate = new Date(scheduledAt);
+        } else if (plan.publishDate && plan.publishDate > new Date()) {
+          targetDate = plan.publishDate;
+        } else {
+          targetDate = new Date(Date.now() + 30 * 60 * 1000);
+        }
         const dt = targetDate.toLocaleString("sv-SE", { timeZone: "Europe/Berlin" }).replace(" ", "T");
 
         // Find brand profile
@@ -470,8 +505,8 @@ router.post("/:id/publish", async (req, res) => {
               hook: plan.hook ?? "",
               imagePrompt: plan.imagePrompt ?? "",
               videoPrompt: plan.videoPrompt ?? "",
-              publishDate: plan.publishDate,
-              scheduledAt: plan.publishDate?.toISOString() ?? new Date().toISOString(),
+              publishDate: scheduledAt ? new Date(scheduledAt) : plan.publishDate,
+              scheduledAt: scheduledAt ?? plan.publishDate?.toISOString() ?? new Date().toISOString(),
             }),
           });
           if (resp.ok) {

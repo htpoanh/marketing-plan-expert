@@ -3,14 +3,12 @@ import {
   LayoutDashboard, 
   Store, 
   MessageSquareText, 
-  BarChart3, 
+  BarChart2,
   Sparkles, 
-  Lightbulb, 
   CalendarDays, 
   CheckSquare,
   ChevronRight,
   Bot,
-  Settings2,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,6 +45,7 @@ const navigation = [
   { name: "Lịch nội dung", href: "/calendar", icon: CalendarDays },
   { name: "Phê duyệt", href: "/approvals", icon: CheckSquare },
   { name: "Automation", href: "/automation", icon: Zap },
+  { name: "Phân tích quảng cáo", href: "/analysis", icon: BarChart2 },
 ];
 
 export function Sidebar() {

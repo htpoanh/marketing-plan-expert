@@ -8,6 +8,7 @@ import pipelineRouter from "./pipeline";
 import aiAgentsRouter from "./ai-agents";
 import aiProfilesRouter from "./ai-profiles";
 import automationRouter from "./automation";
+import adAnalysisRouter from "./ad-analysis";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/pipeline", pipelineRouter);
 router.use("/ai-agents", aiAgentsRouter);
 router.use("/ai-profiles", aiProfilesRouter);
 router.use("/automation", automationRouter);
+router.use("/ad-analysis", adAnalysisRouter);
 
 export default router;

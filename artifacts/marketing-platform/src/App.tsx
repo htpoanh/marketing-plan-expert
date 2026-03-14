@@ -17,6 +17,7 @@ import AIPipeline from "@/pages/pipeline/AIPipeline";
 import MarketingModels from "@/pages/pipeline/MarketingModels";
 import AIAgentsPage from "@/pages/agents/AIAgentsPage";
 import AutomationPage from "@/pages/automation/AutomationPage";
+import AdAnalysis from "@/pages/analysis/AdAnalysis";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,7 @@ function Router() {
       <Route path="/calendar" component={ContentCalendar} />
       <Route path="/approvals" component={ApprovalDashboard} />
       <Route path="/automation" component={AutomationPage} />
+      <Route path="/analysis" component={AdAnalysis} />
       <Route component={NotFound} />
     </Switch>
   );

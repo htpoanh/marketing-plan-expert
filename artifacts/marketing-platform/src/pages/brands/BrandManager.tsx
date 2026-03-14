@@ -8,15 +8,34 @@ import {
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Store, Plus, MapPin, Target, Megaphone, Trash2, Edit3, X, Bot } from "lucide-react";
+import { Store, Plus, MapPin, Target, Megaphone, Trash2, Edit3, X, Bot, Copy, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type AiProfile = { id: number; profileName: string; industry: string | null; isDefault: boolean };
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 export default function BrandManager() {
   const { data: brands, isLoading } = useListBrands();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [cloningId, setCloningId] = useState<number | null>(null);
+
+  const handleClone = async (brandId: number, brandName: string) => {
+    if (!confirm(`Nhân bản cửa hàng "${brandName}"?`)) return;
+    setCloningId(brandId);
+    try {
+      const r = await fetch(`${BASE}/api/brands/${brandId}/clone`, { method: "POST" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: getListBrandsQueryKey() });
+      toast({ title: "✅ Nhân bản thành công", description: `Đã tạo "${data.brandName}" — hãy chỉnh sửa thông tin.` });
+    } catch (e: any) {
+      toast({ title: "❌ Lỗi nhân bản", description: e.message, variant: "destructive" });
+    } finally {
+      setCloningId(null);
+    }
+  };
 
   const { data: profiles = [] } = useQuery<AiProfile[]>({
     queryKey: ["/api/ai-profiles"],
@@ -144,8 +163,16 @@ export default function BrandManager() {
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleEdit(brand)} className="p-2 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground">
+                    <button onClick={() => handleEdit(brand)} title="Chỉnh sửa" className="p-2 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground">
                       <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleClone(brand.id, brand.brandName)}
+                      disabled={cloningId === brand.id}
+                      title="Nhân bản cửa hàng"
+                      className="p-2 hover:bg-blue-500/20 rounded-lg text-muted-foreground hover:text-blue-400 disabled:opacity-50"
+                    >
+                      {cloningId === brand.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                     </button>
                     <button 
                       onClick={() => {

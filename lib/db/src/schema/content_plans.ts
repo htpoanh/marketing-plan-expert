@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { brandsTable } from "./brands";
@@ -18,6 +18,7 @@ export const contentPlansTable = pgTable("content_plans", {
   imagePrompt: text("image_prompt"),
   videoPrompt: text("video_prompt"),
   imageUrl: text("image_url"),
+  promptRating: text("prompt_rating"), // 'good' | 'bad' | null — dữ liệu training AI
   status: text("status").default("draft").notNull(),
   rejectReason: text("reject_reason"),
   metricoolJobId: text("metricool_job_id"),

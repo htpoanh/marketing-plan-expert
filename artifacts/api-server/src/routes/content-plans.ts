@@ -173,6 +173,50 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+// Rate prompt quality for ML training data
+router.patch("/:id/rate", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { rating } = req.body as { rating: "good" | "bad" | null };
+    const [plan] = await db.update(contentPlansTable)
+      .set({ promptRating: rating ?? null, updatedAt: new Date() })
+      .where(eq(contentPlansTable.id, id))
+      .returning();
+    if (!plan) return res.status(404).json({ error: "Not found" });
+    res.json(plan);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save rating" });
+  }
+});
+
+// Bulk delete
+router.post("/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = req.body as { ids: number[] };
+    if (!ids?.length) return res.status(400).json({ error: "No IDs provided" });
+    const { inArray } = await import("drizzle-orm");
+    await db.delete(contentPlansTable).where(inArray(contentPlansTable.id, ids));
+    res.json({ deleted: ids.length });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to bulk delete" });
+  }
+});
+
+// Bulk send to review
+router.post("/bulk-review", async (req, res) => {
+  try {
+    const { ids } = req.body as { ids: number[] };
+    if (!ids?.length) return res.status(400).json({ error: "No IDs provided" });
+    const { inArray } = await import("drizzle-orm");
+    await db.update(contentPlansTable)
+      .set({ status: "review", updatedAt: new Date() })
+      .where(inArray(contentPlansTable.id, ids));
+    res.json({ updated: ids.length });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to bulk update" });
+  }
+});
+
 router.post("/:id/generate-image", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

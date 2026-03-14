@@ -23,6 +23,9 @@ export default function BrandManager() {
     brandName: "",
     industry: "",
     branchLocation: "",
+    address: "",
+    phone: "",
+    businessHours: "",
     targetAudience: "",
     brandVoice: "",
   });
@@ -60,7 +63,7 @@ export default function BrandManager() {
 
   const resetForm = () => {
     setEditingId(null);
-    setFormData({ brandName: "", industry: "", branchLocation: "", targetAudience: "", brandVoice: "" });
+    setFormData({ brandName: "", industry: "", branchLocation: "", address: "", phone: "", businessHours: "", targetAudience: "", brandVoice: "" });
   };
 
   const handleEdit = (brand: any) => {
@@ -69,6 +72,9 @@ export default function BrandManager() {
       brandName: brand.brandName,
       industry: brand.industry,
       branchLocation: brand.branchLocation,
+      address: brand.address ?? "",
+      phone: brand.phone ?? "",
+      businessHours: brand.businessHours ?? "",
       targetAudience: brand.targetAudience,
       brandVoice: brand.brandVoice,
     });
@@ -182,6 +188,26 @@ export default function BrandManager() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Vị trí / Đặc điểm</label>
                   <input required value={formData.branchLocation} onChange={e => setFormData({...formData, branchLocation: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Vd: Mặt tiền đường lớn, gần trường đại học..." />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1">
+                      Số điện thoại <span className="text-xs text-muted-foreground font-normal">(AI tự điền)</span>
+                    </label>
+                    <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Vd: 0901 234 567" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1">
+                      Giờ mở cửa <span className="text-xs text-muted-foreground font-normal">(AI tự điền)</span>
+                    </label>
+                    <input value={formData.businessHours} onChange={e => setFormData({...formData, businessHours: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Vd: 8h-22h T2-CN" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-1">
+                    Địa chỉ đầy đủ <span className="text-xs text-muted-foreground font-normal">(AI tự điền vào caption)</span>
+                  </label>
+                  <input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Vd: 123 Nguyễn Huệ, Quận 1, TP.HCM" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Khách hàng mục tiêu</label>

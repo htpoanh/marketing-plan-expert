@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { pipelineRunsTable, contentPlansTable, brandsTable } from "@workspace/db/schema";
+import { pipelineRunsTable, contentPlansTable, brandsTable, aiAgentConfigsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
@@ -111,35 +111,50 @@ const grok = new OpenAI({
   baseURL: "https://api.x.ai/v1",
 });
 
-const SYSTEM_JSON = "Bạn là chuyên gia marketing AI. Luôn trả về JSON hợp lệ theo đúng cấu trúc yêu cầu, không có markdown hay code block.";
+const BASE_SYSTEM_JSON = "Luôn trả về JSON hợp lệ theo đúng cấu trúc yêu cầu, không có markdown hay code block.";
+
+function buildSystemPrompt(agentConfig: any, baseRole: string): string {
+  const parts = [baseRole];
+  if (agentConfig?.expertiseArea?.trim()) {
+    parts.push(`Chuyên môn đặc biệt: ${agentConfig.expertiseArea}`);
+  }
+  if (agentConfig?.customInstructions?.trim()) {
+    parts.push(`Hướng dẫn bổ sung: ${agentConfig.customInstructions}`);
+  }
+  if (agentConfig?.outputStyle?.trim()) {
+    parts.push(`Phong cách output: ${agentConfig.outputStyle}`);
+  }
+  parts.push(BASE_SYSTEM_JSON);
+  return parts.join("\n\n");
+}
 
 // Agent 1: Grok — real-time trends & market research (fallback: OpenAI)
-async function callGrokJSON(prompt: string): Promise<any> {
+async function callGrokJSON(prompt: string, systemPrompt: string): Promise<any> {
   try {
     const response = await grok.chat.completions.create({
       model: "grok-3",
       max_tokens: 4096,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM_JSON },
+        { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ],
     });
     return JSON.parse(response.choices[0]?.message?.content ?? "{}");
   } catch (err: any) {
     console.warn("Grok unavailable, falling back to OpenAI for Trend Research:", err?.message);
-    return callOpenAIJSON(prompt);
+    return callOpenAIJSON(prompt, systemPrompt);
   }
 }
 
 // Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering
-async function callOpenAIJSON(prompt: string): Promise<any> {
+async function callOpenAIJSON(prompt: string, systemPrompt: string): Promise<any> {
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 4096,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: SYSTEM_JSON },
+      { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ],
   });
@@ -152,10 +167,11 @@ const gemini = new GoogleGenAI({
   httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
 });
 
-async function callGeminiJSON(prompt: string): Promise<any> {
+async function callGeminiJSON(prompt: string, systemPrompt?: string): Promise<any> {
+  const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
   const response = await gemini.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
     config: {
       maxOutputTokens: 8192,
       responseMimeType: "application/json",
@@ -239,6 +255,24 @@ router.post("/run", async (req, res) => {
   const modelList = MARKETING_MODELS.map(m => `- ${m.name} (${m.fullName}): ${m.whenToUse}`).join("\n");
 
   try {
+    // ─── LOAD AGENT CONFIGS ─────────────────────────────────────────────────────
+    const agentConfigs = await db.select().from(aiAgentConfigsTable);
+    const grokConfig = agentConfigs.find(a => a.agentKey === "grok");
+    const openaiConfig = agentConfigs.find(a => a.agentKey === "openai");
+    const geminiConfig = agentConfigs.find(a => a.agentKey === "gemini");
+
+    const grokSystem = buildSystemPrompt(grokConfig, "Bạn là chuyên gia phân tích xu hướng thị trường thời gian thực với 10 năm kinh nghiệm.");
+    const openaiSystem = buildSystemPrompt(openaiConfig, "Bạn là chuyên gia chiến lược marketing và prompt engineering hàng đầu.");
+    const geminiSystem = buildSystemPrompt(geminiConfig, "Bạn là copywriter hàng đầu, chuyên gia viết nội dung viral tiếng Việt tự nhiên.");
+
+    // Brand contact info block
+    const contactBlock = [
+      brand.address ? `- Địa chỉ: ${brand.address}` : null,
+      brand.phone ? `- Số điện thoại: ${brand.phone}` : null,
+      brand.businessHours ? `- Giờ mở cửa: ${brand.businessHours}` : null,
+    ].filter(Boolean).join("\n");
+    const contactSection = contactBlock ? `\nTHÔNG TIN LIÊN HỆ:\n${contactBlock}` : "";
+
     // ─── AGENT 1: TREND RESEARCH ───────────────────────────────────────────────
     const situationBlock = storeSituation
       ? `\nTÌNH TRẠNG HIỆN TẠI CỦA CỬA HÀNG:\n${storeSituation}\n`
@@ -269,7 +303,7 @@ Yêu cầu:
 - seasonalContext: sự kiện/mùa/ngày lễ nào đang hoặc sắp đến ảnh hưởng đến marketing
 - hotTopics: 5 chủ đề đang hot trong ngành`;
 
-    const trendData = await callGrokJSON(trendPrompt);
+    const trendData = await callGrokJSON(trendPrompt, grokSystem);
     await db.update(pipelineRunsTable).set({ trendData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 2: STRATEGY PLANNER ─────────────────────────────────────────────
@@ -280,7 +314,7 @@ THÔNG TIN THƯƠNG HIỆU:
 - Ngành: ${brand.industry}
 - Địa điểm: ${brand.branchLocation}
 - Khách hàng mục tiêu: ${brand.targetAudience}
-- Giọng điệu: ${brand.brandVoice}${situationBlock}
+- Giọng điệu: ${brand.brandVoice}${contactSection}${situationBlock}
 YÊU CẦU CHIẾN LƯỢC:
 - Chủ đề: ${topic}
 - Mục tiêu: ${goal}
@@ -306,7 +340,7 @@ Trả về JSON (không markdown):
   "contentPillars": ["trụ cột nội dung 1", "trụ cột 2", "trụ cột 3", "trụ cột 4"]
 }`;
 
-    const strategyData = await callOpenAIJSON(strategyPrompt);
+    const strategyData = await callOpenAIJSON(strategyPrompt, openaiSystem);
     await db.update(pipelineRunsTable).set({ strategyData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 3 & 4: PER-PLATFORM CONTENT + PROMPT ────────────────────────────
@@ -324,7 +358,7 @@ THƯƠNG HIỆU:
 - Ngành: ${brand.industry}
 - Giọng điệu: ${brand.brandVoice}
 - Khách hàng: ${brand.targetAudience}
-- Địa điểm: ${brand.branchLocation}${situationBlock}
+- Địa điểm: ${brand.branchLocation}${contactSection}${situationBlock}
 
 CHIẾN LƯỢC ĐÃ CHỌN:
 - Mô hình: ${strategyData.marketingModel} (${strategyData.modelExplanation})
@@ -356,7 +390,7 @@ Yêu cầu:
 - mainCaption: PHẢI tuân theo cấu trúc mô hình ${strategyData.marketingModel}
 - Toàn bộ nội dung tiếng Việt tự nhiên, không cứng nhắc`;
 
-      const contentData = await callGeminiJSON(contentPrompt);
+      const contentData = await callGeminiJSON(contentPrompt, geminiSystem);
       lastContentData = contentData;
 
       // Agent 4: OpenAI — tạo prompt ảnh/video cho từng nền tảng
@@ -387,7 +421,7 @@ Yêu cầu:
 - Phù hợp với định dạng ${plat} (tỉ lệ, độ dài)
 - Phản ánh đúng tone thương hiệu và cảm xúc mục tiêu`;
 
-      const promptData = await callOpenAIJSON(promptPrompt);
+      const promptData = await callOpenAIJSON(promptPrompt, openaiSystem);
       lastPromptData = promptData;
 
       const hashtags = Array.isArray(contentData.hashtags) ? contentData.hashtags.join(" ") : "";

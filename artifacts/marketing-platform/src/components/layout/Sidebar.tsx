@@ -9,7 +9,8 @@ import {
   CalendarDays, 
   CheckSquare,
   ChevronRight,
-  Bot
+  Bot,
+  Settings2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -31,6 +32,7 @@ const navigation = [
     children: [
       { name: "Chạy Pipeline", href: "/pipeline" },
       { name: "Mô hình Marketing", href: "/pipeline/models" },
+      { name: "Cấu hình AI Agents", href: "/agents" },
     ]
   },
   { 

@@ -38,6 +38,7 @@ export default function BrandManager() {
     phone: "",
     businessHours: "",
     aiProfileId: "" as string,
+    googlePlaceId: "",
     targetAudience: "",
     brandVoice: "",
   });
@@ -75,7 +76,7 @@ export default function BrandManager() {
 
   const resetForm = () => {
     setEditingId(null);
-    setFormData({ brandName: "", industry: "", branchLocation: "", address: "", phone: "", businessHours: "", aiProfileId: "", targetAudience: "", brandVoice: "" });
+    setFormData({ brandName: "", industry: "", branchLocation: "", address: "", phone: "", businessHours: "", aiProfileId: "", googlePlaceId: "", targetAudience: "", brandVoice: "" });
   };
 
   const handleEdit = (brand: any) => {
@@ -88,6 +89,7 @@ export default function BrandManager() {
       phone: brand.phone ?? "",
       businessHours: brand.businessHours ?? "",
       aiProfileId: brand.aiProfileId ? String(brand.aiProfileId) : "",
+      googlePlaceId: brand.googlePlaceId ?? "",
       targetAudience: brand.targetAudience,
       brandVoice: brand.brandVoice,
     });
@@ -249,6 +251,13 @@ export default function BrandManager() {
                     ))}
                   </select>
                   <p className="text-xs text-muted-foreground">AI sẽ viết content theo đúng phong cách ngành của cửa hàng này.</p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    Google Place ID
+                    <span className="text-xs text-muted-foreground font-normal">(để đồng bộ đánh giá Google)</span>
+                  </label>
+                  <input value={formData.googlePlaceId} onChange={e => setFormData({...formData, googlePlaceId: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-sm" placeholder="Vd: ChIJD7fiBh9u5kcRYJSMaMOCCwQ" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Khách hàng mục tiêu</label>

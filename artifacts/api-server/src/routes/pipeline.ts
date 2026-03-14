@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { pipelineRunsTable, contentPlansTable, brandsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { ai } from "@workspace/integrations-gemini-ai";
+import OpenAI from "openai";
 
 const router: IRouter = Router();
 
@@ -99,16 +99,25 @@ const MARKETING_MODELS = [
   },
 ];
 
-async function callGeminiJSON(prompt: string): Promise<any> {
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: {
-      maxOutputTokens: 8192,
-      responseMimeType: "application/json",
-    },
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+async function callOpenAIJSON(prompt: string): Promise<any> {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 4096,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: "Bạn là chuyên gia marketing AI. Luôn trả về JSON hợp lệ, không có markdown hay code block.",
+      },
+      { role: "user", content: prompt },
+    ],
   });
-  return JSON.parse(response.text ?? "{}");
+  const text = response.choices[0]?.message?.content ?? "{}";
+  return JSON.parse(text);
 }
 
 router.get("/marketing-models", (_req, res) => {
@@ -210,7 +219,7 @@ Yêu cầu:
 - seasonalContext: sự kiện/mùa/ngày lễ nào đang hoặc sắp đến ảnh hưởng đến marketing
 - hotTopics: 5 chủ đề đang hot trong ngành`;
 
-    const trendData = await callGeminiJSON(trendPrompt);
+    const trendData = await callOpenAIJSON(trendPrompt);
     await db.update(pipelineRunsTable).set({ trendData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 2: STRATEGY PLANNER ─────────────────────────────────────────────
@@ -247,7 +256,7 @@ Trả về JSON (không markdown):
   "contentPillars": ["trụ cột nội dung 1", "trụ cột 2", "trụ cột 3", "trụ cột 4"]
 }`;
 
-    const strategyData = await callGeminiJSON(strategyPrompt);
+    const strategyData = await callOpenAIJSON(strategyPrompt);
     await db.update(pipelineRunsTable).set({ strategyData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 3: CONTENT WRITER ───────────────────────────────────────────────
@@ -290,7 +299,7 @@ Yêu cầu:
 - mainCaption: PHẢI tuân theo cấu trúc mô hình ${strategyData.marketingModel}
 - Toàn bộ nội dung tiếng Việt tự nhiên, không cứng nhắc`;
 
-    const contentData = await callGeminiJSON(contentPrompt);
+    const contentData = await callOpenAIJSON(contentPrompt);
     await db.update(pipelineRunsTable).set({ contentData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 4: PROMPT GENERATOR ─────────────────────────────────────────────
@@ -321,7 +330,7 @@ Yêu cầu:
 - Phù hợp với định dạng ${platform} (tỉ lệ, độ dài)
 - Phản ánh đúng tone thương hiệu và cảm xúc mục tiêu`;
 
-    const promptData = await callGeminiJSON(promptPrompt);
+    const promptData = await callOpenAIJSON(promptPrompt);
     await db.update(pipelineRunsTable).set({ promptData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── SAVE TO CONTENT PLANS ─────────────────────────────────────────────────

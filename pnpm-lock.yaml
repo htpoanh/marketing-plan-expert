@@ -37,7 +37,7 @@ catalogs:
       specifier: ^0.7.1
       version: 0.7.1
     clsx:
-      specifier: 2.1.1
+      specifier: ^2.1.1
       version: 2.1.1
     drizzle-orm:
       specifier: ^0.45.1
@@ -55,7 +55,7 @@ catalogs:
       specifier: 19.1.0
       version: 19.1.0
     tailwind-merge:
-      specifier: 3.5.0
+      specifier: ^3.3.1
       version: 3.5.0
     tailwindcss:
       specifier: ^4.1.14
@@ -187,6 +187,9 @@ importers:
       express:
         specifier: ^5
         version: 5.2.1
+      openai:
+        specifier: ^6.27.0
+        version: 6.27.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -372,7 +375,7 @@ importers:
         specifier: ^2.1.7
         version: 2.1.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       recharts:
-        specifier: ^2.15.4
+        specifier: ^2.15.2
         version: 2.15.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       sonner:
         specifier: ^2.0.7
@@ -2657,6 +2660,18 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@6.27.0:
+    resolution: {integrity: sha512-osTKySlrdYrLYTt0zjhY8yp0JUBmWDCN+Q+QxsV4xMQnnoVFpylgKGgxwN8sSdTNw0G4y+WUXs4eCMWpyDNWZQ==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   orval@8.5.3:
     resolution: {integrity: sha512-+8Es2ZR3tPthzAL27X1a9AlboqTQ/w9U/PhMkp4vsLA9OvdkpXr+9f8lCfJUV/wtdX+lXBDQ4imx42Em943JSg==}
@@ -5375,6 +5390,11 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openai@6.27.0(ws@8.19.0)(zod@4.3.6):
+    optionalDependencies:
+      ws: 8.19.0
+      zod: 4.3.6
 
   orval@8.5.3(prettier@3.8.1)(typescript@5.9.3):
     dependencies:

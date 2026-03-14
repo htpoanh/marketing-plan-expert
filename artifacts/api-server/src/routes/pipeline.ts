@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { pipelineRunsTable, contentPlansTable, brandsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import OpenAI from "openai";
+import { ai } from "@workspace/integrations-gemini-ai";
 
 const router: IRouter = Router();
 
@@ -99,25 +100,58 @@ const MARKETING_MODELS = [
   },
 ];
 
+// ── OpenAI (Strategy + Prompt Generator) ──────────────────────────────────────
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ── Grok / xAI (Trend Research) ───────────────────────────────────────────────
+const grok = new OpenAI({
+  apiKey: process.env.GROK_API_KEY,
+  baseURL: "https://api.x.ai/v1",
+});
+
+const SYSTEM_JSON = "Bạn là chuyên gia marketing AI. Luôn trả về JSON hợp lệ theo đúng cấu trúc yêu cầu, không có markdown hay code block.";
+
+// Agent 1: Grok — real-time trends & market research
+async function callGrokJSON(prompt: string): Promise<any> {
+  const response = await grok.chat.completions.create({
+    model: "grok-3",
+    max_tokens: 4096,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM_JSON },
+      { role: "user", content: prompt },
+    ],
+  });
+  return JSON.parse(response.choices[0]?.message?.content ?? "{}");
+}
+
+// Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering
 async function callOpenAIJSON(prompt: string): Promise<any> {
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 4096,
     response_format: { type: "json_object" },
     messages: [
-      {
-        role: "system",
-        content: "Bạn là chuyên gia marketing AI. Luôn trả về JSON hợp lệ, không có markdown hay code block.",
-      },
+      { role: "system", content: SYSTEM_JSON },
       { role: "user", content: prompt },
     ],
   });
-  const text = response.choices[0]?.message?.content ?? "{}";
-  return JSON.parse(text);
+  return JSON.parse(response.choices[0]?.message?.content ?? "{}");
+}
+
+// Agent 3: Gemini — creative Vietnamese content writing
+async function callGeminiJSON(prompt: string): Promise<any> {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.0-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: {
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+    },
+  });
+  return JSON.parse(response.text ?? "{}");
 }
 
 router.get("/marketing-models", (_req, res) => {
@@ -219,7 +253,7 @@ Yêu cầu:
 - seasonalContext: sự kiện/mùa/ngày lễ nào đang hoặc sắp đến ảnh hưởng đến marketing
 - hotTopics: 5 chủ đề đang hot trong ngành`;
 
-    const trendData = await callOpenAIJSON(trendPrompt);
+    const trendData = await callGrokJSON(trendPrompt);
     await db.update(pipelineRunsTable).set({ trendData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 2: STRATEGY PLANNER ─────────────────────────────────────────────
@@ -299,7 +333,7 @@ Yêu cầu:
 - mainCaption: PHẢI tuân theo cấu trúc mô hình ${strategyData.marketingModel}
 - Toàn bộ nội dung tiếng Việt tự nhiên, không cứng nhắc`;
 
-    const contentData = await callOpenAIJSON(contentPrompt);
+    const contentData = await callGeminiJSON(contentPrompt);
     await db.update(pipelineRunsTable).set({ contentData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 4: PROMPT GENERATOR ─────────────────────────────────────────────

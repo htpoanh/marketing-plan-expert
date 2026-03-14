@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "-5qMF1WjfIRTgDWhuUuxn"
+uri = "file://artifacts/marketing-platform/public/blueprints/happywok-messenger-bot.json"
+type = "unspecified"
+title = "Make.com Blueprint — AI Booking Bot Happy Wok"

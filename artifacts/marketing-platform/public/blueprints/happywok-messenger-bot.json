@@ -1,0 +1,271 @@
+{
+  "name": "AI Booking Bot — Happy Wok Messenger",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 0,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": -339,
+          "y": 0,
+          "name": "📨 Nhận Tin Nhắn Facebook"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "🔀 Router"
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false,
+                "useNewZLibDeCompression": true
+              },
+              "filter": {
+                "name": "Chỉ xử lý tin có text",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.entry[].messaging[].message.text}}",
+                      "b": "",
+                      "o": "text:notequal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://1ab29f9a-1076-42ef-a004-adcee85f4325-00-1l3d85p47mdra.kirk.replit.dev/api/messenger/process-make",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "bodyType": "raw",
+                "contentType": "application/json",
+                "body": "{\"senderId\": \"{{1.entry[].messaging[].sender.id}}\", \"message\": \"{{1.entry[].messaging[].message.text}}\", \"pageId\": \"{{1.entry[].id}}\"}",
+                "timeout": 60,
+                "shareData": false,
+                "useMutualTLS": false,
+                "evaluateStatus": false,
+                "serializeUrl": false,
+                "followRedirects": true,
+                "useQuerystring": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 350,
+                  "y": -100,
+                  "name": "🤖 Gọi AI (GPT-4o)"
+                }
+              }
+            },
+            {
+              "id": 4,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false,
+                "useNewZLibDeCompression": true
+              },
+              "mapper": {
+                "url": "https://graph.facebook.com/v19.0/me/messages",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer REPLACE_WITH_YOUR_PAGE_ACCESS_TOKEN"
+                  }
+                ],
+                "bodyType": "raw",
+                "contentType": "application/json",
+                "body": "{\"recipient\": {\"id\": \"{{1.entry[].messaging[].sender.id}}\"}, \"message\": {\"text\": \"{{3.data.reply}}\"}, \"messaging_type\": \"RESPONSE\"}",
+                "timeout": 30,
+                "shareData": false,
+                "useMutualTLS": false,
+                "evaluateStatus": false,
+                "serializeUrl": false,
+                "followRedirects": true,
+                "useQuerystring": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 700,
+                  "y": -100,
+                  "name": "📩 Gửi Reply cho Khách"
+                }
+              }
+            },
+            {
+              "id": 5,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false,
+                "useNewZLibDeCompression": true
+              },
+              "filter": {
+                "name": "Chỉ khi có lịch hẹn mới",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{3.data.bookingCreated}}",
+                      "b": "true",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://graph.facebook.com/v19.0/me/messages",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer REPLACE_WITH_YOUR_PAGE_ACCESS_TOKEN"
+                  }
+                ],
+                "bodyType": "raw",
+                "contentType": "application/json",
+                "body": "{\"recipient\": {\"id\": \"{{3.data.managerPsid}}\"}, \"message\": {\"text\": \"{{3.data.managerMessage}}\"}, \"messaging_type\": \"MESSAGE_TAG\", \"tag\": \"CONFIRMED_EVENT_UPDATE\"}",
+                "timeout": 30,
+                "shareData": false,
+                "useMutualTLS": false,
+                "evaluateStatus": false,
+                "serializeUrl": false,
+                "followRedirects": true,
+                "useQuerystring": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 700,
+                  "y": 50,
+                  "name": "🔔 Thông Báo Manager (Lịch Mới)"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": {
+                "handleErrors": false,
+                "useNewZLibDeCompression": true
+              },
+              "filter": {
+                "name": "Manager trả lời JA hoặc NEIN",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.entry[].messaging[].sender.id}}",
+                      "b": "REPLACE_WITH_MANAGER_PSID",
+                      "o": "text:equal"
+                    },
+                    {
+                      "a": "{{toUpper(1.entry[].messaging[].message.text)}}",
+                      "b": "JA",
+                      "o": "text:equal"
+                    }
+                  ],
+                  [
+                    {
+                      "a": "{{1.entry[].messaging[].sender.id}}",
+                      "b": "REPLACE_WITH_MANAGER_PSID",
+                      "o": "text:equal"
+                    },
+                    {
+                      "a": "{{toUpper(1.entry[].messaging[].message.text)}}",
+                      "b": "NEIN",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "url": "https://1ab29f9a-1076-42ef-a004-adcee85f4325-00-1l3d85p47mdra.kirk.replit.dev/api/messenger/webhook",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "bodyType": "raw",
+                "contentType": "application/json",
+                "body": "{\"object\": \"page\", \"entry\": [{\"id\": \"REPLACE_WITH_PAGE_ID\", \"messaging\": [{\"sender\": {\"id\": \"{{1.entry[].messaging[].sender.id}}\"}, \"recipient\": {\"id\": \"REPLACE_WITH_PAGE_ID\"}, \"message\": {\"text\": \"{{1.entry[].messaging[].message.text}}\"}}]}]}",
+                "timeout": 30,
+                "shareData": false,
+                "useMutualTLS": false,
+                "evaluateStatus": false,
+                "serializeUrl": false,
+                "followRedirects": true,
+                "useQuerystring": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 350,
+                  "y": 100,
+                  "name": "✅ Manager xác nhận JA/NEIN"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu2.make.com"
+  }
+}

@@ -4,7 +4,7 @@ import {
   MessagesSquare, Settings, CalendarCheck, CheckCircle2, XCircle,
   Clock, ChevronDown, ChevronUp, Copy, ExternalLink, RefreshCw,
   AlertCircle, Info, Shield, Phone, User, Scissors, Calendar,
-  Link2, Key, Globe, Zap, ArrowRight, BookOpen,
+  Link2, Key, Globe, Zap, ArrowRight, BookOpen, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,6 +198,46 @@ function ConfigForm({ brandId, initialConfig, onSaved }: {
               <div className="p-5 space-y-5">
                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
                   <strong>Ưu điểm Make.com:</strong> Không cần Facebook Developer Console. Chỉ cần kết nối tài khoản Facebook trong Make.com là đủ. Kịch bản (scenario) tự động nhận tin → gọi AI → gửi lại.
+                </div>
+
+                {/* Blueprint download */}
+                <div className="p-4 bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl text-white">
+                  <p className="font-bold text-sm mb-1 flex items-center gap-2">
+                    <Download className="w-4 h-4" /> Tải Blueprint (Import thẳng vào Make.com)
+                  </p>
+                  <p className="text-xs text-white/80 mb-3">
+                    File JSON sẵn sàng import — đã có đủ 4 module, filter tự động, cả luồng JA/NEIN cho Manager. Chỉ cần thay 2 chỗ: <strong>Page Access Token</strong> + <strong>Manager PSID</strong>.
+                  </p>
+                  <a
+                    href="/blueprints/happywok-messenger-bot.json"
+                    download="happywok-messenger-bot.json"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white text-orange-600 rounded-lg text-sm font-bold hover:bg-orange-50 transition-colors shadow"
+                  >
+                    <Download className="w-4 h-4" />
+                    Tải happywok-messenger-bot.json
+                  </a>
+                  <p className="text-xs text-white/70 mt-2">
+                    Make.com → Create Scenario → ··· → Import Blueprint → chọn file này
+                  </p>
+                </div>
+
+                {/* What to replace after import */}
+                <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg">
+                  <p className="text-xs font-bold text-yellow-800 mb-2">⚡ Sau khi import, chỉ cần sửa 2 chỗ:</p>
+                  <div className="space-y-1.5 text-xs text-yellow-700">
+                    <div className="flex items-start gap-2">
+                      <span className="font-bold w-4 flex-shrink-0">1.</span>
+                      <span>Module <strong>"Gửi Reply"</strong> + <strong>"Thông Báo Manager"</strong>: thay <code className="bg-yellow-100 px-1 rounded border border-yellow-200">REPLACE_WITH_YOUR_PAGE_ACCESS_TOKEN</code> bằng token thật của Happy Wok Fanpage</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-bold w-4 flex-shrink-0">2.</span>
+                      <span>Module <strong>"Manager xác nhận JA/NEIN"</strong>: thay <code className="bg-yellow-100 px-1 rounded border border-yellow-200">REPLACE_WITH_MANAGER_PSID</code> bằng PSID Facebook của Manager</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-bold w-4 flex-shrink-0">3.</span>
+                      <span>Module <strong>"Nhận Tin Nhắn"</strong>: kết nối Custom Webhook → copy URL từ Make.com → dán vào Facebook Webhooks</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Make endpoint URL */}

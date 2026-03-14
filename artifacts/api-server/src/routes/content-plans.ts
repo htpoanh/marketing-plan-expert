@@ -12,14 +12,15 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const router: IRouter = Router();
 
-// Strip AIDA labels + ALL markdown markers (** not rendered on Facebook/Instagram)
+// Strip ALL marketing model labels (AIDA, PAS, Hook-Value-CTA, Storytelling, BAB, 4P, FAB...)
+// Only strips when label word is followed by colon — preserves natural usage in sentences
+const MARKETING_LABEL_RE =
+  /\*{0,2}(Attention|Interest|Desire|Action|Problem|Agitate|Amplify|Lösung|Solution|Hook|Value|CTA|Story|Storytelling|Situation|Challenge|Transformation|Before|After|Bridge|Promise|Picture|Proof|Push|Feature|Advantage|Benefit|AIDA|PAS|BAB|FAB|Schritt\s*\d*|Step\s*\d*|Teil\s*\d*|Phase\s*\d*|Kontext|Hintergrund|Konflikt|Auflösung|Nutzwert|Handlungsaufruf)\*{0,2}:\*{0,2}\s*/gi;
+
 function cleanPostText(text: string | null | undefined): string {
   if (!text) return "";
   return text
-    .replace(/\*{0,2}A[-‑]?ttention\*{0,2}:?\*{0,2}\s*/gi, "")
-    .replace(/\*{0,2}I[-‑]?nterest\*{0,2}:?\*{0,2}\s*/gi, "")
-    .replace(/\*{0,2}D[-‑]?esire\*{0,2}:?\*{0,2}\s*/gi, "")
-    .replace(/\*{0,2}A[-‑]?ction\*{0,2}:?\*{0,2}\s*/gi, "")
+    .replace(MARKETING_LABEL_RE, "")
     .replace(/\*{1,2}/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

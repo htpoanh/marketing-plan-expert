@@ -247,7 +247,7 @@ ZIEL: ${goal}
 TRENDING KONTEXT: ${trendData.seasonalContext ?? ""}
 
 WICHTIGE REGELN — UNBEDINGT EINHALTEN:
-1. KEIN AIDA-Gerüst sichtbar machen — keine Beschriftungen wie "Attention:", "Interest:", "Desire:", "Action:", keine Strukturhinweise, keine Marketing-Anmerkungen im Text
+1. KEINE Marketing-Framework-Labels im Text — verboten sind: "Attention:", "Interest:", "Desire:", "Action:", "Hook:", "Value:", "CTA:", "Problem:", "Agitate:", "Solution:", "Story:", "Challenge:", "Before:", "After:", "Bridge:", "Feature:", "Benefit:", "Step 1:", "Schritt 1:", "Phase 1:", oder jegliche anderen Struktur-Labels oder Annotationen. Der Text muss wie ein echter Social-Media-Post klingen, nicht wie eine Marketing-Vorlage.
 2. Text ist ein natürlicher Social-Media-Post — wie ein Mensch schreibt, nicht wie eine Vorlage
 3. Kontaktdaten NICHT in mainCaption einfügen — werden automatisch hinzugefügt
 4. Keine Klammern, keine [Platzhalter], keine Erklärungen in Klammern

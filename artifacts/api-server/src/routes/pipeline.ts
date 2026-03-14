@@ -397,7 +397,7 @@ Schreibe Content GENAU NACH DEM ${strategyData.marketingModel}-MODELL und gib JS
 Anforderungen:
 - hooks: 3 Eröffnungssätze im ${plat}-Stil, die in den ersten 3 Sekunden Aufmerksamkeit erregen
 - hashtags: 15-25 Hashtags (Mix aus Trending + Lokal ${brand.branchLocation} + Conversion), deutsche und englische Hashtags
-- mainCaption: MUSS der Struktur des ${strategyData.marketingModel}-Modells folgen
+- mainCaption: MUSS der Logik des ${strategyData.marketingModel}-Modells folgen, ABER KEINE sichtbaren Labels — kein "Hook:", "Value:", "CTA:", "Attention:", "Problem:", "Story:", "Step 1:" oder jegliche Struktur-Annotationen im Text. Der Text fließt natürlich ohne sichtbare Framework-Labels.
 - GESAMTER CONTENT AUF DEUTSCH — natürlich, nicht steif, authentisch`;
 
       const contentData = await callGeminiJSON(contentPrompt, geminiSystem);

@@ -12,14 +12,14 @@ import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-// Strip AIDA labels + ALL markdown bold/italic markers
+// Strip ALL marketing model labels (AIDA, PAS, Hook-Value-CTA, Storytelling, BAB, 4P, FAB...)
+// Rule: only strip when word is followed by colon (label pattern), not when used naturally in sentences
 function cleanText(text: string | null | undefined): string {
   if (!text) return "";
+  const MARKETING_LABELS =
+    /\*{0,2}(Attention|Interest|Desire|Action|Problem|Agitate|Amplify|Lösung|Solution|Hook|Value|CTA|Story|Storytelling|Situation|Challenge|Transformation|Before|After|Bridge|Promise|Picture|Proof|Push|Feature|Advantage|Benefit|AIDA|PAS|BAB|FAB|Schritt\s*\d*|Step\s*\d*|Teil\s*\d*|Phase\s*\d*|Kontext|Hintergrund|Konflikt|Auflösung|Nutzwert|Handlungsaufruf)\*{0,2}:\*{0,2}\s*/gi;
   return text
-    .replace(/\*{0,2}A[-‑]?ttention\*{0,2}:?\*{0,2}\s*/gi, "")
-    .replace(/\*{0,2}I[-‑]?nterest\*{0,2}:?\*{0,2}\s*/gi, "")
-    .replace(/\*{0,2}D[-‑]?esire\*{0,2}:?\*{0,2}\s*/gi, "")
-    .replace(/\*{0,2}A[-‑]?ction\*{0,2}:?\*{0,2}\s*/gi, "")
+    .replace(MARKETING_LABELS, "")
     .replace(/\*{1,2}/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

@@ -86,6 +86,8 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [pingingMetricool, setPingingMetricool] = useState(false);
+  const [pingResult, setPingResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
 
   const toggleContentType = (ct: string) => {
     const current = local.contentTypes.split(",").filter(Boolean);
@@ -252,6 +254,43 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
               Mỗi tiệm có thể đăng vào fanpage riêng — nhập Blog ID + Token tương ứng. Tìm Blog ID tại{" "}
               <a href="https://app.metricool.com" target="_blank" rel="noreferrer" className="text-primary hover:underline">app.metricool.com</a> → Settings → My account.
             </p>
+            {/* Direct Metricool ping button */}
+            <button
+              onClick={async () => {
+                if (!local.metricoolAccountId) { setPingResult({ ok: false, message: "Hãy nhập Blog ID trước!" }); return; }
+                if (!local.metricoolToken) { setPingResult({ ok: false, message: "Hãy nhập API Token trước!" }); return; }
+                setPingingMetricool(true); setPingResult(null);
+                try {
+                  const r = await fetch(`${BASE}/api/automation/test-metricool/${brand.id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ blogId: local.metricoolAccountId, metricoolToken: local.metricoolToken }),
+                  });
+                  const data = await r.json();
+                  if (data.ok) {
+                    setPingResult({ ok: true, message: `✅ Metricool nhận bài! Post đã vào hàng đợi.`, detail: JSON.stringify(data.metricoolResponse, null, 2) });
+                  } else {
+                    const errMsg = data.error ?? (data.metricoolResponse ? JSON.stringify(data.metricoolResponse) : `HTTP ${data.status}`);
+                    setPingResult({ ok: false, message: `❌ Metricool lỗi: ${errMsg}`, detail: JSON.stringify(data.metricoolResponse ?? data, null, 2) });
+                  }
+                } catch (e: any) {
+                  setPingResult({ ok: false, message: `❌ Lỗi kết nối: ${e.message}` });
+                } finally {
+                  setPingingMetricool(false);
+                }
+              }}
+              disabled={pingingMetricool}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 text-xs font-semibold transition-colors disabled:opacity-50 w-full justify-center"
+            >
+              {pingingMetricool ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🔌</span>}
+              {pingingMetricool ? "Đang kết nối Metricool..." : "Ping trực tiếp Metricool (bypass Make.com)"}
+            </button>
+            {pingResult && (
+              <div className={`p-3 rounded-xl border text-xs ${pingResult.ok ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300" : "bg-red-500/10 border-red-500/20 text-red-300"}`}>
+                <p className="font-medium">{pingResult.message}</p>
+                {pingResult.detail && <pre className="mt-2 text-[10px] opacity-70 overflow-x-auto whitespace-pre-wrap">{pingResult.detail}</pre>}
+              </div>
+            )}
           </div>
 
           {/* Summary */}
@@ -366,7 +405,11 @@ export default function AutomationPage() {
     const r = await fetch(`${BASE}/api/automation/run/${brandId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ testMode: true }),
+      body: JSON.stringify({
+        testMode: true,
+        metricoolAccountId: currentSettings.metricoolAccountId || undefined,
+        metricoolToken: currentSettings.metricoolToken || undefined,
+      }),
     });
     const data = await r.json();
     if (!data.ok) throw new Error(data.error ?? "Lỗi không xác định");

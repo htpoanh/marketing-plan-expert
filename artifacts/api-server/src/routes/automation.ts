@@ -489,13 +489,22 @@ router.post("/run", async (req, res) => {
 // ── POST /automation/run/:brandId — run for single brand manually ─────────────
 router.post("/run/:brandId", async (req, res) => {
   const brandId = parseInt(req.params.brandId);
-  const { dryRun = false, testMode = false } = req.body;
+  const { dryRun = false, testMode = false, metricoolAccountId: bodyMetricoolId, metricoolToken: bodyMetricoolToken } = req.body;
 
   try {
     const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
     if (!brand) return res.status(404).json({ error: "Brand nicht gefunden" });
 
     let [settings] = await db.select().from(automationSettingsTable).where(eq(automationSettingsTable.brandId, brandId));
+
+    // Merge incoming metricool credentials (from UI form, may not be saved yet)
+    if (settings && (bodyMetricoolId !== undefined || bodyMetricoolToken !== undefined)) {
+      settings = {
+        ...settings,
+        metricoolAccountId: bodyMetricoolId ?? settings.metricoolAccountId,
+        metricoolToken: bodyMetricoolToken ?? settings.metricoolToken,
+      };
+    }
 
     // Use defaults if no settings configured yet
     if (!settings) {
@@ -599,6 +608,50 @@ router.post("/run/:brandId", async (req, res) => {
     res.json({ ok: true, ...result, dryRun });
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── POST /automation/test-metricool/:brandId — direct Metricool ping (bypass Make.com) ─────
+router.post("/test-metricool/:brandId", async (req, res) => {
+  const brandId = parseInt(req.params.brandId);
+  const { blogId, metricoolToken, text, scheduledAt } = req.body;
+
+  if (!blogId) return res.status(400).json({ ok: false, error: "Thiếu Blog ID (blogId)" });
+  if (!metricoolToken) return res.status(400).json({ ok: false, error: "Thiếu Metricool API Token (metricoolToken)" });
+
+  // Test payload: a simple post scheduled +10 min from now
+  const postDate = scheduledAt ?? new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 16);
+  const caption = text ?? "Test von AI Marketer 🚀 #Test";
+
+  try {
+    const payload = {
+      blogId: String(blogId),
+      networks: [{ type: "facebook", text: caption }],
+      date: postDate,
+    };
+    console.log("[test-metricool] Sending to Metricool:", JSON.stringify(payload));
+
+    const mcRes = await fetch("https://app.metricool.com/api/v2/planning", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${metricoolToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const mcText = await mcRes.text();
+    let mcData: any;
+    try { mcData = JSON.parse(mcText); } catch { mcData = { raw: mcText }; }
+
+    console.log("[test-metricool] Metricool response:", mcRes.status, mcText);
+
+    if (!mcRes.ok) {
+      return res.json({ ok: false, status: mcRes.status, metricoolResponse: mcData });
+    }
+    return res.json({ ok: true, status: mcRes.status, metricoolResponse: mcData, sentPayload: payload });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
   }
 });
 

@@ -7,6 +7,7 @@ import contentPlansRouter from "./content-plans";
 import pipelineRouter from "./pipeline";
 import aiAgentsRouter from "./ai-agents";
 import aiProfilesRouter from "./ai-profiles";
+import automationRouter from "./automation";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/content-plans", contentPlansRouter);
 router.use("/pipeline", pipelineRouter);
 router.use("/ai-agents", aiAgentsRouter);
 router.use("/ai-profiles", aiProfilesRouter);
+router.use("/automation", automationRouter);
 
 export default router;

@@ -16,6 +16,7 @@ import ApprovalDashboard from "@/pages/approvals/ApprovalDashboard";
 import AIPipeline from "@/pages/pipeline/AIPipeline";
 import MarketingModels from "@/pages/pipeline/MarketingModels";
 import AIAgentsPage from "@/pages/agents/AIAgentsPage";
+import AutomationPage from "@/pages/automation/AutomationPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/agents" component={AIAgentsPage} />
       <Route path="/calendar" component={ContentCalendar} />
       <Route path="/approvals" component={ApprovalDashboard} />
+      <Route path="/automation" component={AutomationPage} />
       <Route component={NotFound} />
     </Switch>
   );

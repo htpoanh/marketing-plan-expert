@@ -6,3 +6,4 @@ export * from "./pipeline_runs";
 export * from "./conversations";
 export * from "./messages";
 export * from "./ai_agent_configs";
+export * from "./automation_settings";

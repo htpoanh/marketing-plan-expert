@@ -10,7 +10,8 @@ import {
   CheckSquare,
   ChevronRight,
   Bot,
-  Settings2
+  Settings2,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -45,6 +46,7 @@ const navigation = [
   },
   { name: "Lịch nội dung", href: "/calendar", icon: CalendarDays },
   { name: "Phê duyệt", href: "/approvals", icon: CheckSquare },
+  { name: "Automation", href: "/automation", icon: Zap },
 ];
 
 export function Sidebar() {

@@ -17,6 +17,7 @@ export const contentPlansTable = pgTable("content_plans", {
   hashtags: text("hashtags"),
   imagePrompt: text("image_prompt"),
   videoPrompt: text("video_prompt"),
+  imageUrl: text("image_url"),
   status: text("status").default("draft").notNull(),
   rejectReason: text("reject_reason"),
   metricoolJobId: text("metricool_job_id"),

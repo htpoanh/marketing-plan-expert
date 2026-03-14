@@ -9,10 +9,58 @@ import {
 import { AppLayout } from "@/components/layout/AppLayout";
 import { 
   Sparkles, Bot, Search, BrainCircuit, PenTool, Palette, Save, 
-  ChevronDown, ChevronUp, Copy, CheckCircle2, XCircle, Clock, Trash2, ExternalLink, Eye, X
+  ChevronDown, ChevronUp, Copy, CheckCircle2, XCircle, Clock, Trash2, ExternalLink, Eye, X, Image, Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function GenerateImageButton({ planIds, toast }: { planIds: number[]; toast: ReturnType<typeof useToast>["toast"] }) {
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [images, setImages] = useState<{ id: number; url: string }[]>([]);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    const results: { id: number; url: string }[] = [];
+    for (const id of planIds) {
+      try {
+        const res = await fetch(`${BASE}/api/content-plans/${id}/generate-image`, { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.imageUrl) results.push({ id, url: data.imageUrl });
+        }
+      } catch {}
+    }
+    setImages(results);
+    setDone(true);
+    setLoading(false);
+    toast({ title: `Đã tạo ${results.length}/${planIds.length} hình ảnh`, description: "Xem hình trong Lịch Nội dung" });
+  };
+
+  return (
+    <div className="space-y-3">
+      <button
+        onClick={handleGenerate}
+        disabled={loading || done}
+        className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+      >
+        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Image className="w-4 h-4" />}
+        {loading ? `Đang tạo hình (${planIds.length} bài)...` : done ? "Đã tạo xong!" : `Tạo hình DALL-E (${planIds.length} bài)`}
+      </button>
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          {images.map(img => (
+            <div key={img.id} className="rounded-xl overflow-hidden border border-border/50">
+              <img src={img.url} alt={`Plan ${img.id}`} className="w-full object-cover aspect-square" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const AGENT_STEPS = [
   { id: 1, name: "Phân tích xu hướng", icon: Search, desc: "Trend Research Agent", time: 8000 },
@@ -431,26 +479,32 @@ function RunPipelineTab() {
 
               <div className="h-px bg-border/50 w-full" />
 
-              <ResultSection title="4. Prompts Hình ảnh/Video" icon={Palette} defaultOpen={false}>
+              <ResultSection title="4. Prompts Hình ảnh/Video" icon={Palette} defaultOpen={true}>
                 {result.promptData && (
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-3">
-                        <h4 className="text-sm font-bold flex items-center gap-2"><Palette className="w-4 h-4 text-purple-500" /> Image Prompt</h4>
-                        <div className="p-4 bg-secondary/30 rounded-xl border border-border/50 text-sm relative group h-full">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold flex items-center gap-2"><Palette className="w-4 h-4 text-purple-500" /> Image Prompt</h4>
+                          {result.savedPlanIds?.length > 0 && (
+                            <GenerateImageButton planIds={result.savedPlanIds} toast={toast} />
+                          )}
+                        </div>
+                        <div className="p-4 bg-secondary/30 rounded-xl border border-border/50 text-sm relative group">
                           {result.promptData.imagePrompt}
                           <button onClick={() => copyToClipboard(result.promptData.imagePrompt)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-background rounded-md shadow hover:text-primary"><Copy className="w-4 h-4" /></button>
                         </div>
                       </div>
                       <div className="space-y-3">
                         <h4 className="text-sm font-bold flex items-center gap-2"><Palette className="w-4 h-4 text-blue-500" /> Video Prompt</h4>
-                        <div className="p-4 bg-secondary/30 rounded-xl border border-border/50 text-sm relative group h-full">
+                        <p className="text-xs text-muted-foreground">Dùng cho HailuoAI, Sora, hoặc Kling</p>
+                        <div className="p-4 bg-secondary/30 rounded-xl border border-border/50 text-sm relative group">
                           {result.promptData.videoPrompt}
                           <button onClick={() => copyToClipboard(result.promptData.videoPrompt)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-background rounded-md shadow hover:text-primary"><Copy className="w-4 h-4" /></button>
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex flex-wrap gap-4 mt-4">
                       <div className="px-3 py-1.5 bg-secondary rounded-lg text-xs font-medium border border-border/50">
                         <span className="text-muted-foreground mr-1">Style:</span> {result.promptData.visualStyle}

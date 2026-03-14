@@ -3,10 +3,12 @@ import { db } from "@workspace/db";
 import { contentPlansTable, brandsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
   httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
 });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const router: IRouter = Router();
 
@@ -160,6 +162,7 @@ router.put("/:id", async (req, res) => {
     if (body.hashtags !== undefined) updateData.hashtags = body.hashtags;
     if (body.imagePrompt !== undefined) updateData.imagePrompt = body.imagePrompt;
     if (body.videoPrompt !== undefined) updateData.videoPrompt = body.videoPrompt;
+    if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
     if (body.status) updateData.status = body.status;
 
     const [plan] = await db.update(contentPlansTable).set(updateData).where(eq(contentPlansTable.id, id)).returning();
@@ -167,6 +170,38 @@ router.put("/:id", async (req, res) => {
     res.json(plan);
   } catch (error) {
     res.status(500).json({ error: "Failed to update content plan" });
+  }
+});
+
+router.post("/:id/generate-image", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
+    if (!plan) return res.status(404).json({ error: "Content plan not found" });
+
+    const prompt = plan.imagePrompt;
+    if (!prompt) return res.status(400).json({ error: "Bài viết chưa có image prompt" });
+
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: prompt.substring(0, 1000),
+      n: 1,
+      size: "1024x1024",
+      quality: "standard",
+    });
+
+    const imageUrl = response.data[0]?.url;
+    if (!imageUrl) return res.status(500).json({ error: "Không tạo được hình ảnh" });
+
+    const [updated] = await db.update(contentPlansTable)
+      .set({ imageUrl, updatedAt: new Date() })
+      .where(eq(contentPlansTable.id, id))
+      .returning();
+
+    res.json({ imageUrl, plan: updated });
+  } catch (error: any) {
+    console.error("Generate image error:", error);
+    res.status(500).json({ error: error?.message ?? "Failed to generate image" });
   }
 });
 

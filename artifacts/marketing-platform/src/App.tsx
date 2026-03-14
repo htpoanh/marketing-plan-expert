@@ -18,6 +18,7 @@ import MarketingModels from "@/pages/pipeline/MarketingModels";
 import AIAgentsPage from "@/pages/agents/AIAgentsPage";
 import AutomationPage from "@/pages/automation/AutomationPage";
 import AdAnalysis from "@/pages/analysis/AdAnalysis";
+import MessengerBot from "@/pages/messenger/MessengerBot";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/approvals" component={ApprovalDashboard} />
       <Route path="/automation" component={AutomationPage} />
       <Route path="/analysis" component={AdAnalysis} />
+      <Route path="/messenger" component={MessengerBot} />
       <Route component={NotFound} />
     </Switch>
   );

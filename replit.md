@@ -89,12 +89,33 @@ artifacts-monorepo/
 - `POST /api/content-plans/:id/reject`
 - `POST /api/content-plans/:id/publish` — Trigger Metricool webhook
 
+## AI Messenger Booking Bot
+
+Route: `/messenger` (frontend), `/api/messenger/*` (API)
+
+Flow: Customer messages Facebook Page → GPT-4o collects info in German (service, date, time, name, phone) → saves appointment → notifies manager PSID via Messenger → Manager replies "JA" (confirm) or "NEIN" (reject) → AI sends response to customer.
+
+**DB Tables**: `messenger_configs` (per-brand: page_access_token, verify_token, manager_psid, page_id), `messenger_sessions` (per-user PSID conversation state + history), `appointments` (booking records with status)
+
+**Key API endpoints**:
+- `GET /api/messenger/webhook` — Meta webhook verification
+- `POST /api/messenger/webhook` — Receive and process messages
+- `GET/POST /api/messenger/config/:brandId` — Config CRUD
+- `GET /api/messenger/appointments` — List bookings
+- `PATCH /api/messenger/appointments/:id/status` — Manual confirm/reject
+- `GET /api/messenger/overview` — All brands with stats
+
+**Setup**: Facebook Developer App → Messenger → Webhooks → Callback URL = `{domain}/api/messenger/webhook`, subscribe: `messages, messaging_postbacks`. Token from Page Access Tokens.
+
 ## Environment Variables
 
 - `DATABASE_URL` — Auto-provisioned by Replit
 - `AI_INTEGRATIONS_GEMINI_BASE_URL` — Auto-set by Replit AI Integrations
 - `AI_INTEGRATIONS_GEMINI_API_KEY` — Auto-set by Replit AI Integrations
 - `METRICOOL_WEBHOOK_URL` — Optional: set to trigger Metricool publishing
+- `OPENAI_API_KEY` — GPT-4o for Messenger booking bot + content generation
+- `GROK_API_KEY` — Grok for trend analysis in AI pipeline
+- `MAKE_WEBHOOK_URL` — Make.com automation webhook
 
 ## Development
 

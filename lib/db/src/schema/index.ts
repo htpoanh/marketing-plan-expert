@@ -8,3 +8,6 @@ export * from "./messages";
 export * from "./ai_agent_configs";
 export * from "./automation_settings";
 export * from "./automation_logs";
+export * from "./messenger_configs";
+export * from "./messenger_sessions";
+export * from "./appointments";

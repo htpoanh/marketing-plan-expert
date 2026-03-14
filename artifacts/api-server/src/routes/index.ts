@@ -9,6 +9,7 @@ import aiAgentsRouter from "./ai-agents";
 import aiProfilesRouter from "./ai-profiles";
 import automationRouter from "./automation";
 import adAnalysisRouter from "./ad-analysis";
+import messengerRouter from "./messenger";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use("/ai-agents", aiAgentsRouter);
 router.use("/ai-profiles", aiProfilesRouter);
 router.use("/automation", automationRouter);
 router.use("/ad-analysis", adAnalysisRouter);
+router.use("/messenger", messengerRouter);
 
 export default router;

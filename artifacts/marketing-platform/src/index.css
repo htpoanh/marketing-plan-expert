@@ -51,45 +51,46 @@
 }
 
 :root {
-  /* DARK MODE DEFAULT FOR SAAS PROFESSIONAL LOOK */
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  
-  --card: 222 47% 13%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 33% 17%;
-  
-  --popover: 222 47% 13%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 33% 17%;
-  
-  /* Vibrant Indigo/Blue Primary */
-  --primary: 250 100% 65%;
-  --primary-foreground: 210 40% 98%;
-  
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20.2% 65.1%;
-  
-  --accent: 250 100% 65%;
-  --accent-foreground: 210 40% 98%;
-  
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
+  /* LIGHT MODE */
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
 
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
-  --ring: 250 100% 65%;
-  
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --card-border: 220 13% 89%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --popover-border: 220 13% 89%;
+
+  /* Indigo primary */
+  --primary: 250 95% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 14% 94%;
+  --secondary-foreground: 222 47% 20%;
+
+  --muted: 220 14% 94%;
+  --muted-foreground: 215 16% 46%;
+
+  --accent: 250 95% 60%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 13% 89%;
+  --input: 220 13% 89%;
+  --ring: 250 95% 60%;
+
   --radius: 0.75rem;
 
-  --chart-1: 250 100% 65%;
-  --chart-2: 190 90% 50%;
-  --chart-3: 340 80% 60%;
-  --chart-4: 40 90% 60%;
-  --chart-5: 280 80% 65%;
+  /* Vibrant chart colors for light background */
+  --chart-1: 250 95% 58%;
+  --chart-2: 199 89% 44%;
+  --chart-3: 340 78% 52%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 161 78% 40%;
 }
 
 @layer base {
@@ -107,7 +108,7 @@
   }
 }
 
-/* Custom scrollbar for dark mode */
+/* Scrollbar for light mode */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -116,14 +117,14 @@
   background: hsl(var(--background));
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted));
+  background: hsl(220 13% 80%);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: hsl(215 16% 60%);
 }
 
 /* Glassmorphism utilities */
 .glass-panel {
-  @apply bg-card/60 backdrop-blur-xl border border-white/10 shadow-xl;
+  @apply bg-white/70 backdrop-blur-xl border border-black/8 shadow-xl;
 }

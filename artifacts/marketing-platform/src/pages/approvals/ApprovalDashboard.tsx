@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useListContentPlans,
   useListBrands,
@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send, Calendar, Store, ChevronsDown, ChevronsUp, FileText } from "lucide-react";
+import { X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send, Calendar, Store, ChevronsDown, ChevronsUp, FileText, Scissors } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
@@ -54,6 +54,9 @@ export default function ApprovalDashboard() {
   const [schedules, setSchedules] = useState<Record<number, string>>({});
   const [rewritingId, setRewritingId] = useState<{ id: number; direction: "shorter" | "longer" } | null>(null);
   const [localCaptions, setLocalCaptions] = useState<Record<number, string>>({});
+  const [selections, setSelections] = useState<Record<number, { start: number; end: number; text: string } | null>>({});
+  const [rewritingSelectionId, setRewritingSelectionId] = useState<{ id: number; direction: "shorter" | "longer" } | null>(null);
+  const textareaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
 
   const rejectMutation = useRejectContentPlan({
     mutation: {
@@ -125,6 +128,45 @@ export default function ApprovalDashboard() {
       toast({ title: "❌ Lỗi viết lại", description: e.message, variant: "destructive" });
     } finally {
       setRewritingId(null);
+    }
+  };
+
+  const handleSelectionChange = (planId: number) => {
+    const el = textareaRefs.current[planId];
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const text = el.value.slice(start, end).trim();
+    if (text.length > 8) {
+      setSelections(prev => ({ ...prev, [planId]: { start, end, text } }));
+    } else {
+      setSelections(prev => ({ ...prev, [planId]: null }));
+    }
+  };
+
+  const handleRewriteSelection = async (planId: number, direction: "shorter" | "longer", brandId: number) => {
+    const sel = selections[planId];
+    if (!sel || !sel.text) return;
+    setRewritingSelectionId({ id: planId, direction });
+    try {
+      const res = await fetch(`${BASE}/api/content-plans/rewrite-selection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: sel.text, direction, brandId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      // Replace only the selected portion in the caption
+      const current = localCaptions[planId] ?? cleanText((plans as any[])?.find((p: any) => p.id === planId)?.caption);
+      const newCaption = current.slice(0, sel.start) + data.result + current.slice(sel.end);
+      setLocalCaptions(prev => ({ ...prev, [planId]: newCaption }));
+      setSelections(prev => ({ ...prev, [planId]: null }));
+      const label = direction === "shorter" ? "ngắn hơn" : "dài hơn";
+      toast({ title: `✅ Đoạn đã viết lại ${label}`, description: `${data.wordCount ?? "?"} từ → ${data.result.slice(0, 40)}…` });
+    } catch (e: any) {
+      toast({ title: "❌ Lỗi viết lại đoạn", description: e.message, variant: "destructive" });
+    } finally {
+      setRewritingSelectionId(null);
     }
   };
 
@@ -213,6 +255,10 @@ export default function ApprovalDashboard() {
               const isRewritingShorter = rewritingId?.id === plan.id && rewritingId.direction === "shorter";
               const isRewritingLonger = rewritingId?.id === plan.id && rewritingId.direction === "longer";
               const anyRewriting = isRewritingShorter || isRewritingLonger;
+              const sel = selections[plan.id];
+              const isRewritingSelShorter = rewritingSelectionId?.id === plan.id && rewritingSelectionId.direction === "shorter";
+              const isRewritingSelLonger = rewritingSelectionId?.id === plan.id && rewritingSelectionId.direction === "longer";
+              const anyRewritingSel = isRewritingSelShorter || isRewritingSelLonger;
 
               return (
                 <div key={plan.id} className="bg-card rounded-2xl border border-border/50 shadow-xl overflow-hidden flex flex-col lg:flex-row">
@@ -234,18 +280,55 @@ export default function ApprovalDashboard() {
 
                     <h3 className="text-lg font-bold mb-3 text-primary">{cleanText(plan.hook) || plan.topic}</h3>
 
-                    <div className="p-4 bg-secondary/30 rounded-xl mb-3 border border-border/50 space-y-2">
-                      <p className={`text-sm text-foreground/90 whitespace-pre-wrap transition-opacity ${anyRewriting ? "opacity-40" : "opacity-100"}`}>
-                        {displayCaption}
-                      </p>
-                      {plan.cta && !plan.caption?.includes(plan.cta) && (
-                        <p className="text-sm font-semibold text-amber-400">{cleanText(plan.cta)}</p>
+                    <div className="relative mb-3">
+                      <textarea
+                        ref={el => { textareaRefs.current[plan.id] = el; }}
+                        value={displayCaption}
+                        onChange={e => setLocalCaptions(prev => ({ ...prev, [plan.id]: e.target.value }))}
+                        onSelect={() => handleSelectionChange(plan.id)}
+                        onMouseUp={() => handleSelectionChange(plan.id)}
+                        onKeyUp={() => handleSelectionChange(plan.id)}
+                        rows={6}
+                        disabled={anyRewriting || anyRewritingSel || publishingId === plan.id}
+                        className={`w-full p-4 bg-secondary/30 rounded-xl border border-border/50 text-sm text-foreground/90 resize-y leading-relaxed transition-opacity focus:outline-none focus:ring-2 focus:ring-primary/30 ${anyRewriting || anyRewritingSel ? "opacity-40" : "opacity-100"}`}
+                      />
+                      {/* Floating selection rewrite toolbar */}
+                      {sel && !anyRewriting && !anyRewritingSel && (
+                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-2 bg-card border border-border shadow-lg rounded-full z-10 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                          <Scissors className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground font-medium mr-1">Đoạn đã chọn:</span>
+                          <button
+                            onClick={() => handleRewriteSelection(plan.id, "shorter", plan.brandId)}
+                            disabled={anyRewritingSel}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                          >
+                            {isRewritingSelShorter ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronsDown className="w-3 h-3" />}
+                            Ngắn lại
+                          </button>
+                          <button
+                            onClick={() => handleRewriteSelection(plan.id, "longer", plan.brandId)}
+                            disabled={anyRewritingSel}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-violet-500 text-white hover:bg-violet-600 transition-colors disabled:opacity-50"
+                          >
+                            {isRewritingSelLonger ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronsUp className="w-3 h-3" />}
+                            Dài hơn
+                          </button>
+                          <button
+                            onClick={() => setSelections(prev => ({ ...prev, [plan.id]: null }))}
+                            className="ml-1 p-1 rounded-full hover:bg-secondary transition-colors text-muted-foreground"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
-                      <p className="text-xs text-muted-foreground">{plan.hashtags}</p>
                     </div>
+                    {plan.cta && !plan.caption?.includes(plan.cta) && (
+                      <p className="text-sm font-semibold text-amber-400 mb-2">{cleanText(plan.cta)}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mb-3">{plan.hashtags}</p>
 
                     {/* Rewrite controls */}
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
                       <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${
                         wordCount > 220 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-secondary border-border/50 text-muted-foreground"
                       }`}>
@@ -254,20 +337,23 @@ export default function ApprovalDashboard() {
                       </span>
                       <button
                         onClick={() => handleRewrite(plan.id, "shorter")}
-                        disabled={anyRewriting || publishingId === plan.id}
+                        disabled={anyRewriting || anyRewritingSel || publishingId === plan.id}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isRewritingShorter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronsDown className="w-3.5 h-3.5" />}
-                        Viết ngắn hơn
+                        Viết ngắn hơn (toàn bài)
                       </button>
                       <button
                         onClick={() => handleRewrite(plan.id, "longer")}
-                        disabled={anyRewriting || publishingId === plan.id}
+                        disabled={anyRewriting || anyRewritingSel || publishingId === plan.id}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isRewritingLonger ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronsUp className="w-3.5 h-3.5" />}
-                        Viết dài hơn
+                        Viết dài hơn (toàn bài)
                       </button>
+                      {!sel && (
+                        <span className="text-xs text-muted-foreground italic">· Bôi đen đoạn bất kỳ để viết lại ngắn/dài</span>
+                      )}
                     </div>
 
                     {plan.imagePrompt && (

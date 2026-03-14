@@ -353,6 +353,45 @@ router.post("/:id/generate-image", async (req, res) => {
 });
 
 // ── Rewrite caption shorter or longer (max 250 words) ───────────────────────
+router.post("/rewrite-selection", async (req, res) => {
+  try {
+    const { text, direction, brandId } = req.body as { text: string; direction: "shorter" | "longer"; brandId?: number };
+    if (!text?.trim() || !direction) {
+      return res.status(400).json({ error: "text and direction are required" });
+    }
+    let brandName = "ein Unternehmen";
+    if (brandId) {
+      const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
+      if (brand) brandName = brand.brandName;
+    }
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    const directionInstruction = direction === "shorter"
+      ? `Schreibe diesen Abschnitt KÜRZER (Ziel: ${Math.max(8, Math.round(wordCount * 0.55))}–${Math.round(wordCount * 0.7)} Wörter). Behalte die Kernaussage, streiche Füllwörter.`
+      : `Schreibe diesen Abschnitt AUSFÜHRLICHER (Ziel: ${Math.round(wordCount * 1.3)}–${Math.round(wordCount * 1.6)} Wörter). Mehr Details, Emotion oder Storytelling.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `Du bist ein professioneller Social-Media-Texter für ${brandName} in Deutschland. Schreibe ausschließlich auf Deutsch, natürlich und fließend, ohne Marketing-Labels oder Erklärungen.`,
+        },
+        {
+          role: "user",
+          content: `${directionInstruction}\n\nORIGINALTEXT:\n${text}\n\nGib NUR den neuen Text zurück, keine Erklärung:`,
+        },
+      ],
+      temperature: 0.72,
+      max_tokens: 300,
+    });
+    const result = cleanPostText(completion.choices[0]?.message?.content ?? text);
+    res.json({ result, wordCount: result.split(/\s+/).filter(Boolean).length });
+  } catch (error: any) {
+    console.error("Rewrite selection error:", error);
+    res.status(500).json({ error: error?.message ?? "Failed to rewrite selection" });
+  }
+});
+
 router.post("/:id/rewrite", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

@@ -161,7 +161,7 @@ async function callOpenAIJSON(prompt: string, systemPrompt: string): Promise<any
   return JSON.parse(response.choices[0]?.message?.content ?? "{}");
 }
 
-// Agent 3: Gemini — creative Vietnamese content writing
+// Agent 3: Gemini — creative German content writing
 const gemini = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
   httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
@@ -251,7 +251,7 @@ router.post("/run", async (req, res) => {
 
   const runId = run.id;
   const now = new Date();
-  const month = now.toLocaleString("vi-VN", { month: "long" });
+  const month = now.toLocaleString("de-DE", { month: "long" });
   const modelList = MARKETING_MODELS.map(m => `- ${m.name} (${m.fullName}): ${m.whenToUse}`).join("\n");
 
   try {
@@ -271,9 +271,9 @@ router.post("/run", async (req, res) => {
     const openaiConfig = agentConfigs.find(a => a.agentKey === "openai");
     const geminiConfig = agentConfigs.find(a => a.agentKey === "gemini");
 
-    const grokSystem = buildSystemPrompt(grokConfig, "Bạn là chuyên gia phân tích xu hướng thị trường thời gian thực với 10 năm kinh nghiệm.");
-    const openaiSystem = buildSystemPrompt(openaiConfig, "Bạn là chuyên gia chiến lược marketing và prompt engineering hàng đầu.");
-    const geminiSystem = buildSystemPrompt(geminiConfig, "Bạn là copywriter hàng đầu, chuyên gia viết nội dung viral tiếng Việt tự nhiên.");
+    const grokSystem = buildSystemPrompt(grokConfig, "Du bist ein Experte für Echtzeit-Markttrends mit 10 Jahren Erfahrung im deutschen Markt.");
+    const openaiSystem = buildSystemPrompt(openaiConfig, "Du bist ein führender Marketing-Stratege und Prompt-Engineering-Experte.");
+    const geminiSystem = buildSystemPrompt(geminiConfig, "Du bist ein Top-Copywriter, Experte für viralen deutschen Content auf Social Media. Schreibe immer auf Deutsch, natürlich und überzeugend.");
 
     // Brand contact info block
     const contactBlock = [
@@ -288,66 +288,66 @@ router.post("/run", async (req, res) => {
       ? `\nTÌNH TRẠNG HIỆN TẠI CỦA CỬA HÀNG:\n${storeSituation}\n`
       : "";
 
-    const trendPrompt = `Bạn là chuyên gia phân tích xu hướng thị trường với 10 năm kinh nghiệm.
+    const trendPrompt = `Du bist ein Markttrend-Experte mit 10 Jahren Erfahrung im deutschsprachigen Markt.
 
-THÔNG TIN PHÂN TÍCH:
-- Ngành: ${brand.industry}
-- Địa điểm: ${brand.branchLocation}
-- Chủ đề: ${topic}
-- Tháng hiện tại: ${month}
-- Nền tảng: ${platformLabel}${situationBlock}
+ANALYSE-INFORMATIONEN:
+- Branche: ${brand.industry}
+- Standort: ${brand.branchLocation}
+- Thema: ${topic}
+- Aktueller Monat: ${month}
+- Plattform: ${platformLabel}${situationBlock}
 
-Hãy phân tích xu hướng và trả về JSON (không markdown):
+Analysiere die Trends und gib JSON zurück (kein Markdown):
 {
-  "keywords": ["từ khóa trending 1", "từ khóa 2", "từ khóa 3", "..."],
+  "keywords": ["trending Keyword 1", "Keyword 2", "Keyword 3", "..."],
   "trendScore": 75,
-  "recommendedAngles": ["góc tiếp cận 1", "góc tiếp cận 2", "góc tiếp cận 3"],
-  "seasonalContext": "bối cảnh mùa vụ/sự kiện đặc biệt tháng này",
-  "hotTopics": ["chủ đề nóng 1", "chủ đề nóng 2", "chủ đề nóng 3", "chủ đề nóng 4", "chủ đề nóng 5"]
+  "recommendedAngles": ["Ansatz 1", "Ansatz 2", "Ansatz 3"],
+  "seasonalContext": "saisonaler Kontext / Ereignisse diesen Monat",
+  "hotTopics": ["heißes Thema 1", "Thema 2", "Thema 3", "Thema 4", "Thema 5"]
 }
 
-Yêu cầu:
-- keywords: 8-12 từ khóa phổ biến trên ${platform} cho ngành ${brand.industry} tại ${brand.branchLocation}
-- trendScore: 0-100 (mức độ trending của chủ đề)
-- recommendedAngles: 3 hướng tiếp cận nội dung hiệu quả nhất hiện tại
-- seasonalContext: sự kiện/mùa/ngày lễ nào đang hoặc sắp đến ảnh hưởng đến marketing
-- hotTopics: 5 chủ đề đang hot trong ngành`;
+Anforderungen:
+- keywords: 8-12 populäre Hashtags/Keywords auf ${platform} für ${brand.industry} in ${brand.branchLocation}
+- trendScore: 0-100 (wie trending ist das Thema aktuell)
+- recommendedAngles: 3 effektivste Content-Ansätze für den deutschen Markt
+- seasonalContext: aktuelle Saison, Feiertage oder Events die das Marketing beeinflussen
+- hotTopics: 5 heiße Themen in der Branche auf Deutsch`;
 
     const trendData = await callGrokJSON(trendPrompt, grokSystem);
     await db.update(pipelineRunsTable).set({ trendData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 2: STRATEGY PLANNER ─────────────────────────────────────────────
-    const strategyPrompt = `Bạn là chuyên gia chiến lược marketing với bằng MBA và 15 năm thực chiến.
+    const strategyPrompt = `Du bist ein Marketing-Stratege mit MBA und 15 Jahren Praxiserfahrung im deutschen Markt.
 
-THÔNG TIN THƯƠNG HIỆU:
-- Tên: ${brand.brandName}
-- Ngành: ${brand.industry}
-- Địa điểm: ${brand.branchLocation}
-- Khách hàng mục tiêu: ${brand.targetAudience}
-- Giọng điệu: ${brand.brandVoice}${contactSection}${situationBlock}
-YÊU CẦU CHIẾN LƯỢC:
-- Chủ đề: ${topic}
-- Mục tiêu: ${goal}
-- Nền tảng: ${platform}
+MARKEN-INFORMATIONEN:
+- Name: ${brand.brandName}
+- Branche: ${brand.industry}
+- Standort: ${brand.branchLocation}
+- Zielgruppe: ${brand.targetAudience}
+- Markenstimme: ${brand.brandVoice}${contactSection}${situationBlock}
+STRATEGIE-ANFORDERUNGEN:
+- Thema: ${topic}
+- Ziel: ${goal}
+- Plattform: ${platform}
 
-XU HƯỚNG ĐÃ PHÂN TÍCH:
-- Keywords trending: ${trendData.keywords?.join(", ")}
-- Góc tiếp cận gợi ý: ${trendData.recommendedAngles?.join(", ")}
-- Bối cảnh mùa: ${trendData.seasonalContext}
+ANALYSIERTE TRENDS:
+- Trending Keywords: ${trendData.keywords?.join(", ")}
+- Empfohlene Ansätze: ${trendData.recommendedAngles?.join(", ")}
+- Saisonaler Kontext: ${trendData.seasonalContext}
 
-CÁC MÔ HÌNH MARKETING PHẢI CHỌN MỘT:
+MARKETING-MODELLE (EINES AUSWÄHLEN):
 ${modelList}
 
-Trả về JSON (không markdown):
+Gib JSON zurück (kein Markdown):
 {
-  "marketingModel": "tên mô hình (ví dụ: AIDA)",
-  "modelExplanation": "giải thích mô hình này hoạt động như thế nào (2-3 câu ngắn gọn)",
-  "reasoning": "lý do tại sao mô hình này phù hợp nhất với case này (2-3 câu)",
-  "campaignAngle": "góc độ chiến dịch cụ thể kết hợp trend + mô hình",
+  "marketingModel": "Modellname (z.B. AIDA)",
+  "modelExplanation": "Wie funktioniert dieses Modell (2-3 kurze Sätze auf Deutsch)",
+  "reasoning": "Warum passt dieses Modell am besten zu diesem Fall (2-3 Sätze auf Deutsch)",
+  "campaignAngle": "Konkreter Kampagnenwinkel aus Trend + Modell kombiniert",
   "funnelStage": "Awareness / Consideration / Conversion / Retention",
-  "targetEmotion": "cảm xúc chính muốn kích thích ở khách hàng",
-  "ctaStrategy": "chiến lược kêu gọi hành động chi tiết",
-  "contentPillars": ["trụ cột nội dung 1", "trụ cột 2", "trụ cột 3", "trụ cột 4"]
+  "targetEmotion": "Hauptemotion die beim Kunden ausgelöst werden soll",
+  "ctaStrategy": "Detaillierte Call-to-Action-Strategie auf Deutsch",
+  "contentPillars": ["Content-Säule 1", "Säule 2", "Säule 3", "Säule 4"]
 }`;
 
     const strategyData = await callOpenAIJSON(strategyPrompt, openaiSystem);
@@ -360,76 +360,77 @@ Trả về JSON (không markdown):
     let lastPromptData: any = null;
 
     for (const plat of platforms) {
-      // Agent 3: Gemini — viết nội dung cho từng nền tảng
-      const contentPrompt = `Bạn là copywriter hàng đầu, chuyên gia viết nội dung viral cho ${plat}.
+      // Agent 3: Gemini — schreibt Content für jede Plattform auf Deutsch
+      const contentPrompt = `Du bist ein Top-Copywriter für viralen ${plat}-Content im deutschsprachigen Raum.
 
-THƯƠNG HIỆU:
-- Tên: ${brand.brandName}
-- Ngành: ${brand.industry}
-- Giọng điệu: ${brand.brandVoice}
-- Khách hàng: ${brand.targetAudience}
-- Địa điểm: ${brand.branchLocation}${contactSection}${situationBlock}
+MARKE:
+- Name: ${brand.brandName}
+- Branche: ${brand.industry}
+- Markenstimme: ${brand.brandVoice}
+- Zielgruppe: ${brand.targetAudience}
+- Standort: ${brand.branchLocation}${contactSection}${situationBlock}
 
-CHIẾN LƯỢC ĐÃ CHỌN:
-- Mô hình: ${strategyData.marketingModel} (${strategyData.modelExplanation})
-- Góc chiến dịch: ${strategyData.campaignAngle}
-- Cảm xúc mục tiêu: ${strategyData.targetEmotion}
-- Giai đoạn phễu: ${strategyData.funnelStage}
+GEWÄHLTE STRATEGIE:
+- Modell: ${strategyData.marketingModel} (${strategyData.modelExplanation})
+- Kampagnenwinkel: ${strategyData.campaignAngle}
+- Zielemotion: ${strategyData.targetEmotion}
+- Funnel-Phase: ${strategyData.funnelStage}
 
-XU HƯỚNG:
+TRENDS:
 - Keywords: ${trendData.keywords?.join(", ")}
-- Bối cảnh: ${trendData.seasonalContext}
+- Saisonaler Kontext: ${trendData.seasonalContext}
 
-YÊU CẦU:
-- Chủ đề: ${topic}
-- Mục tiêu: ${goal}
-- Nền tảng: ${plat}
+ANFORDERUNGEN:
+- Thema: ${topic}
+- Ziel: ${goal}
+- Plattform: ${plat}
 
-Viết nội dung THEO ĐÚNG MÔ HÌNH ${strategyData.marketingModel} và trả về JSON (không markdown):
+Schreibe Content GENAU NACH DEM ${strategyData.marketingModel}-MODELL und gib JSON zurück (kein Markdown):
 {
-  "hooks": ["hook mạnh 1", "hook mạnh 2", "hook mạnh 3"],
-  "mainCaption": "caption đầy đủ 150-300 từ theo mô hình ${strategyData.marketingModel}",
-  "shortCaption": "caption ngắn 50-80 từ cho story/reel",
-  "cta": "kêu gọi hành động cụ thể và hấp dẫn",
+  "hooks": ["starker Hook 1", "starker Hook 2", "starker Hook 3"],
+  "mainCaption": "vollständige Caption 150-300 Wörter nach dem ${strategyData.marketingModel}-Modell",
+  "shortCaption": "kurze Caption 50-80 Wörter für Story/Reel",
+  "cta": "konkreter und überzeugender Call-to-Action",
   "hashtags": ["#hashtag1", "#hashtag2", "..."]
 }
 
-Yêu cầu:
-- hooks: 3 câu mở đầu theo phong cách ${plat}, gây chú ý ngay 3 giây đầu
-- hashtags: 15-25 hashtags (mix trending + local ${brand.branchLocation} + conversion)
-- mainCaption: PHẢI tuân theo cấu trúc mô hình ${strategyData.marketingModel}
-- Toàn bộ nội dung tiếng Việt tự nhiên, không cứng nhắc`;
+Anforderungen:
+- hooks: 3 Eröffnungssätze im ${plat}-Stil, die in den ersten 3 Sekunden Aufmerksamkeit erregen
+- hashtags: 15-25 Hashtags (Mix aus Trending + Lokal ${brand.branchLocation} + Conversion), deutsche und englische Hashtags
+- mainCaption: MUSS der Struktur des ${strategyData.marketingModel}-Modells folgen
+- GESAMTER CONTENT AUF DEUTSCH — natürlich, nicht steif, authentisch`;
 
       const contentData = await callGeminiJSON(contentPrompt, geminiSystem);
       lastContentData = contentData;
 
       // Agent 4: OpenAI — tạo prompt ảnh/video cho từng nền tảng
-      const promptPrompt = `Bạn là chuyên gia AI prompt engineering cho hình ảnh và video marketing.
+      const promptPrompt = `You are an expert AI prompt engineer specializing in marketing visuals for the German market.
 
-THÔNG TIN BÀI ĐĂNG:
-- Thương hiệu: ${brand.brandName} | Ngành: ${brand.industry}
-- Nền tảng: ${plat}
-- Chủ đề: ${topic}
-- Caption chính: ${contentData.mainCaption?.substring(0, 200)}...
-- Phong cách thương hiệu: ${brand.brandVoice}
-- Góc chiến lược: ${strategyData.campaignAngle}
-- Cảm xúc: ${strategyData.targetEmotion}
+POST INFORMATION:
+- Brand: ${brand.brandName} | Industry: ${brand.industry}
+- Platform: ${plat}
+- Topic: ${topic}
+- Main Caption (excerpt): ${contentData.mainCaption?.substring(0, 200)}...
+- Brand voice: ${brand.brandVoice}
+- Campaign angle: ${strategyData.campaignAngle}
+- Target emotion: ${strategyData.targetEmotion}
 
-Tạo prompts chuyên nghiệp và trả về JSON (không markdown):
+Create professional prompts and return JSON (no markdown):
 {
-  "imagePrompt": "Detailed English prompt for DALL-E/Midjourney image generation",
-  "videoPrompt": "Detailed English prompt for HailuoAI/Sora video generation with scene description",
-  "visualStyle": "Mô tả phong cách hình ảnh tổng thể (bằng tiếng Việt)",
+  "imagePrompt": "Detailed English prompt for DALL-E/Midjourney image generation — ultra detailed, lighting, composition, color, quality",
+  "videoPrompt": "Detailed English prompt for HailuoAI/Sora video generation with scene-by-scene description",
+  "visualStyle": "Visual style description for this brand (in German)",
   "cameraDirection": "Camera angles and movements for video (English)",
-  "overlayText": "Text overlay suggestions for the visual",
-  "colorPalette": "Recommended color palette and mood"
+  "overlayText": "German text overlay suggestions for the visual",
+  "colorPalette": "Recommended color palette and mood (English)"
 }
 
-Yêu cầu:
-- imagePrompt: cực kỳ chi tiết (ánh sáng, góc, màu sắc, bố cục, phong cách, chất lượng)
-- videoPrompt: mô tả từng cảnh, chuyển động camera, hiệu ứng, âm thanh gợi ý
-- Phù hợp với định dạng ${plat} (tỉ lệ, độ dài)
-- Phản ánh đúng tone thương hiệu và cảm xúc mục tiêu`;
+Requirements:
+- imagePrompt: extremely detailed (lighting, angles, colors, composition, style, quality, mood) — in English for best AI generation results
+- videoPrompt: describe each scene, camera movements, effects, suggested audio — in English
+- Fits ${plat} format (aspect ratio, duration)
+- Reflects brand tone and target emotion accurately
+- overlayText suggestions should be short punchy German phrases`;
 
       const promptData = await callOpenAIJSON(promptPrompt, openaiSystem);
       lastPromptData = promptData;

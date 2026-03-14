@@ -251,19 +251,19 @@ router.post("/:id/generate-image", async (req, res) => {
             content: [
               {
                 type: "text",
-                text: `Phân tích phong cách hình ảnh tham chiếu này để dùng làm style guide cho việc tạo hình marketing. Mô tả chi tiết: màu sắc chủ đạo, ánh sáng, bố cục, phong cách nhiếp ảnh, không khí tổng thể, chất liệu/texture, và cách trình bày thương hiệu. Chỉ trả lời mô tả phong cách, không giải thích thêm.`,
+                text: `Analyze the visual style of this reference image to use as a style guide for marketing image generation. Describe in detail: dominant colors, lighting, composition, photography style, overall atmosphere, textures/materials, and brand presentation approach. Focus on what makes this image work visually. Return only the style description, no additional explanation.`,
               },
               ...referenceImages.slice(0, 3).map((img) => ({
                 type: "image_url",
-                image_url: { url: img, detail: "low" },
+                image_url: { url: img, detail: "auto" },
               })),
             ],
           },
         ];
         const visionRes = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: visionMessages,
-          max_tokens: 400,
+          max_tokens: 600,
         });
         styleDescription = visionRes.choices[0]?.message?.content ?? "";
       } catch (e) {

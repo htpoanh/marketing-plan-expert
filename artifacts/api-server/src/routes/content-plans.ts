@@ -212,29 +212,46 @@ router.post("/:id/publish", async (req, res) => {
     const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
 
-    const metricoolWebhook = process.env.METRICOOL_WEBHOOK_URL;
+    const makeWebhook = process.env.MAKE_WEBHOOK_URL;
     let metricoolJobId: string | null = null;
 
-    if (metricoolWebhook) {
+    if (makeWebhook) {
       try {
-        const resp = await fetch(metricoolWebhook, {
+        const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, plan.brandId));
+        const fullCaption = [plan.caption, plan.hashtags].filter(Boolean).join("\n\n");
+        const resp = await fetch(makeWebhook, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            action: "publish_to_metricool",
+            contentPlanId: plan.id,
+            brandName: brand?.brandName ?? "",
             platform: plan.platform,
-            caption: plan.caption,
-            hashtags: plan.hashtags,
+            contentType: plan.contentType,
+            topic: plan.topic,
+            caption: fullCaption,
+            shortCaption: plan.shortCaption ?? "",
+            cta: plan.cta ?? "",
+            hashtags: plan.hashtags ?? "",
+            hook: plan.hook ?? "",
+            imagePrompt: plan.imagePrompt ?? "",
+            videoPrompt: plan.videoPrompt ?? "",
             publishDate: plan.publishDate,
-            imagePrompt: plan.imagePrompt,
+            scheduledAt: plan.publishDate?.toISOString() ?? new Date().toISOString(),
           }),
         });
         if (resp.ok) {
-          const data = await resp.json() as any;
-          metricoolJobId = data?.id ?? `metricool_${Date.now()}`;
+          let data: any = {};
+          try { data = await resp.json(); } catch {}
+          metricoolJobId = data?.id ?? data?.jobId ?? `make_${Date.now()}`;
+        } else {
+          console.error("Make.com webhook failed:", resp.status, await resp.text());
         }
       } catch (e) {
-        console.error("Metricool webhook failed:", e);
+        console.error("Make.com webhook error:", e);
       }
+    } else {
+      console.warn("MAKE_WEBHOOK_URL not set — skipping Make.com trigger");
     }
 
     const [updated] = await db.update(contentPlansTable)

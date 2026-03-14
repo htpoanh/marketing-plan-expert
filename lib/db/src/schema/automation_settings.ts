@@ -11,6 +11,8 @@ export const automationSettingsTable = pgTable("automation_settings", {
   autoApprove: boolean("auto_approve").default(false).notNull(),
   topicMode: text("topic_mode").default("auto").notNull(),
   customGoal: text("custom_goal"),
+  metricoolAccountId: text("metricool_account_id"),
+  metricoolToken: text("metricool_token"),
   lastRunAt: timestamp("last_run_at"),
   lastRunStatus: text("last_run_status"),
   lastRunSummary: text("last_run_summary"),

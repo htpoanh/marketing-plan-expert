@@ -50,8 +50,17 @@ interface BrandSettings {
     id: number; brandId: number; isEnabled: boolean; platforms: string;
     contentTypes: string; runHour: number; autoApprove: boolean;
     topicMode: string; customGoal: string | null;
+    metricoolAccountId: string | null; metricoolToken: string | null;
     lastRunAt: string | null; lastRunStatus: string | null; lastRunSummary: string | null;
   } | null;
+}
+
+interface AutomationLog {
+  id: number; brandId: number; brandName: string;
+  runAt: string; status: string; plansCreated: number;
+  webhookSent: boolean; webhookStatus: string | null; webhookError: string | null;
+  errorMessage: string | null;
+  details: { trendTopic?: string; summary?: string; contentIds?: number[] } | null;
 }
 
 function BrandAutomationCard({ item, onSave, onRunNow }: {
@@ -68,7 +77,10 @@ function BrandAutomationCard({ item, onSave, onRunNow }: {
     autoApprove: settings?.autoApprove ?? false,
     topicMode: settings?.topicMode ?? "auto",
     customGoal: settings?.customGoal ?? "",
+    metricoolAccountId: settings?.metricoolAccountId ?? "",
+    metricoolToken: settings?.metricoolToken ?? "",
   });
+  const [showToken, setShowToken] = useState(false);
   const [running, setRunning] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -195,6 +207,50 @@ function BrandAutomationCard({ item, onSave, onRunNow }: {
             />
           </div>
 
+          {/* Metricool Account */}
+          <div className="p-4 rounded-xl border border-border/50 bg-secondary/20 space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <span className="w-5 h-5 rounded bg-blue-500/20 flex items-center justify-center text-blue-400 text-[10px]">M</span>
+              Metricool — Chọn tài khoản đăng bài
+            </p>
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Blog ID (Account ID trong Metricool)</label>
+                <input
+                  type="text"
+                  value={local.metricoolAccountId}
+                  onChange={e => { setLocal(p => ({ ...p, metricoolAccountId: e.target.value })); setDirty(true); }}
+                  placeholder="VD: 123456 — Lấy từ Metricool → Settings → My account → Blog ID"
+                  className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-muted-foreground/40"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">API Token (Bearer token Metricool)</label>
+                <div className="relative">
+                  <input
+                    type={showToken ? "text" : "password"}
+                    value={local.metricoolToken}
+                    onChange={e => { setLocal(p => ({ ...p, metricoolToken: e.target.value })); setDirty(true); }}
+                    placeholder="Lấy từ Metricool → Settings → API → Generate token"
+                    className="w-full px-3 py-2 pr-20 rounded-xl bg-card border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-muted-foreground/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(s => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary px-2 py-1 rounded hover:bg-primary/10"
+                  >
+                    {showToken ? "Ẩn" : "Hiện"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              <Info className="w-3.5 h-3.5 inline mr-1 text-blue-400" />
+              Mỗi tiệm có thể đăng vào fanpage riêng — nhập Blog ID + Token tương ứng. Tìm Blog ID tại{" "}
+              <a href="https://app.metricool.com" target="_blank" rel="noreferrer" className="text-primary hover:underline">app.metricool.com</a> → Settings → My account.
+            </p>
+          </div>
+
           {/* Summary */}
           <div className="p-3 bg-secondary/30 rounded-xl flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
@@ -249,6 +305,15 @@ export default function AutomationPage() {
     },
   });
 
+  const { data: logs = [], refetch: refetchLogs } = useQuery<AutomationLog[]>({
+    queryKey: ["automation-logs"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/automation/logs?limit=30`);
+      return r.json();
+    },
+    refetchInterval: 30000,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async ({ brandId, settings }: { brandId: number; settings: any }) => {
       const r = await fetch(`${BASE}/api/automation/settings/${brandId}`, {
@@ -277,6 +342,7 @@ export default function AutomationPage() {
       if (data.ok) {
         toast({ title: `Đã tạo ${data.plans?.length ?? 0} bài cho tiệm!` });
         queryClient.invalidateQueries({ queryKey: ["automation-settings"] });
+        queryClient.invalidateQueries({ queryKey: ["automation-logs"] });
       } else {
         toast({ title: `Lỗi: ${data.error}`, variant: "destructive" });
       }
@@ -297,6 +363,7 @@ export default function AutomationPage() {
       if (data.ok) {
         toast({ title: `Đã tạo ${data.totalPlansCreated} bài cho ${data.totalBrands} tiệm!` });
         queryClient.invalidateQueries({ queryKey: ["automation-settings"] });
+        queryClient.invalidateQueries({ queryKey: ["automation-logs"] });
       } else {
         toast({ title: `Lỗi: ${data.error}`, variant: "destructive" });
       }
@@ -548,6 +615,95 @@ export default function AutomationPage() {
               Cần cài đặt MAKE_WEBHOOK_URL trong Replit Secrets — lấy từ Make.com → Webhooks → Copy URL.
             </p>
           </div>
+        </div>
+
+        {/* ── Nhật ký automation ───────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-lg flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" />
+              Nhật ký tự động hóa
+            </h2>
+            <button
+              onClick={() => { refetchLogs(); queryClient.invalidateQueries({ queryKey: ["automation-logs"] }); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground border border-border/50 hover:border-border transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Làm mới
+            </button>
+          </div>
+
+          {logs.length === 0 ? (
+            <div className="text-center py-10 bg-card rounded-2xl border border-border/50">
+              <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">Chưa có lịch sử chạy nào.</p>
+              <p className="text-muted-foreground/60 text-xs mt-1">Nhấn "Chạy ngay" để tạo nhật ký đầu tiên.</p>
+            </div>
+          ) : (
+            <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-secondary/30">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thời gian</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cửa hàng</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bài tạo</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Make.com</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chủ đề</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {logs.map(log => (
+                    <tr key={log.id} className="hover:bg-secondary/20 transition-colors">
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {format(new Date(log.runAt), "dd/MM HH:mm")}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                            {log.brandName.charAt(0)}
+                          </span>
+                          <span className="text-sm truncate max-w-[120px]">{log.brandName}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {log.status === "success" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" />Thành công
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-medium" title={log.errorMessage ?? ""}>
+                            <XCircle className="w-3 h-3" />Lỗi
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${log.plansCreated > 0 ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"}`}>
+                          {log.plansCreated}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {!log.webhookSent ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : log.webhookStatus === "success" ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                            <CheckCircle className="w-3 h-3" />Đã gửi
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-400" title={log.webhookError ?? ""}>
+                            <XCircle className="w-3 h-3" />Thất bại
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[180px] truncate" title={log.details?.trendTopic ?? ""}>
+                        {log.details?.trendTopic ?? log.errorMessage ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

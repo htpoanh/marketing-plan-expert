@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   automationSettingsTable,
+  automationLogsTable,
   brandsTable,
   contentPlansTable,
   pipelineRunsTable,
@@ -90,22 +91,42 @@ router.get("/settings", async (_req, res) => {
 router.post("/settings/:brandId", async (req, res) => {
   try {
     const brandId = parseInt(req.params.brandId);
-    const { isEnabled, platforms, contentTypes, runHour, autoApprove, topicMode, customGoal } = req.body;
+    const { isEnabled, platforms, contentTypes, runHour, autoApprove, topicMode, customGoal, metricoolAccountId, metricoolToken } = req.body;
 
     const existing = await db.select().from(automationSettingsTable).where(eq(automationSettingsTable.brandId, brandId));
 
     if (existing.length > 0) {
       const [updated] = await db.update(automationSettingsTable)
-        .set({ isEnabled, platforms, contentTypes, runHour, autoApprove, topicMode, customGoal, updatedAt: new Date() })
+        .set({ isEnabled, platforms, contentTypes, runHour, autoApprove, topicMode, customGoal, metricoolAccountId, metricoolToken, updatedAt: new Date() })
         .where(eq(automationSettingsTable.brandId, brandId))
         .returning();
       return res.json(updated);
     } else {
       const [created] = await db.insert(automationSettingsTable)
-        .values({ brandId, isEnabled, platforms, contentTypes, runHour, autoApprove, topicMode, customGoal })
+        .values({ brandId, isEnabled, platforms, contentTypes, runHour, autoApprove, topicMode, customGoal, metricoolAccountId, metricoolToken })
         .returning();
       return res.json(created);
     }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /automation/logs — recent automation run logs ─────────────────────────
+router.get("/logs", async (req, res) => {
+  try {
+    const { brandId, limit = "50" } = req.query;
+
+    const rows = brandId
+      ? await db.select().from(automationLogsTable)
+          .where(eq(automationLogsTable.brandId, parseInt(brandId as string)))
+          .orderBy(automationLogsTable.runAt)
+          .limit(parseInt(limit as string))
+      : await db.select().from(automationLogsTable)
+          .orderBy(automationLogsTable.runAt)
+          .limit(parseInt(limit as string));
+
+    res.json(rows.reverse());
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -358,6 +379,11 @@ router.post("/run", async (req, res) => {
 
       const brandLookup = Object.fromEntries(successResults.map(r => [r.brandId, r.brandName]));
 
+      // Get metricoolAccountId per brand from settings
+      const metricoolLookup = Object.fromEntries(
+        allSettings.map(s => [s.brandId, { accountId: s.metricoolAccountId ?? "", token: s.metricoolToken ?? "" }])
+      );
+
       // Platform mapping to Metricool network names
       const platformMap: Record<string, string> = {
         "Facebook": "facebook",
@@ -368,6 +394,8 @@ router.post("/run", async (req, res) => {
       const contentDetails = planDetails.map(p => ({
         id: p.id,
         brandName: brandLookup[p.brandId] ?? "Unknown",
+        metricoolAccountId: metricoolLookup[p.brandId]?.accountId ?? "",
+        metricoolToken: metricoolLookup[p.brandId]?.token ?? "",
         platform: p.platform,
         metricoolNetwork: platformMap[p.platform] ?? p.platform.toLowerCase(),
         contentType: p.contentType,
@@ -396,16 +424,53 @@ router.post("/run", async (req, res) => {
         contentDetails,
       };
 
+      let webhookOk = false;
+      let webhookErrMsg = "";
       try {
-        await fetch(webhookUrl, {
+        const whResp = await fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(webhookPayload),
         });
-        console.log(`Webhook sent: ${contentDetails.length} content plans to Make.com`);
-      } catch (e) {
+        webhookOk = whResp.ok;
+        if (!whResp.ok) webhookErrMsg = `HTTP ${whResp.status}`;
+        console.log(`Webhook sent: ${contentDetails.length} content plans to Make.com (status: ${whResp.status})`);
+      } catch (e: any) {
+        webhookErrMsg = e.message;
         console.warn("Webhook send failed:", e);
       }
+
+      // Save logs for each brand
+      for (const r of successResults) {
+        const brandPlanCount = r.plans?.length ?? 0;
+        await db.insert(automationLogsTable).values({
+          brandId: r.brandId,
+          brandName: r.brandName,
+          status: "success",
+          plansCreated: brandPlanCount,
+          webhookSent: true,
+          webhookStatus: webhookOk ? "success" : "failed",
+          webhookError: webhookErrMsg || null,
+          details: {
+            trendTopic: r.trendTopic,
+            summary: r.summary,
+            contentIds: r.plans ?? [],
+          },
+        });
+      }
+    }
+
+    // Save error logs for failed brands (outside webhook block)
+    for (const r of results.filter(r => !r.ok)) {
+      await db.insert(automationLogsTable).values({
+        brandId: r.brandId,
+        brandName: r.brandName,
+        status: "error",
+        plansCreated: 0,
+        webhookSent: false,
+        webhookStatus: "not_sent",
+        errorMessage: r.error ?? "Unknown error",
+      }).catch(() => {});
     }
 
     res.json({
@@ -444,6 +509,8 @@ router.post("/run/:brandId", async (req, res) => {
         autoApprove: false,
         topicMode: "auto",
         customGoal: null,
+        metricoolAccountId: null,
+        metricoolToken: null,
         lastRunAt: null,
         lastRunStatus: null,
         lastRunSummary: null,
@@ -460,21 +527,68 @@ router.post("/run/:brandId", async (req, res) => {
         .where(eq(automationSettingsTable.brandId, brandId));
     }
 
-    // Send to Make webhook
+    // Send full content to Make webhook
     const webhookUrl = process.env.MAKE_WEBHOOK_URL;
-    if (!dryRun && webhookUrl) {
+    let webhookOk = false;
+    let webhookErrMsg = "";
+    if (!dryRun && webhookUrl && result.plans?.length > 0) {
       try {
-        await fetch(webhookUrl, {
+        const planDetails = await db.select({
+          id: contentPlansTable.id,
+          brandId: contentPlansTable.brandId,
+          platform: contentPlansTable.platform,
+          contentType: contentPlansTable.contentType,
+          topic: contentPlansTable.topic,
+          caption: contentPlansTable.caption,
+          shortCaption: contentPlansTable.shortCaption,
+          cta: contentPlansTable.cta,
+          hashtags: contentPlansTable.hashtags,
+          imagePrompt: contentPlansTable.imagePrompt,
+          publishDate: contentPlansTable.publishDate,
+        }).from(contentPlansTable).where(inArray(contentPlansTable.id, result.plans));
+
+        const platformMap: Record<string, string> = { "Facebook": "facebook", "Instagram": "instagram", "TikTok": "tiktok" };
+        const contentDetails = planDetails.map(p => ({
+          id: p.id,
+          brandName: brand.brandName,
+          metricoolAccountId: settings.metricoolAccountId ?? "",
+          metricoolToken: settings.metricoolToken ?? "",
+          platform: p.platform,
+          metricoolNetwork: platformMap[p.platform] ?? p.platform.toLowerCase(),
+          contentType: p.contentType,
+          topic: p.topic,
+          caption: [p.caption, p.cta].filter(Boolean).join("\n\n"),
+          shortCaption: p.shortCaption ?? "",
+          hashtags: p.hashtags ?? "",
+          fullText: [p.caption, p.cta, p.hashtags].filter(Boolean).join("\n\n"),
+          imagePrompt: p.imagePrompt ?? "",
+          publishDate: p.publishDate instanceof Date ? p.publishDate.toISOString() : new Date().toISOString(),
+        }));
+
+        const whResp = await fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "manual_automation_run",
-            timestamp: new Date().toISOString(),
-            brand: { id: brand.id, name: brand.brandName },
-            result,
-          }),
+          body: JSON.stringify({ event: "manual_run", timestamp: new Date().toISOString(), contentDetails }),
         });
-      } catch {}
+        webhookOk = whResp.ok;
+        if (!whResp.ok) webhookErrMsg = `HTTP ${whResp.status}`;
+      } catch (e: any) {
+        webhookErrMsg = e.message;
+      }
+    }
+
+    // Save log
+    if (!dryRun) {
+      await db.insert(automationLogsTable).values({
+        brandId: brand.id,
+        brandName: brand.brandName,
+        status: "success",
+        plansCreated: result.plans?.length ?? 0,
+        webhookSent: webhookUrl ? true : false,
+        webhookStatus: webhookUrl ? (webhookOk ? "success" : "failed") : "not_configured",
+        webhookError: webhookErrMsg || null,
+        details: { trendTopic: result.trendTopic, summary: result.summary, contentIds: result.plans ?? [] },
+      }).catch(() => {});
     }
 
     res.json({ ok: true, ...result, dryRun });
@@ -527,6 +641,7 @@ router.get("/blueprint", (_req, res) => {
           bodyType: "raw",
           contentType: "application/json",
           body: JSON.stringify({
+            blogId: "{{2.value.metricoolAccountId}}",
             text: "{{2.value.fullText}}",
             date: "{{2.value.publishDate}}",
             networks: [{ type: "{{2.value.metricoolNetwork}}" }],

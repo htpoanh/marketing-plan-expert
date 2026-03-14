@@ -268,10 +268,10 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
                   });
                   const data = await r.json();
                   if (data.ok) {
-                    setPingResult({ ok: true, message: `✅ Metricool nhận bài! Post đã vào hàng đợi.`, detail: JSON.stringify(data.metricoolResponse, null, 2) });
+                    setPingResult({ ok: true, message: `✅ Metricool nhận bài thành công! Post đã vào hàng đợi lên lịch.`, detail: JSON.stringify(data.metricoolResponse, null, 2) });
                   } else {
-                    const errMsg = data.error ?? (data.metricoolResponse ? JSON.stringify(data.metricoolResponse) : `HTTP ${data.status}`);
-                    setPingResult({ ok: false, message: `❌ Metricool lỗi: ${errMsg}`, detail: JSON.stringify(data.metricoolResponse ?? data, null, 2) });
+                    const errMsg = data.hint ?? data.error ?? `HTTP ${data.status}`;
+                    setPingResult({ ok: false, message: `❌ HTTP ${data.status}: ${errMsg}`, detail: data.hint ? undefined : JSON.stringify(data.metricoolResponse ?? data, null, 2) });
                   }
                 } catch (e: any) {
                   setPingResult({ ok: false, message: `❌ Lỗi kết nối: ${e.message}` });

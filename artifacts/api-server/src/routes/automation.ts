@@ -647,7 +647,12 @@ router.post("/test-metricool/:brandId", async (req, res) => {
     console.log("[test-metricool] Metricool response:", mcRes.status, mcText);
 
     if (!mcRes.ok) {
-      return res.json({ ok: false, status: mcRes.status, metricoolResponse: mcData });
+      let hint = "";
+      if (mcRes.status === 401) hint = "Token không hợp lệ hoặc hết hạn. Vào Metricool → Settings → API → Generate Token mới.";
+      else if (mcRes.status === 403) hint = "Token không có quyền. Kiểm tra quyền API trong Metricool.";
+      else if (mcRes.status === 404) hint = "Blog ID không tìm thấy. Kiểm tra lại Blog ID trong Metricool → Settings → My account.";
+      else if (mcRes.status === 422) hint = "Dữ liệu không hợp lệ. Kiểm tra format ngày hoặc network type.";
+      return res.json({ ok: false, status: mcRes.status, hint, metricoolResponse: mcData });
     }
     return res.json({ ok: true, status: mcRes.status, metricoolResponse: mcData, sentPayload: payload });
   } catch (e: any) {

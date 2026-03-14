@@ -320,6 +320,97 @@ router.post("/webhook", async (req: Request, res: Response) => {
   }
 });
 
+// ── Make.com Integration Endpoint ──────────────────────────────────────────
+// Make.com scenario calls this with the customer message → we return the AI reply
+// Make.com then sends the reply back via Facebook Messenger module
+router.post("/process-make", async (req: Request, res: Response) => {
+  try {
+    const { senderId, message, pageId, brandId } = req.body as {
+      senderId: string;
+      message: string;
+      pageId?: string;
+      brandId?: number;
+    };
+
+    if (!senderId || !message) {
+      return res.status(400).json({ error: "senderId and message are required" });
+    }
+
+    // Find config by pageId or brandId
+    let config: any;
+    if (pageId) {
+      [config] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.pageId, pageId));
+    } else if (brandId) {
+      [config] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.brandId, brandId));
+    } else {
+      // Fall back to first active config
+      const configs = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.isActive, true));
+      config = configs[0];
+    }
+
+    if (!config) return res.status(404).json({ error: "No Messenger config found for this page/brand" });
+
+    const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, config.brandId));
+    if (!brand) return res.status(404).json({ error: "Brand not found" });
+
+    // Get or create session
+    let [session] = await db.select().from(messengerSessionsTable).where(eq(messengerSessionsTable.psid, senderId));
+    if (!session) {
+      [session] = await db.insert(messengerSessionsTable).values({
+        psid: senderId,
+        brandId: config.brandId,
+        state: "idle",
+        collectedData: {},
+        conversationHistory: [],
+      }).returning();
+    }
+
+    const history = ((session.conversationHistory as any[]) || []);
+    const updatedHistory = [...history.slice(-8), { role: "user", content: message }];
+
+    const { reply, newState, collectedData, shouldBookNow } = await processMessage(
+      message, { ...session, conversationHistory: updatedHistory }, brand, config
+    );
+
+    if (shouldBookNow) {
+      const [appt] = await db.insert(appointmentsTable).values({
+        brandId: config.brandId,
+        customerPsid: senderId,
+        customerName: collectedData.customerName,
+        service: collectedData.service,
+        preferredDate: collectedData.preferredDate,
+        preferredTime: collectedData.preferredTime,
+        phone: collectedData.phone,
+        status: "pending",
+        managerNotifiedAt: new Date(),
+      }).returning();
+
+      await db.update(messengerSessionsTable)
+        .set({ state: "waiting_manager", collectedData, appointmentId: appt.id, conversationHistory: [...updatedHistory, { role: "assistant", content: reply }], updatedAt: new Date() })
+        .where(eq(messengerSessionsTable.psid, senderId));
+
+      // Return reply + booking data (Make.com sends reply, and optionally notifies manager via separate route)
+      return res.json({
+        reply,
+        bookingCreated: true,
+        appointmentId: appt.id,
+        bookingData: collectedData,
+        managerMessage: `📅 NEUE BUCHUNGSANFRAGE\n\n👤 ${collectedData.customerName}\n💅 ${collectedData.service}\n📆 ${collectedData.preferredDate} um ${collectedData.preferredTime}\n📞 ${collectedData.phone}\n\nAntworten Sie mit JA oder NEIN.`,
+        managerPsid: config.managerPsid,
+      });
+    } else {
+      await db.update(messengerSessionsTable)
+        .set({ state: newState, collectedData, conversationHistory: [...updatedHistory, { role: "assistant", content: reply }], updatedAt: new Date() })
+        .where(eq(messengerSessionsTable.psid, senderId));
+
+      return res.json({ reply, bookingCreated: false });
+    }
+  } catch (err: any) {
+    console.error("Make.com process error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Config CRUD ────────────────────────────────────────────────────────────
 router.get("/config/:brandId", async (req: Request, res: Response) => {
   try {

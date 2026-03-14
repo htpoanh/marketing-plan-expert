@@ -119,35 +119,39 @@ function ConfigForm({ brandId, initialConfig, onSaved }: {
 
   const set = (key: string, val: any) => setForm(f => ({ ...f, [key]: val }));
 
-  const webhookUrl = `${window.location.origin.replace(/:\d+$/, "")}/api/messenger/webhook`;
+  const origin = window.location.origin.replace(/:\d+$/, "");
+  const webhookUrl = `${origin}/api/messenger/webhook`;
+  const makeEndpointUrl = `${origin}/api/messenger/process-make`;
 
+  const [guideTab, setGuideTab] = useState<"make" | "direct">("make");
   const [guideOpen, setGuideOpen] = useState(false);
 
   return (
     <div className="space-y-6">
 
       {/* ── Connection flow diagram ────────────────────────────────── */}
-      <div className="p-4 rounded-xl border border-primary/20 bg-primary/5">
-        <p className="text-sm font-bold text-primary mb-3 flex items-center gap-2">
-          <Zap className="w-4 h-4" /> Luồng kết nối hoạt động như thế nào?
+      <div className="p-4 rounded-xl border border-orange-200 bg-orange-50">
+        <p className="text-sm font-bold text-orange-700 mb-3 flex items-center gap-2">
+          <img src="https://www.make.com/en/images/favicons/favicon.ico" className="w-4 h-4" onError={e => (e.currentTarget.style.display="none")} alt="" />
+          Luồng kết nối qua Make.com
         </p>
-        <div className="flex items-center gap-1 flex-wrap text-xs">
+        <div className="flex items-center gap-1.5 flex-wrap text-xs">
           {[
             { icon: "💬", label: "Khách nhắn\nMessenger" },
             { arrow: true },
-            { icon: "📡", label: "Facebook\nGửi Webhook" },
+            { icon: "🔶", label: "Make.com\nnhận tin" },
             { arrow: true },
-            { icon: "🤖", label: "AI Server\nXử lý GPT-4o" },
+            { icon: "🤖", label: "AI Server\n(GPT-4o)" },
             { arrow: true },
-            { icon: "📩", label: "Bot trả lời\ntiếng Đức" },
+            { icon: "🔶", label: "Make.com\ngửi reply" },
             { arrow: true },
-            { icon: "🔔", label: "Thông báo\nManager" },
+            { icon: "📩", label: "Khách nhận\ntrả lời Đức" },
           ].map((item, i) =>
             (item as any).arrow ? (
-              <ArrowRight key={i} className="w-3.5 h-3.5 text-primary/50 flex-shrink-0" />
+              <ArrowRight key={i} className="w-3 h-3 text-orange-400 flex-shrink-0" />
             ) : (
-              <div key={i} className="flex flex-col items-center text-center min-w-[60px] px-2 py-1.5 bg-white rounded-lg border border-primary/15 shadow-sm">
-                <span className="text-base mb-0.5">{(item as any).icon}</span>
+              <div key={i} className="flex flex-col items-center text-center px-2 py-1.5 bg-white rounded-lg border border-orange-200 shadow-sm min-w-[56px]">
+                <span className="text-sm mb-0.5">{(item as any).icon}</span>
                 <span className="text-[10px] text-foreground/70 whitespace-pre-line leading-tight">{(item as any).label}</span>
               </div>
             )
@@ -155,7 +159,7 @@ function ConfigForm({ brandId, initialConfig, onSaved }: {
         </div>
       </div>
 
-      {/* ── Step-by-step guide (collapsible) ───────────────────────── */}
+      {/* ── Step-by-step guide (collapsible, 2 tabs) ───────────────────────── */}
       <div className="rounded-xl border border-border overflow-hidden">
         <button
           type="button"
@@ -164,124 +168,156 @@ function ConfigForm({ brandId, initialConfig, onSaved }: {
         >
           <span className="flex items-center gap-2 font-semibold text-sm">
             <BookOpen className="w-4 h-4 text-primary" />
-            📋 Hướng dẫn kết nối Facebook Fanpage từng bước
+            📋 Hướng dẫn kết nối từng bước
           </span>
           {guideOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </button>
 
         {guideOpen && (
-          <div className="p-5 space-y-5 border-t border-border bg-card">
+          <div className="border-t border-border bg-card">
+            {/* Tab switcher */}
+            <div className="flex border-b border-border">
+              <button
+                type="button"
+                onClick={() => setGuideTab("make")}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${guideTab === "make" ? "bg-orange-50 text-orange-700 border-b-2 border-orange-500" : "text-muted-foreground hover:bg-secondary/40"}`}
+              >
+                🔶 Qua Make.com <span className="text-xs font-normal px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full">Khuyên dùng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setGuideTab("direct")}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${guideTab === "direct" ? "bg-blue-50 text-blue-700 border-b-2 border-blue-500" : "text-muted-foreground hover:bg-secondary/40"}`}
+              >
+                📡 Trực tiếp Facebook API
+              </button>
+            </div>
 
-            {/* Step 1 */}
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">1</div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm mb-1">Tạo Facebook App trên developers.facebook.com</p>
-                <div className="text-xs text-muted-foreground space-y-1 mb-2">
-                  <p>→ Đăng nhập vào <strong>developers.facebook.com</strong></p>
-                  <p>→ Nhấn <strong>"My Apps" → "Create App"</strong></p>
-                  <p>→ Chọn loại <strong>"Business"</strong> → Đặt tên (VD: <em>Happy Wok Bot</em>)</p>
-                  <p>→ Sau khi tạo xong: vào <strong>Dashboard → Add Product → Messenger</strong></p>
+            {/* MAKE.COM TAB */}
+            {guideTab === "make" && (
+              <div className="p-5 space-y-5">
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+                  <strong>Ưu điểm Make.com:</strong> Không cần Facebook Developer Console. Chỉ cần kết nối tài khoản Facebook trong Make.com là đủ. Kịch bản (scenario) tự động nhận tin → gọi AI → gửi lại.
                 </div>
-                <a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium">
-                  <ExternalLink className="w-3 h-3" /> Mở Facebook Developers
+
+                {/* Make endpoint URL */}
+                <div>
+                  <p className="text-xs font-semibold text-foreground mb-2">🔗 URL endpoint để Make.com gọi vào:</p>
+                  <div className="flex items-center gap-2 p-2 bg-orange-50 border border-orange-300 rounded-lg">
+                    <Globe className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+                    <code className="text-xs text-orange-800 flex-1 break-all">{makeEndpointUrl}</code>
+                    <button onClick={() => { navigator.clipboard.writeText(makeEndpointUrl); toast({ title: "✅ Đã copy URL!" }); }} className="p-1 hover:bg-orange-100 rounded flex-shrink-0">
+                      <Copy className="w-3.5 h-3.5 text-orange-700" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Make scenario steps */}
+                <div className="space-y-4">
+                  <p className="text-xs font-bold text-foreground">Cấu trúc Scenario trong Make.com:</p>
+
+                  {/* Module 1 */}
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">1</div>
+                    <div className="flex-1 p-3 bg-secondary/30 rounded-lg border border-border">
+                      <p className="text-xs font-bold mb-1">Module 1 — Facebook Messenger → Watch Messages</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>→ Tìm module: <strong>Facebook Messenger</strong> (hoặc <strong>Facebook Pages</strong>)</p>
+                        <p>→ Chọn trigger: <strong>"Watch Messages" / "Watch New Messages"</strong></p>
+                        <p>→ Kết nối tài khoản Facebook (OAuth) → Chọn Page <strong>Happy Wok</strong></p>
+                        <p className="text-orange-600">→ Sẽ nhận được: <code className="bg-white px-1 rounded border">senderId</code>, <code className="bg-white px-1 rounded border">message.text</code>, <code className="bg-white px-1 rounded border">pageId</code></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Module 2 */}
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">2</div>
+                    <div className="flex-1 p-3 bg-secondary/30 rounded-lg border border-border">
+                      <p className="text-xs font-bold mb-1">Module 2 — HTTP → Make a request</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>→ URL: <code className="bg-white px-1 rounded border text-orange-700 break-all">{makeEndpointUrl}</code></p>
+                        <p>→ Method: <strong>POST</strong> | Content-Type: <strong>application/json</strong></p>
+                        <p>→ Body (JSON):</p>
+                        <pre className="mt-1 p-2 bg-white border rounded text-[10px] leading-relaxed">{`{
+  "senderId": "{{1.senderId}}",
+  "message": "{{1.message.text}}",
+  "pageId": "{{1.pageId}}"
+}`}</pre>
+                        <p className="text-green-600">→ Response sẽ có: <code className="bg-white px-1 rounded border">reply</code> (text AI trả lời), <code className="bg-white px-1 rounded border">bookingCreated</code></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Module 3 */}
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">3</div>
+                    <div className="flex-1 p-3 bg-secondary/30 rounded-lg border border-border">
+                      <p className="text-xs font-bold mb-1">Module 3 — Facebook Messenger → Send Message</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>→ Recipient: <code className="bg-white px-1 rounded border">{"{{1.senderId}}"}</code> (PSID khách)</p>
+                        <p>→ Message: <code className="bg-white px-1 rounded border">{"{{2.data.reply}}"}</code> (AI reply từ module 2)</p>
+                        <p className="text-green-600 font-medium">✅ Xong! Khách nhắn → Make.com gọi AI → gửi lại tiếng Đức</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Module 4 optional - notify manager */}
+                  <div className="flex gap-3 opacity-70">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-secondary text-muted-foreground flex items-center justify-center font-bold text-xs">4</div>
+                    <div className="flex-1 p-3 bg-secondary/20 rounded-lg border border-dashed border-border">
+                      <p className="text-xs font-bold mb-1">Module 4 (tuỳ chọn) — Filter + Notify Manager</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>→ Thêm Filter: <code className="bg-white px-1 rounded border">{"{{2.data.bookingCreated}}"}</code> = <code className="bg-white px-1 rounded border">true</code></p>
+                        <p>→ Facebook Messenger → Send Message tới Manager PSID</p>
+                        <p>→ Message: <code className="bg-white px-1 rounded border">{"{{2.data.managerMessage}}"}</code></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <a href="https://www.make.com/en/integrations/facebook-messenger" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-orange-600 hover:underline font-medium">
+                  <ExternalLink className="w-3 h-3" /> Xem Make.com × Facebook Messenger integration
                 </a>
               </div>
-            </div>
+            )}
 
-            {/* Step 2 */}
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm">2</div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm mb-1">Lấy Page Access Token (quan trọng nhất)</p>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>→ Trong Messenger settings → mục <strong>"Access Tokens"</strong></p>
-                  <p>→ Chọn Page <strong>Happy Wok</strong> từ dropdown</p>
-                  <p>→ Nhấn <strong>"Generate Token"</strong> → Copy token bắt đầu bằng <code className="bg-secondary px-1 rounded">EAAxxxx...</code></p>
-                  <p className="text-amber-600 font-medium">⚠ Token cần quyền: <code className="bg-amber-50 px-1 rounded">pages_messaging</code></p>
+            {/* DIRECT FACEBOOK API TAB */}
+            {guideTab === "direct" && (
+              <div className="p-5 space-y-4">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                  <strong>Khi dùng trực tiếp:</strong> Cần có Facebook Developer App, cấu hình webhook, lấy token. Phức tạp hơn nhưng real-time hơn (không phụ thuộc Make.com polling).
                 </div>
-              </div>
-            </div>
 
-            {/* Step 3 */}
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold text-sm">3</div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm mb-1">Cài đặt Webhook — dán URL này vào Facebook</p>
-                <div className="text-xs text-muted-foreground mb-2 space-y-1">
-                  <p>→ Messenger settings → <strong>"Webhooks" → "Add Callback URL"</strong></p>
-                  <p>→ Dán vào ô <strong>Callback URL</strong>:</p>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg mb-2">
+                {[
+                  { n: 1, color: "blue", title: "Tạo Facebook App", steps: ["Vào developers.facebook.com → My Apps → Create App", "Chọn loại Business → Đặt tên Happy Wok Bot", "Dashboard → Add Product → Messenger"] },
+                  { n: 2, color: "amber", title: "Lấy Page Access Token", steps: ["Messenger settings → Access Tokens", "Chọn Page Happy Wok → Generate Token", "Token dạng EAAxxxx... (cần quyền pages_messaging)"] },
+                  { n: 3, color: "green", title: "Cài Webhook", steps: [`Messenger → Webhooks → Add Callback URL`, `Dán: ${webhookUrl}`, "Verify Token: đặt tự do (VD: happywok_2025)", "Tick: messages + messaging_postbacks → Verify and Save"] },
+                  { n: 4, color: "violet", title: "Lấy Page ID", steps: ["Fanpage Happy Wok → Giới thiệu → Page ID", "Hoặc: Cài đặt trang → Thông tin trang"] },
+                  { n: 5, color: "rose", title: "Lấy Manager PSID", steps: ["Manager nhắn tin vào Inbox Happy Wok", "PSID xuất hiện trong webhook payload: sender.id"] },
+                ].map(step => (
+                  <div key={step.n} className="flex gap-3">
+                    <div className={`flex-shrink-0 w-7 h-7 rounded-full bg-${step.color}-100 text-${step.color}-700 flex items-center justify-center font-bold text-xs`}>{step.n}</div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold mb-1">{step.title}</p>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {step.steps.map((s, i) => <p key={i}>→ {s}</p>)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
                   <Globe className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                   <code className="text-xs text-green-800 flex-1 break-all">{webhookUrl}</code>
-                  <button onClick={() => { navigator.clipboard.writeText(webhookUrl); toast({ title: "✅ Đã copy Webhook URL!" }); }} className="p-1 hover:bg-green-100 rounded flex-shrink-0">
+                  <button onClick={() => { navigator.clipboard.writeText(webhookUrl); toast({ title: "✅ Đã copy!" }); }} className="p-1 hover:bg-green-100 rounded">
                     <Copy className="w-3.5 h-3.5 text-green-700" />
                   </button>
                 </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>→ Ô <strong>Verify Token</strong>: nhập bất kỳ chuỗi bí mật nào (VD: <code className="bg-secondary px-1 rounded">happywok_bot_2025</code>) — <strong>ghi nhớ để điền vào form bên dưới</strong></p>
-                  <p>→ Tick chọn subscriptions: <code className="bg-secondary px-1 rounded">messages</code> và <code className="bg-secondary px-1 rounded">messaging_postbacks</code></p>
-                  <p>→ Nhấn <strong>"Verify and Save"</strong></p>
-                </div>
               </div>
-            </div>
-
-            {/* Step 4 */}
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-sm">4</div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm mb-1">Lấy Page ID của Fanpage Happy Wok</p>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>→ Vào <strong>facebook.com/happywok</strong> (trang Fanpage)</p>
-                  <p>→ Nhấn <strong>"Giới thiệu"</strong> hoặc <strong>"About"</strong> → Cuộn xuống tìm <strong>Page ID</strong></p>
-                  <p>→ Hoặc: <strong>Cài đặt trang → Thông tin trang</strong> → ID dạng số <code className="bg-secondary px-1 rounded">123456789012345</code></p>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 5 */}
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-sm">5</div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm mb-1">Lấy Manager PSID (để nhận thông báo lịch hẹn)</p>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>→ Từ tài khoản Facebook cá nhân của manager → nhắn 1 tin bất kỳ tới <strong>Inbox của Fanpage Happy Wok</strong></p>
-                  <p>→ Sau khi webhook hoạt động, PSID sẽ xuất hiện trong log server (xem Console → <code className="bg-secondary px-1 rounded">sender.id</code>)</p>
-                  <p className="text-rose-600">→ Hoặc: dùng Graph API Explorer → <code className="bg-secondary px-1 rounded">GET /me?access_token=...</code> với token cá nhân</p>
-                  <p className="font-medium text-foreground">PSID là số ~16 chữ số dùng riêng cho mỗi Page. Bot sẽ nhắn "JA/NEIN" cho manager khi có lịch hẹn mới.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 6 */}
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">6</div>
-              <div className="flex-1">
-                <p className="font-semibold text-sm mb-1">Điền vào form bên dưới và bật "Kích hoạt"</p>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>→ Page ID, Verify Token, Page Access Token, Manager PSID</p>
-                  <p>→ Điền thông tin dịch vụ và giờ mở cửa để AI trả lời đúng</p>
-                  <p>→ Bật công tắc <strong>"Kích hoạt AI Booking"</strong></p>
-                  <p className="text-green-600 font-medium">✅ Xong! Bot sẽ tự động nhận và xử lý tin nhắn đặt lịch bằng tiếng Đức.</p>
-                </div>
-              </div>
-            </div>
-
+            )}
           </div>
         )}
-      </div>
-
-      {/* Webhook URL prominent display */}
-      <div className="p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
-        <Globe className="w-4 h-4 text-green-600 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-green-800 mb-0.5">Webhook URL của hệ thống này</p>
-          <code className="text-xs text-green-700 break-all">{webhookUrl}</code>
-        </div>
-        <button onClick={() => { navigator.clipboard.writeText(webhookUrl); toast({ title: "✅ Đã copy!" }); }} className="p-1.5 hover:bg-green-100 rounded flex-shrink-0">
-          <Copy className="w-4 h-4 text-green-700" />
-        </button>
       </div>
 
       {/* Active toggle */}

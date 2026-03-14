@@ -228,6 +228,85 @@ export interface RejectBody {
   reason?: string | null;
 }
 
+export interface RunPipelineBody {
+  brandId: number;
+  topic: string;
+  goal: string;
+  platform: string;
+  contentCount?: number;
+}
+
+export interface TrendData {
+  keywords: string[];
+  trendScore: number;
+  recommendedAngles: string[];
+  seasonalContext: string;
+  hotTopics: string[];
+}
+
+export interface StrategyData {
+  marketingModel: string;
+  modelExplanation: string;
+  reasoning: string;
+  campaignAngle: string;
+  funnelStage: string;
+  targetEmotion: string;
+  ctaStrategy: string;
+  contentPillars: string[];
+}
+
+export interface ContentData {
+  hooks: string[];
+  mainCaption: string;
+  shortCaption: string;
+  cta: string;
+  hashtags: string[];
+}
+
+export interface PromptData {
+  imagePrompt: string;
+  videoPrompt: string;
+  visualStyle: string;
+  cameraDirection: string;
+  overlayText: string;
+  colorPalette: string;
+}
+
+export interface PipelineRun {
+  id: number;
+  brandId: number;
+  /** @nullable */
+  brandName?: string | null;
+  topic: string;
+  goal: string;
+  platform: string;
+  contentCount: number;
+  status: string;
+  trendData?: TrendData | null;
+  strategyData?: StrategyData | null;
+  contentData?: ContentData | null;
+  promptData?: PromptData | null;
+  savedPlanIds: number[];
+  /** @nullable */
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketingModel {
+  id: string;
+  name: string;
+  fullName: string;
+  description: string;
+  whenToUse: string;
+  steps: string[];
+  example: string;
+}
+
+export type ListPipelineRunsParams = {
+  brandId?: number;
+};
+
 export type ListReviewsParams = {
   brandId?: number;
   rating?: number;

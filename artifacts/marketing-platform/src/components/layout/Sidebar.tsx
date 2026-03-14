@@ -8,7 +8,8 @@ import {
   Lightbulb, 
   CalendarDays, 
   CheckSquare,
-  ChevronRight
+  ChevronRight,
+  Bot
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -22,6 +23,14 @@ const navigation = [
     children: [
       { name: "Tất cả đánh giá", href: "/reviews" },
       { name: "Báo cáo thống kê", href: "/reviews/reports" },
+    ]
+  },
+  {
+    name: "Pipeline AI",
+    icon: Bot,
+    children: [
+      { name: "Chạy Pipeline", href: "/pipeline" },
+      { name: "Mô hình Marketing", href: "/pipeline/models" },
     ]
   },
   { 

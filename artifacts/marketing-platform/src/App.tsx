@@ -13,6 +13,8 @@ import ContentGenerator from "@/pages/content/ContentGenerator";
 import StrategyGenerator from "@/pages/content/StrategyGenerator";
 import ContentCalendar from "@/pages/calendar/ContentCalendar";
 import ApprovalDashboard from "@/pages/approvals/ApprovalDashboard";
+import AIPipeline from "@/pages/pipeline/AIPipeline";
+import MarketingModels from "@/pages/pipeline/MarketingModels";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +34,8 @@ function Router() {
       <Route path="/reviews/reports" component={ReviewReports} />
       <Route path="/content/generator" component={ContentGenerator} />
       <Route path="/content/strategy" component={StrategyGenerator} />
+      <Route path="/pipeline" component={AIPipeline} />
+      <Route path="/pipeline/models" component={MarketingModels} />
       <Route path="/calendar" component={ContentCalendar} />
       <Route path="/approvals" component={ApprovalDashboard} />
       <Route component={NotFound} />

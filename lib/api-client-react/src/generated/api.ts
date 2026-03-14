@@ -30,12 +30,16 @@ import type {
   GetReviewStatsParams,
   HealthStatus,
   ListContentPlansParams,
+  ListPipelineRunsParams,
   ListReviewsParams,
+  MarketingModel,
   MarketingStrategy,
+  PipelineRun,
   RejectBody,
   Review,
   ReviewReplyResponse,
   ReviewStats,
+  RunPipelineBody,
   SaveReplyBody,
   UpdateContentPlanBody,
 } from "./api.schemas";
@@ -116,6 +120,435 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Run full AI agent pipeline
+ */
+export const getRunPipelineUrl = () => {
+  return `/api/pipeline/run`;
+};
+
+export const runPipeline = async (
+  runPipelineBody: RunPipelineBody,
+  options?: RequestInit,
+): Promise<PipelineRun> => {
+  return customFetch<PipelineRun>(getRunPipelineUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(runPipelineBody),
+  });
+};
+
+export const getRunPipelineMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runPipeline>>,
+    TError,
+    { data: BodyType<RunPipelineBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runPipeline>>,
+  TError,
+  { data: BodyType<RunPipelineBody> },
+  TContext
+> => {
+  const mutationKey = ["runPipeline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runPipeline>>,
+    { data: BodyType<RunPipelineBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runPipeline(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunPipelineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runPipeline>>
+>;
+export type RunPipelineMutationBody = BodyType<RunPipelineBody>;
+export type RunPipelineMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Run full AI agent pipeline
+ */
+export const useRunPipeline = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runPipeline>>,
+    TError,
+    { data: BodyType<RunPipelineBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runPipeline>>,
+  TError,
+  { data: BodyType<RunPipelineBody> },
+  TContext
+> => {
+  return useMutation(getRunPipelineMutationOptions(options));
+};
+
+/**
+ * @summary List pipeline run history
+ */
+export const getListPipelineRunsUrl = (params?: ListPipelineRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/pipeline/runs?${stringifiedParams}`
+    : `/api/pipeline/runs`;
+};
+
+export const listPipelineRuns = async (
+  params?: ListPipelineRunsParams,
+  options?: RequestInit,
+): Promise<PipelineRun[]> => {
+  return customFetch<PipelineRun[]>(getListPipelineRunsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPipelineRunsQueryKey = (
+  params?: ListPipelineRunsParams,
+) => {
+  return [`/api/pipeline/runs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListPipelineRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPipelineRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPipelineRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPipelineRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPipelineRunsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPipelineRuns>>
+  > = ({ signal }) => listPipelineRuns(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPipelineRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPipelineRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPipelineRuns>>
+>;
+export type ListPipelineRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List pipeline run history
+ */
+
+export function useListPipelineRuns<
+  TData = Awaited<ReturnType<typeof listPipelineRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPipelineRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPipelineRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPipelineRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get pipeline run by ID
+ */
+export const getGetPipelineRunUrl = (id: number) => {
+  return `/api/pipeline/runs/${id}`;
+};
+
+export const getPipelineRun = async (
+  id: number,
+  options?: RequestInit,
+): Promise<PipelineRun> => {
+  return customFetch<PipelineRun>(getGetPipelineRunUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPipelineRunQueryKey = (id: number) => {
+  return [`/api/pipeline/runs/${id}`] as const;
+};
+
+export const getGetPipelineRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPipelineRun>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPipelineRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPipelineRunQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPipelineRun>>> = ({
+    signal,
+  }) => getPipelineRun(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPipelineRun>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPipelineRunQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPipelineRun>>
+>;
+export type GetPipelineRunQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get pipeline run by ID
+ */
+
+export function useGetPipelineRun<
+  TData = Awaited<ReturnType<typeof getPipelineRun>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPipelineRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPipelineRunQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete pipeline run
+ */
+export const getDeletePipelineRunUrl = (id: number) => {
+  return `/api/pipeline/runs/${id}`;
+};
+
+export const deletePipelineRun = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeletePipelineRunUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeletePipelineRunMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePipelineRun>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deletePipelineRun>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deletePipelineRun"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deletePipelineRun>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deletePipelineRun(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeletePipelineRunMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deletePipelineRun>>
+>;
+
+export type DeletePipelineRunMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete pipeline run
+ */
+export const useDeletePipelineRun = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePipelineRun>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deletePipelineRun>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeletePipelineRunMutationOptions(options));
+};
+
+/**
+ * @summary List all built-in marketing models
+ */
+export const getListMarketingModelsUrl = () => {
+  return `/api/pipeline/marketing-models`;
+};
+
+export const listMarketingModels = async (
+  options?: RequestInit,
+): Promise<MarketingModel[]> => {
+  return customFetch<MarketingModel[]>(getListMarketingModelsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMarketingModelsQueryKey = () => {
+  return [`/api/pipeline/marketing-models`] as const;
+};
+
+export const getListMarketingModelsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMarketingModels>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMarketingModels>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMarketingModelsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMarketingModels>>
+  > = ({ signal }) => listMarketingModels({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMarketingModels>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMarketingModelsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMarketingModels>>
+>;
+export type ListMarketingModelsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all built-in marketing models
+ */
+
+export function useListMarketingModels<
+  TData = Awaited<ReturnType<typeof listMarketingModels>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMarketingModels>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMarketingModelsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

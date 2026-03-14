@@ -9,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: pipeline
+    description: Full AI agent pipeline (Trend → Strategy → Content → Prompts → Save)
   - name: brands
     description: Brand and store management
   - name: reviews
@@ -34,6 +36,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /pipeline/run:
+    post:
+      operationId: runPipeline
+      tags: [pipeline]
+      summary: Run full AI agent pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunPipelineBody"
+      responses:
+        "200":
+          description: Pipeline completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineRun"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pipeline/runs:
+    get:
+      operationId: listPipelineRuns
+      tags: [pipeline]
+      summary: List pipeline run history
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of pipeline runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PipelineRun"
+
+  /pipeline/runs/{id}:
+    get:
+      operationId: getPipelineRun
+      tags: [pipeline]
+      summary: Get pipeline run by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pipeline run detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineRun"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePipelineRun
+      tags: [pipeline]
+      summary: Delete pipeline run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /pipeline/marketing-models:
+    get:
+      operationId: listMarketingModels
+      tags: [pipeline]
+      summary: List all built-in marketing models
+      responses:
+        "200":
+          description: Marketing models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketingModel"
 
   /brands:
     get:
@@ -997,3 +1098,214 @@ components:
       properties:
         reason:
           type: ["string", "null"]
+
+    RunPipelineBody:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        topic:
+          type: string
+        goal:
+          type: string
+        platform:
+          type: string
+        contentCount:
+          type: integer
+      required:
+        - brandId
+        - topic
+        - goal
+        - platform
+
+    TrendData:
+      type: object
+      properties:
+        keywords:
+          type: array
+          items:
+            type: string
+        trendScore:
+          type: integer
+        recommendedAngles:
+          type: array
+          items:
+            type: string
+        seasonalContext:
+          type: string
+        hotTopics:
+          type: array
+          items:
+            type: string
+      required:
+        - keywords
+        - trendScore
+        - recommendedAngles
+        - seasonalContext
+        - hotTopics
+
+    StrategyData:
+      type: object
+      properties:
+        marketingModel:
+          type: string
+        modelExplanation:
+          type: string
+        reasoning:
+          type: string
+        campaignAngle:
+          type: string
+        funnelStage:
+          type: string
+        targetEmotion:
+          type: string
+        ctaStrategy:
+          type: string
+        contentPillars:
+          type: array
+          items:
+            type: string
+      required:
+        - marketingModel
+        - modelExplanation
+        - reasoning
+        - campaignAngle
+        - funnelStage
+        - targetEmotion
+        - ctaStrategy
+        - contentPillars
+
+    ContentData:
+      type: object
+      properties:
+        hooks:
+          type: array
+          items:
+            type: string
+        mainCaption:
+          type: string
+        shortCaption:
+          type: string
+        cta:
+          type: string
+        hashtags:
+          type: array
+          items:
+            type: string
+      required:
+        - hooks
+        - mainCaption
+        - shortCaption
+        - cta
+        - hashtags
+
+    PromptData:
+      type: object
+      properties:
+        imagePrompt:
+          type: string
+        videoPrompt:
+          type: string
+        visualStyle:
+          type: string
+        cameraDirection:
+          type: string
+        overlayText:
+          type: string
+        colorPalette:
+          type: string
+      required:
+        - imagePrompt
+        - videoPrompt
+        - visualStyle
+        - cameraDirection
+        - overlayText
+        - colorPalette
+
+    PipelineRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        brandName:
+          type: ["string", "null"]
+        topic:
+          type: string
+        goal:
+          type: string
+        platform:
+          type: string
+        contentCount:
+          type: integer
+        status:
+          type: string
+        trendData:
+          oneOf:
+            - $ref: "#/components/schemas/TrendData"
+            - type: "null"
+        strategyData:
+          oneOf:
+            - $ref: "#/components/schemas/StrategyData"
+            - type: "null"
+        contentData:
+          oneOf:
+            - $ref: "#/components/schemas/ContentData"
+            - type: "null"
+        promptData:
+          oneOf:
+            - $ref: "#/components/schemas/PromptData"
+            - type: "null"
+        savedPlanIds:
+          type: array
+          items:
+            type: integer
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandId
+        - topic
+        - goal
+        - platform
+        - contentCount
+        - status
+        - savedPlanIds
+        - errorMessage
+        - createdAt
+        - updatedAt
+
+    MarketingModel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        fullName:
+          type: string
+        description:
+          type: string
+        whenToUse:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        example:
+          type: string
+      required:
+        - id
+        - name
+        - fullName
+        - description
+        - whenToUse
+        - steps
+        - example

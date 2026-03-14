@@ -7,6 +7,7 @@
  */
 
 export * from "./brand";
+export * from "./contentData";
 export * from "./contentPlan";
 export * from "./createBrandBody";
 export * from "./createContentPlanBody";
@@ -19,11 +20,18 @@ export * from "./generateStrategyBody";
 export * from "./getReviewStatsParams";
 export * from "./healthStatus";
 export * from "./listContentPlansParams";
+export * from "./listPipelineRunsParams";
 export * from "./listReviewsParams";
+export * from "./marketingModel";
 export * from "./marketingStrategy";
+export * from "./pipelineRun";
+export * from "./promptData";
 export * from "./rejectBody";
 export * from "./review";
 export * from "./reviewReplyResponse";
 export * from "./reviewStats";
+export * from "./runPipelineBody";
 export * from "./saveReplyBody";
+export * from "./strategyData";
+export * from "./trendData";
 export * from "./updateContentPlanBody";

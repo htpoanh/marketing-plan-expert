@@ -15,6 +15,256 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Run full AI agent pipeline
+ */
+export const RunPipelineBody = zod.object({
+  brandId: zod.number(),
+  topic: zod.string(),
+  goal: zod.string(),
+  platform: zod.string(),
+  contentCount: zod.number().optional(),
+});
+
+export const RunPipelineResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  brandName: zod.string().nullish(),
+  topic: zod.string(),
+  goal: zod.string(),
+  platform: zod.string(),
+  contentCount: zod.number(),
+  status: zod.string(),
+  trendData: zod
+    .union([
+      zod.object({
+        keywords: zod.array(zod.string()),
+        trendScore: zod.number(),
+        recommendedAngles: zod.array(zod.string()),
+        seasonalContext: zod.string(),
+        hotTopics: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  strategyData: zod
+    .union([
+      zod.object({
+        marketingModel: zod.string(),
+        modelExplanation: zod.string(),
+        reasoning: zod.string(),
+        campaignAngle: zod.string(),
+        funnelStage: zod.string(),
+        targetEmotion: zod.string(),
+        ctaStrategy: zod.string(),
+        contentPillars: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  contentData: zod
+    .union([
+      zod.object({
+        hooks: zod.array(zod.string()),
+        mainCaption: zod.string(),
+        shortCaption: zod.string(),
+        cta: zod.string(),
+        hashtags: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  promptData: zod
+    .union([
+      zod.object({
+        imagePrompt: zod.string(),
+        videoPrompt: zod.string(),
+        visualStyle: zod.string(),
+        cameraDirection: zod.string(),
+        overlayText: zod.string(),
+        colorPalette: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  savedPlanIds: zod.array(zod.number()),
+  errorMessage: zod.string().nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary List pipeline run history
+ */
+export const ListPipelineRunsQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+});
+
+export const ListPipelineRunsResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  brandName: zod.string().nullish(),
+  topic: zod.string(),
+  goal: zod.string(),
+  platform: zod.string(),
+  contentCount: zod.number(),
+  status: zod.string(),
+  trendData: zod
+    .union([
+      zod.object({
+        keywords: zod.array(zod.string()),
+        trendScore: zod.number(),
+        recommendedAngles: zod.array(zod.string()),
+        seasonalContext: zod.string(),
+        hotTopics: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  strategyData: zod
+    .union([
+      zod.object({
+        marketingModel: zod.string(),
+        modelExplanation: zod.string(),
+        reasoning: zod.string(),
+        campaignAngle: zod.string(),
+        funnelStage: zod.string(),
+        targetEmotion: zod.string(),
+        ctaStrategy: zod.string(),
+        contentPillars: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  contentData: zod
+    .union([
+      zod.object({
+        hooks: zod.array(zod.string()),
+        mainCaption: zod.string(),
+        shortCaption: zod.string(),
+        cta: zod.string(),
+        hashtags: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  promptData: zod
+    .union([
+      zod.object({
+        imagePrompt: zod.string(),
+        videoPrompt: zod.string(),
+        visualStyle: zod.string(),
+        cameraDirection: zod.string(),
+        overlayText: zod.string(),
+        colorPalette: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  savedPlanIds: zod.array(zod.number()),
+  errorMessage: zod.string().nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListPipelineRunsResponse = zod.array(ListPipelineRunsResponseItem);
+
+/**
+ * @summary Get pipeline run by ID
+ */
+export const GetPipelineRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetPipelineRunResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  brandName: zod.string().nullish(),
+  topic: zod.string(),
+  goal: zod.string(),
+  platform: zod.string(),
+  contentCount: zod.number(),
+  status: zod.string(),
+  trendData: zod
+    .union([
+      zod.object({
+        keywords: zod.array(zod.string()),
+        trendScore: zod.number(),
+        recommendedAngles: zod.array(zod.string()),
+        seasonalContext: zod.string(),
+        hotTopics: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  strategyData: zod
+    .union([
+      zod.object({
+        marketingModel: zod.string(),
+        modelExplanation: zod.string(),
+        reasoning: zod.string(),
+        campaignAngle: zod.string(),
+        funnelStage: zod.string(),
+        targetEmotion: zod.string(),
+        ctaStrategy: zod.string(),
+        contentPillars: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  contentData: zod
+    .union([
+      zod.object({
+        hooks: zod.array(zod.string()),
+        mainCaption: zod.string(),
+        shortCaption: zod.string(),
+        cta: zod.string(),
+        hashtags: zod.array(zod.string()),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  promptData: zod
+    .union([
+      zod.object({
+        imagePrompt: zod.string(),
+        videoPrompt: zod.string(),
+        visualStyle: zod.string(),
+        cameraDirection: zod.string(),
+        overlayText: zod.string(),
+        colorPalette: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  savedPlanIds: zod.array(zod.number()),
+  errorMessage: zod.string().nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete pipeline run
+ */
+export const DeletePipelineRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List all built-in marketing models
+ */
+export const ListMarketingModelsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  fullName: zod.string(),
+  description: zod.string(),
+  whenToUse: zod.string(),
+  steps: zod.array(zod.string()),
+  example: zod.string(),
+});
+export const ListMarketingModelsResponse = zod.array(
+  ListMarketingModelsResponseItem,
+);
+
+/**
  * @summary List all brands/stores
  */
 export const ListBrandsResponseItem = zod.object({

@@ -280,8 +280,24 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [keyStatus, setKeyStatus] = useState<{ ok: boolean; message?: string; reason?: string } | null>(null);
+  const [checkingKey, setCheckingKey] = useState(false);
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  const handleCheckKey = async () => {
+    setCheckingKey(true);
+    setKeyStatus(null);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/check-api-key`);
+      const d = await r.json();
+      setKeyStatus(d);
+    } catch {
+      setKeyStatus({ ok: false, reason: "Không kết nối được máy chủ." });
+    } finally {
+      setCheckingKey(false);
+    }
+  };
 
   const handleSync = async () => {
     if (!placeId.trim()) return;
@@ -323,6 +339,63 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
         <p className="text-sm text-muted-foreground mt-1">
           Nhập Google Place ID của cửa hàng để tự động tải đánh giá thật từ Google Maps về hệ thống.
         </p>
+      </div>
+
+      {/* ── API Key Status Check ── */}
+      <div className="p-4 bg-card rounded-2xl border border-border/50 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Settings className="w-4 h-4 text-primary" /> Kiểm tra kết nối Google API
+          </p>
+          <button
+            onClick={handleCheckKey}
+            disabled={checkingKey}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-secondary/30 hover:bg-secondary text-xs font-medium transition-all disabled:opacity-50"
+          >
+            {checkingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {checkingKey ? "Đang kiểm tra..." : "Kiểm tra ngay"}
+          </button>
+        </div>
+
+        {!keyStatus && !checkingKey && (
+          <p className="text-xs text-muted-foreground">Nhấn "Kiểm tra ngay" để xem GOOGLE_API_KEY có hoạt động không.</p>
+        )}
+
+        {keyStatus && (
+          <div className={`flex items-start gap-3 p-3 rounded-xl border ${keyStatus.ok ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20"}`}>
+            {keyStatus.ok
+              ? <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+              : <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />}
+            <div className="space-y-1">
+              <p className={`text-sm font-bold ${keyStatus.ok ? "text-emerald-400" : "text-red-400"}`}>
+                {keyStatus.ok ? "API key hợp lệ — sẵn sàng đồng bộ!" : "API key không hoạt động"}
+              </p>
+              <p className="text-xs text-muted-foreground">{keyStatus.ok ? keyStatus.message : keyStatus.reason}</p>
+              {!keyStatus.ok && (
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-xs font-semibold text-foreground">Cách cập nhật API key đúng:</p>
+                  <ol className="space-y-1.5">
+                    {[
+                      { n: "1", text: "Truy cập", link: "https://console.cloud.google.com/apis/credentials", linkText: "Google Cloud Console → Credentials" },
+                      { n: "2", text: "Tạo API key mới → bật", link: "https://console.cloud.google.com/apis/library/places-backend.googleapis.com", linkText: "Places API" },
+                      { n: "3", text: "Trong Replit: vào Secrets (ổ khóa bên trái) → sửa GOOGLE_API_KEY → dán key mới vào" },
+                      { n: "4", text: "Quay lại đây → nhấn Kiểm tra lại" },
+                    ].map(item => (
+                      <li key={item.n} className="flex gap-2 text-xs text-muted-foreground">
+                        <span className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 font-bold text-[10px]">{item.n}</span>
+                        <span>
+                          {item.text}{" "}
+                          {item.link && <a href={item.link} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5">{item.linkText} <ExternalLink className="w-2.5 h-2.5" /></a>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="text-xs text-muted-foreground/60 mt-1">* Google cấp $200 miễn phí/tháng — đủ dùng cho cửa hàng nhỏ.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* How to get Place ID */}

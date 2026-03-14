@@ -172,6 +172,33 @@ Dùng [Tên khách] cho tên khách. 2-4 câu tự nhiên. Chỉ trả về nộ
   }
 });
 
+// ─── CHECK GOOGLE API KEY ─────────────────────────────────────────────────────
+router.get("/check-api-key", async (req, res) => {
+  const key = process.env.GOOGLE_API_KEY;
+  if (!key) return res.json({ ok: false, reason: "GOOGLE_API_KEY chưa được cài đặt trong Secrets." });
+
+  try {
+    const r = await fetch(
+      `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=test&inputtype=textquery&fields=name&key=${key}`
+    );
+    const d = await r.json() as any;
+    if (d.status === "OK" || d.status === "ZERO_RESULTS") {
+      return res.json({ ok: true, message: "API key hợp lệ và Places API đã được bật." });
+    } else if (d.status === "REQUEST_DENIED") {
+      return res.json({
+        ok: false,
+        reason: "API key không hợp lệ hoặc chưa bật Places API.",
+        status: d.status,
+        rawMessage: d.error_message,
+      });
+    } else {
+      return res.json({ ok: false, reason: `Google trả về: ${d.status}`, status: d.status });
+    }
+  } catch (e: any) {
+    return res.json({ ok: false, reason: `Không kết nối được Google API: ${e.message}` });
+  }
+});
+
 // ─── GOOGLE PLACES SYNC ───────────────────────────────────────────────────────
 router.post("/sync", async (req, res) => {
   try {

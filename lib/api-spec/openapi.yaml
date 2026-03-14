@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AI Marketing Strategist Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: brands
+    description: Brand and store management
+  - name: reviews
+    description: Google Reviews management and auto-reply
+  - name: content
+    description: AI content generation
+  - name: contentPlans
+    description: Content calendar and planning
+  - name: approvals
+    description: Content approval workflow
+  - name: strategy
+    description: AI marketing strategy generation
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,507 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /brands:
+    get:
+      operationId: listBrands
+      tags: [brands]
+      summary: List all brands/stores
+      responses:
+        "200":
+          description: List of brands
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Brand"
+    post:
+      operationId: createBrand
+      tags: [brands]
+      summary: Create a new brand/store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandBody"
+      responses:
+        "201":
+          description: Created brand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+
+  /brands/{id}:
+    get:
+      operationId: getBrand
+      tags: [brands]
+      summary: Get brand by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Brand details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateBrand
+      tags: [brands]
+      summary: Update brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandBody"
+      responses:
+        "200":
+          description: Updated brand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBrand
+      tags: [brands]
+      summary: Delete brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reviews:
+    get:
+      operationId: listReviews
+      tags: [reviews]
+      summary: List all Google reviews
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: rating
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: replied
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Add a Google review manually
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewBody"
+      responses:
+        "201":
+          description: Created review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  /reviews/{id}:
+    get:
+      operationId: getReview
+      tags: [reviews]
+      summary: Get review by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Review details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteReview
+      tags: [reviews]
+      summary: Delete review
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /reviews/{id}/generate-reply:
+    post:
+      operationId: generateReviewReply
+      tags: [reviews]
+      summary: Generate AI reply for a review
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Generated reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewReplyResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reviews/{id}/reply:
+    post:
+      operationId: saveReviewReply
+      tags: [reviews]
+      summary: Save and mark review as replied
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveReplyBody"
+      responses:
+        "200":
+          description: Updated review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reviews/stats:
+    get:
+      operationId: getReviewStats
+      tags: [reviews]
+      summary: Get review statistics per brand
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Review statistics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReviewStats"
+
+  /content/generate:
+    post:
+      operationId: generateContent
+      tags: [content]
+      summary: Generate AI marketing content
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateContentBody"
+      responses:
+        "200":
+          description: Generated content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedContent"
+
+  /content/strategy:
+    post:
+      operationId: generateStrategy
+      tags: [strategy]
+      summary: Generate AI marketing strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateStrategyBody"
+      responses:
+        "200":
+          description: Generated strategy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketingStrategy"
+
+  /content-plans:
+    get:
+      operationId: listContentPlans
+      tags: [contentPlans]
+      summary: List content plans
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of content plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContentPlan"
+    post:
+      operationId: createContentPlan
+      tags: [contentPlans]
+      summary: Create content plan item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContentPlanBody"
+      responses:
+        "201":
+          description: Created content plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentPlan"
+
+  /content-plans/generate:
+    post:
+      operationId: generateContentPlan
+      tags: [contentPlans]
+      summary: Generate a 7 or 30-day AI content plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateContentPlanBody"
+      responses:
+        "200":
+          description: Generated content plan
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContentPlan"
+
+  /content-plans/{id}:
+    get:
+      operationId: getContentPlan
+      tags: [contentPlans]
+      summary: Get content plan by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Content plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentPlan"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateContentPlan
+      tags: [contentPlans]
+      summary: Update content plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContentPlanBody"
+      responses:
+        "200":
+          description: Updated content plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentPlan"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteContentPlan
+      tags: [contentPlans]
+      summary: Delete content plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /content-plans/{id}/approve:
+    post:
+      operationId: approveContentPlan
+      tags: [approvals]
+      summary: Approve content plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentPlan"
+
+  /content-plans/{id}/reject:
+    post:
+      operationId: rejectContentPlan
+      tags: [approvals]
+      summary: Reject content plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentPlan"
+
+  /content-plans/{id}/publish:
+    post:
+      operationId: publishContentPlan
+      tags: [approvals]
+      summary: Publish to Metricool
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentPlan"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +545,455 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Brand:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandName:
+          type: string
+        industry:
+          type: string
+        branchLocation:
+          type: string
+        targetAudience:
+          type: string
+        brandVoice:
+          type: string
+        websiteUrl:
+          type: ["string", "null"]
+        facebookUrl:
+          type: ["string", "null"]
+        instagramUrl:
+          type: ["string", "null"]
+        tiktokUrl:
+          type: ["string", "null"]
+        googlePlaceId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandName
+        - industry
+        - branchLocation
+        - targetAudience
+        - brandVoice
+        - websiteUrl
+        - facebookUrl
+        - instagramUrl
+        - tiktokUrl
+        - googlePlaceId
+        - createdAt
+        - updatedAt
+
+    CreateBrandBody:
+      type: object
+      properties:
+        brandName:
+          type: string
+        industry:
+          type: string
+        branchLocation:
+          type: string
+        targetAudience:
+          type: string
+        brandVoice:
+          type: string
+        websiteUrl:
+          type: ["string", "null"]
+        facebookUrl:
+          type: ["string", "null"]
+        instagramUrl:
+          type: ["string", "null"]
+        tiktokUrl:
+          type: ["string", "null"]
+        googlePlaceId:
+          type: ["string", "null"]
+      required:
+        - brandName
+        - industry
+        - branchLocation
+        - targetAudience
+        - brandVoice
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        reviewerName:
+          type: string
+        rating:
+          type: integer
+        reviewText:
+          type: ["string", "null"]
+        reviewDate:
+          type: string
+          format: date-time
+        replied:
+          type: boolean
+        replyText:
+          type: ["string", "null"]
+        replyDate:
+          type: ["string", "null"]
+          format: date-time
+        googleReviewId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandId
+        - reviewerName
+        - rating
+        - reviewText
+        - reviewDate
+        - replied
+        - replyText
+        - replyDate
+        - googleReviewId
+        - createdAt
+
+    CreateReviewBody:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        reviewerName:
+          type: string
+        rating:
+          type: integer
+        reviewText:
+          type: ["string", "null"]
+        reviewDate:
+          type: string
+          format: date-time
+        googleReviewId:
+          type: ["string", "null"]
+      required:
+        - brandId
+        - reviewerName
+        - rating
+        - reviewDate
+
+    ReviewReplyResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+      required:
+        - reply
+
+    SaveReplyBody:
+      type: object
+      properties:
+        replyText:
+          type: string
+      required:
+        - replyText
+
+    ReviewStats:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        brandName:
+          type: string
+        totalReviews:
+          type: integer
+        averageRating:
+          type: number
+        repliedCount:
+          type: integer
+        unrepliedCount:
+          type: integer
+        rating1Count:
+          type: integer
+        rating2Count:
+          type: integer
+        rating3Count:
+          type: integer
+        rating4Count:
+          type: integer
+        rating5Count:
+          type: integer
+      required:
+        - brandId
+        - brandName
+        - totalReviews
+        - averageRating
+        - repliedCount
+        - unrepliedCount
+        - rating1Count
+        - rating2Count
+        - rating3Count
+        - rating4Count
+        - rating5Count
+
+    GenerateContentBody:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        platform:
+          type: string
+        contentType:
+          type: string
+        topic:
+          type: string
+        campaignGoal:
+          type: string
+        additionalContext:
+          type: ["string", "null"]
+      required:
+        - brandId
+        - platform
+        - contentType
+        - topic
+        - campaignGoal
+
+    GeneratedContent:
+      type: object
+      properties:
+        hooks:
+          type: array
+          items:
+            type: string
+        mainCaption:
+          type: string
+        shortCaption:
+          type: string
+        cta:
+          type: string
+        hashtags:
+          type: array
+          items:
+            type: string
+        imagePrompt:
+          type: string
+        videoPrompt:
+          type: string
+        visualStyle:
+          type: string
+      required:
+        - hooks
+        - mainCaption
+        - shortCaption
+        - cta
+        - hashtags
+        - imagePrompt
+        - videoPrompt
+        - visualStyle
+
+    GenerateStrategyBody:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        campaignGoal:
+          type: string
+        platform:
+          type: string
+        duration:
+          type: string
+      required:
+        - brandId
+        - campaignGoal
+        - platform
+
+    MarketingStrategy:
+      type: object
+      properties:
+        marketingModel:
+          type: string
+        reasoning:
+          type: string
+        campaignAngle:
+          type: string
+        funnelStage:
+          type: string
+        targetEmotion:
+          type: string
+        ctaStrategy:
+          type: string
+        suggestedTopics:
+          type: array
+          items:
+            type: string
+      required:
+        - marketingModel
+        - reasoning
+        - campaignAngle
+        - funnelStage
+        - targetEmotion
+        - ctaStrategy
+        - suggestedTopics
+
+    ContentPlan:
+      type: object
+      properties:
+        id:
+          type: integer
+        brandId:
+          type: integer
+        publishDate:
+          type: string
+          format: date-time
+        platform:
+          type: string
+        contentType:
+          type: string
+        hook:
+          type: ["string", "null"]
+        caption:
+          type: ["string", "null"]
+        shortCaption:
+          type: ["string", "null"]
+        cta:
+          type: ["string", "null"]
+        hashtags:
+          type: ["string", "null"]
+        imagePrompt:
+          type: ["string", "null"]
+        videoPrompt:
+          type: ["string", "null"]
+        topic:
+          type: string
+        status:
+          type: string
+        rejectReason:
+          type: ["string", "null"]
+        metricoolJobId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - brandId
+        - publishDate
+        - platform
+        - contentType
+        - hook
+        - caption
+        - shortCaption
+        - cta
+        - hashtags
+        - imagePrompt
+        - videoPrompt
+        - topic
+        - status
+        - rejectReason
+        - metricoolJobId
+        - createdAt
+        - updatedAt
+
+    CreateContentPlanBody:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        publishDate:
+          type: string
+          format: date-time
+        platform:
+          type: string
+        contentType:
+          type: string
+        topic:
+          type: string
+        hook:
+          type: ["string", "null"]
+        caption:
+          type: ["string", "null"]
+        shortCaption:
+          type: ["string", "null"]
+        cta:
+          type: ["string", "null"]
+        hashtags:
+          type: ["string", "null"]
+        imagePrompt:
+          type: ["string", "null"]
+        videoPrompt:
+          type: ["string", "null"]
+      required:
+        - brandId
+        - publishDate
+        - platform
+        - contentType
+        - topic
+
+    UpdateContentPlanBody:
+      type: object
+      properties:
+        publishDate:
+          type: string
+          format: date-time
+        platform:
+          type: string
+        contentType:
+          type: string
+        topic:
+          type: string
+        hook:
+          type: ["string", "null"]
+        caption:
+          type: ["string", "null"]
+        shortCaption:
+          type: ["string", "null"]
+        cta:
+          type: ["string", "null"]
+        hashtags:
+          type: ["string", "null"]
+        imagePrompt:
+          type: ["string", "null"]
+        videoPrompt:
+          type: ["string", "null"]
+        status:
+          type: string
+
+    GenerateContentPlanBody:
+      type: object
+      properties:
+        brandId:
+          type: integer
+        days:
+          type: integer
+        platform:
+          type: string
+        campaignGoal:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+      required:
+        - brandId
+        - days
+        - platform
+        - campaignGoal
+        - startDate
+
+    RejectBody:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]

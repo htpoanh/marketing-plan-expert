@@ -1,8 +1,8 @@
-# Workspace
+# AI Marketing Strategist Platform
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+A Vietnamese AI-powered marketing platform for managing multiple store locations. Features Google review management with AI auto-reply, content generation, marketing strategy, and a content calendar with Metricool integration.
 
 ## Stack
 
@@ -10,87 +10,104 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **Frontend**: React + Vite (artifacts/marketing-platform)
+- **API framework**: Express 5 (artifacts/api-server)
 - **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
+- **AI Engine**: Gemini AI (via Replit AI Integrations - no API key needed)
+- **Validation**: Zod (zod/v4), drizzle-zod
 - **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
 
 ## Structure
 
 ```text
 artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
+├── artifacts/
+│   ├── api-server/         # Express API server
+│   └── marketing-platform/ # React + Vite frontend
+├── lib/
+│   ├── api-spec/           # OpenAPI spec + Orval codegen
 │   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+│   ├── api-zod/            # Generated Zod schemas
+│   ├── db/                 # Drizzle ORM schema + DB connection
+│   │   └── src/schema/
+│   │       ├── brands.ts       # Store/brand management
+│   │       ├── reviews.ts      # Google reviews
+│   │       ├── content_plans.ts # Content calendar
+│   │       ├── conversations.ts # Gemini AI conversations
+│   │       └── messages.ts     # Gemini AI messages
+│   └── integrations-gemini-ai/ # Gemini AI integration
 ```
 
-## TypeScript & Composite Projects
+## Features
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+### 1. Quản lý cửa hàng (Brand Manager)
+- CRUD for multiple store/brand profiles
+- Fields: name, industry, location, target audience, brand voice, social links, Google Place ID
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+### 2. Đánh giá Google (Google Reviews)
+- Manual review entry (until Google API integration)
+- Filter by store, rating, replied/unreplied
+- AI auto-reply generation (Gemini) for any star rating
+- Auto-reply tone: 1-2 stars (apologetic), 3 stars (constructive), 4-5 stars (grateful)
 
-## Root Scripts
+### 3. Báo cáo đánh giá (Review Reports)
+- Per-store stats: total, average rating, replied/unreplied
+- Star rating breakdown (1-5) with charts
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+### 4. Tạo nội dung AI (Content Generator)
+- Input: brand, platform (FB/IG/TikTok), content type, topic, campaign goal
+- Output: 3 viral hooks, main caption, short caption, CTA, hashtags, image prompt, video prompt
 
-## Packages
+### 5. Chiến lược AI (Strategy Generator)
+- Input: brand, platform, campaign goal
+- Output: marketing model selection (AIDA/STP/4P/Funnel etc.), reasoning, campaign angle, funnel stage, target emotion, CTA strategy, suggested topics
 
-### `artifacts/api-server` (`@workspace/api-server`)
+### 6. Lịch nội dung (Content Calendar)
+- 7 or 30-day AI-generated content plan
+- Status workflow: draft → review → approved → scheduled → posted
+- Calendar and list view
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+### 7. Phê duyệt (Approval Dashboard)
+- Review pending content plans
+- Approve/reject with reason
+- Publish to Metricool via webhook
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+## API Routes
 
-### `lib/db` (`@workspace/db`)
+- `GET/POST /api/brands` — Store management
+- `GET/PUT/DELETE /api/brands/:id`
+- `GET/POST /api/reviews` — Review management
+- `POST /api/reviews/:id/generate-reply` — AI reply generation
+- `POST /api/reviews/:id/reply` — Save reply
+- `GET /api/reviews/stats` — Review statistics
+- `POST /api/content/generate` — AI content generation
+- `POST /api/content/strategy` — AI strategy generation
+- `GET/POST /api/content-plans` — Content plans
+- `POST /api/content-plans/generate` — AI-generated content plan
+- `GET/PUT/DELETE /api/content-plans/:id`
+- `POST /api/content-plans/:id/approve`
+- `POST /api/content-plans/:id/reject`
+- `POST /api/content-plans/:id/publish` — Trigger Metricool webhook
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+## Environment Variables
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+- `DATABASE_URL` — Auto-provisioned by Replit
+- `AI_INTEGRATIONS_GEMINI_BASE_URL` — Auto-set by Replit AI Integrations
+- `AI_INTEGRATIONS_GEMINI_API_KEY` — Auto-set by Replit AI Integrations
+- `METRICOOL_WEBHOOK_URL` — Optional: set to trigger Metricool publishing
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+## Development
 
-### `lib/api-spec` (`@workspace/api-spec`)
+```bash
+# Run API server
+pnpm --filter @workspace/api-server run dev
 
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
+# Run frontend
+pnpm --filter @workspace/marketing-platform run dev
 
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
+# Push DB changes
+pnpm --filter @workspace/db run push
 
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+# Run codegen after OpenAPI spec changes
+pnpm --filter @workspace/api-spec run codegen
+```

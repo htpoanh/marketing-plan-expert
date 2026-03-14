@@ -1,0 +1,14 @@
+packages:
+  "recharts": "Required for Google Reviews stats and reports charts"
+  "date-fns": "Required for formatting dates in reviews and content calendar"
+  "clsx": "Utility for conditionally joining classNames"
+  "tailwind-merge": "Utility for merging tailwind classes safely"
+
+images:
+  - path: "artifacts/marketing-platform/public/images/auth-bg.png"
+    description: "Abstract gradient mesh background in deep indigo and violet with dark mode professional aesthetic"
+    aspect_ratio: "16:9"
+
+notes:
+  - App uses React Query hooks generated from OpenAPI spec in @workspace/api-client-react
+  - Vietnamese language is used for UI labels per user request

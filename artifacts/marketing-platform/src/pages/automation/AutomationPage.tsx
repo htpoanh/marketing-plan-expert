@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Zap, Play, CheckCircle, XCircle, Clock, Settings, Webhook,
   ChevronRight, AlertCircle, Info, Loader2, RefreshCw, Copy,
-  Instagram, Youtube, Facebook, ExternalLink, Circle, Check,
+  Instagram, Youtube, Facebook, ExternalLink, Circle, Check, Download,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
@@ -437,6 +437,50 @@ export default function AutomationPage() {
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 {copied ? "Đã copy!" : "Copy"}
               </button>
+            </div>
+          </div>
+
+          {/* Blueprint Download */}
+          <div className="p-5 bg-gradient-to-r from-orange-500/10 to-purple-500/10 rounded-2xl border border-orange-500/20 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="font-bold">Tải Blueprint Make.com — Import 1 click</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">File JSON sẵn sàng — không cần cài đặt thủ công</p>
+                </div>
+              </div>
+              <a
+                href={`${BASE}/api/automation/blueprint`}
+                download="ai-marketing-make-blueprint.json"
+                className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-white font-semibold text-sm transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Tải Blueprint
+              </a>
+            </div>
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground text-sm">Sau khi tải, import vào Make.com:</p>
+              {[
+                "Vào Make.com → My Scenarios → dấu \"...\" → Import Blueprint",
+                "Chọn file vừa tải → Make.com tự tạo Scenario với 3 modules sẵn",
+                "Module 1: Custom Webhook (tự động tạo URL mới → copy URL → dán vào Replit Secrets: MAKE_WEBHOOK_URL)",
+                "Module 3: Thay REPLACE_WITH_METRICOOL_API_TOKEN bằng token Metricool của bạn",
+                "Bật Scenario → Done! Mỗi ngày AI chạy tự động lúc 17:00",
+              ].map((text, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5">{i + 1}</span>
+                  <span>{text}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-card/60 rounded-xl border border-border/50">
+              <Info className="w-3.5 h-3.5 text-primary shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Blueprint chứa sẵn: <span className="text-foreground font-medium">Webhook trigger → Iterator → HTTP to Metricool</span> — chỉ cần thay token Metricool và URL webhook mới.
+              </p>
             </div>
           </div>
 

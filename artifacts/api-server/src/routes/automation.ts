@@ -8,7 +8,7 @@ import {
   aiAgentConfigsTable,
   aiProfilesTable,
 } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 
@@ -331,23 +331,60 @@ router.post("/run", async (req, res) => {
       }
     }
 
-    // Send all results to Make.com webhook
+    // Send all results to Make.com webhook with FULL content details
     if (!dryRun && webhookUrl && results.some(r => r.ok)) {
       const successResults = results.filter(r => r.ok);
       const planIds = successResults.flatMap(r => r.plans ?? []);
 
-      // Fetch the actual content plans to send to Make.com
+      // Fetch full content plan details for Make.com → Metricool
       const planDetails = planIds.length > 0
-        ? await db.select().from(contentPlansTable).where(
-            // filter by the plan IDs
-            eq(contentPlansTable.brandId, successResults[0]?.brandId)
-          )
+        ? await db.select({
+            id: contentPlansTable.id,
+            brandId: contentPlansTable.brandId,
+            platform: contentPlansTable.platform,
+            contentType: contentPlansTable.contentType,
+            topic: contentPlansTable.topic,
+            caption: contentPlansTable.caption,
+            shortCaption: contentPlansTable.shortCaption,
+            cta: contentPlansTable.cta,
+            hashtags: contentPlansTable.hashtags,
+            imagePrompt: contentPlansTable.imagePrompt,
+            publishDate: contentPlansTable.publishDate,
+            status: contentPlansTable.status,
+          })
+          .from(contentPlansTable)
+          .where(inArray(contentPlansTable.id, planIds))
         : [];
+
+      const brandLookup = Object.fromEntries(successResults.map(r => [r.brandId, r.brandName]));
+
+      // Platform mapping to Metricool network names
+      const platformMap: Record<string, string> = {
+        "Facebook": "facebook",
+        "Instagram": "instagram",
+        "TikTok": "tiktok",
+      };
+
+      const contentDetails = planDetails.map(p => ({
+        id: p.id,
+        brandName: brandLookup[p.brandId] ?? "Unknown",
+        platform: p.platform,
+        metricoolNetwork: platformMap[p.platform] ?? p.platform.toLowerCase(),
+        contentType: p.contentType,
+        topic: p.topic,
+        caption: [p.caption, p.cta].filter(Boolean).join("\n\n"),
+        shortCaption: p.shortCaption ?? "",
+        hashtags: p.hashtags ?? "",
+        fullText: [p.caption, p.cta, p.hashtags].filter(Boolean).join("\n\n"),
+        imagePrompt: p.imagePrompt ?? "",
+        publishDate: p.publishDate instanceof Date ? p.publishDate.toISOString() : new Date().toISOString(),
+        status: p.status,
+      }));
 
       const webhookPayload = {
         event: "daily_automation_completed",
         timestamp: new Date().toISOString(),
-        totalBrands: results.length,
+        totalBrands: successResults.length,
         totalPlansCreated: planIds.length,
         results: successResults.map(r => ({
           brandId: r.brandId,
@@ -356,8 +393,7 @@ router.post("/run", async (req, res) => {
           plansCreated: r.plans?.length ?? 0,
           summary: r.summary,
         })),
-        // Content details for Make.com to send to Metricool
-        contentPlans: planIds,
+        contentDetails,
       };
 
       try {
@@ -366,6 +402,7 @@ router.post("/run", async (req, res) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(webhookPayload),
         });
+        console.log(`Webhook sent: ${contentDetails.length} content plans to Make.com`);
       } catch (e) {
         console.warn("Webhook send failed:", e);
       }
@@ -444,6 +481,87 @@ router.post("/run/:brandId", async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// ── GET /automation/blueprint — serve importable Make.com blueprint ───────────
+router.get("/blueprint", (_req, res) => {
+  const blueprint = {
+    name: "🤖 AI Marketing Platform – Daily Auto Post",
+    flow: [
+      {
+        id: 1,
+        module: "gateway:CustomWebHook",
+        version: 1,
+        parameters: { hook: 0, maxResults: 1 },
+        mapper: {},
+        metadata: {
+          designer: { x: 0, y: 0, name: "📥 Receive from AI Marketing App" },
+          restore: { hook: { label: "AI Marketing – Daily Content" } },
+        },
+      },
+      {
+        id: 2,
+        module: "builtin:BasicIterator",
+        version: 1,
+        parameters: {},
+        mapper: { array: "{{1.contentDetails}}" },
+        metadata: {
+          designer: { x: 300, y: 0, name: "🔁 Loop each content plan" },
+        },
+      },
+      {
+        id: 3,
+        module: "http:ActionSendData",
+        version: 3,
+        parameters: { handleErrors: true, useNewZLibDecompression: true },
+        mapper: {
+          url: "https://app.metricool.com/api/v2/planning",
+          method: "POST",
+          headers: [
+            {
+              name: "Authorization",
+              value: "Bearer REPLACE_WITH_METRICOOL_API_TOKEN",
+            },
+            { name: "Content-Type", value: "application/json" },
+          ],
+          bodyType: "raw",
+          contentType: "application/json",
+          body: JSON.stringify({
+            text: "{{2.value.fullText}}",
+            date: "{{2.value.publishDate}}",
+            networks: [{ type: "{{2.value.metricoolNetwork}}" }],
+          }),
+        },
+        metadata: {
+          designer: { x: 600, y: 0, name: "📅 Schedule in Metricool" },
+        },
+      },
+    ],
+    metadata: {
+      instant: true,
+      version: 1,
+      scenario: {
+        roundtrips: 1,
+        maxErrors: 3,
+        autoCommit: true,
+        autoCommitTriggerLast: true,
+        sequential: true,
+        confidential: false,
+        dataloss: false,
+        dlq: false,
+        freshVariables: false,
+      },
+      designer: { orphans: [] },
+      zone: "eu2.make.com",
+    },
+  };
+
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="ai-marketing-make-blueprint.json"'
+  );
+  res.json(blueprint);
 });
 
 export default router;

@@ -57,13 +57,63 @@ async function callOpenAIJSON(prompt: string, system: string): Promise<any> {
   return JSON.parse(r.choices[0]?.message?.content ?? "{}");
 }
 
+// Normalize content JSON — handle Gemini returning array, wrong field names, nested structures
+function normalizeContentJSON(raw: any): any {
+  if (!raw || typeof raw !== "object") return {};
+  let data = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+  // Unwrap single-key nested objects (e.g., { CONTENT_IDEA_1: { ... } })
+  const keys = Object.keys(data);
+  if (keys.length === 1 && typeof data[keys[0]] === "object" && !Array.isArray(data[keys[0]])) {
+    const inner = data[keys[0]];
+    const hasContentFields = ["hook", "hooks", "mainCaption", "caption", "CAPTION", "HOOK"].some(f => f in inner);
+    if (hasContentFields) data = inner;
+  }
+  // Pick hook: prefer string, fall back to first array element
+  const hookRaw = data.hook ?? data.HOOK ?? data.hooks ?? data.HOOKS;
+  const hook = typeof hookRaw === "string" ? hookRaw :
+                (Array.isArray(hookRaw) && hookRaw.length > 0 ? hookRaw[0] : "");
+  // Normalize hashtags
+  const hashtagsRaw = data.hashtags ?? data.HASHTAGS ?? data.tags ?? [];
+  const hashtags = Array.isArray(hashtagsRaw)
+    ? hashtagsRaw.filter((v: any) => typeof v === "string")
+    : typeof hashtagsRaw === "string" ? hashtagsRaw.split(/\s+/).filter((v: string) => v.startsWith("#")) : [];
+  return {
+    hook,
+    mainCaption: data.mainCaption ?? data.CAPTION ?? data.caption ?? data.mainContent ?? "",
+    shortCaption: data.shortCaption ?? data.SHORT_CAPTION ?? "",
+    cta: data.cta ?? data.CTA ?? data.callToAction ?? "",
+    hashtags,
+    imagePrompt: data.imagePrompt ?? data.IMAGE_PROMPT ?? "",
+  };
+}
+
 async function callGeminiJSON(prompt: string): Promise<any> {
-  const r = await gemini.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: { maxOutputTokens: 8192, responseMimeType: "application/json" },
-  });
-  return JSON.parse(r.text ?? "{}");
+  try {
+    const r = await gemini.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { maxOutputTokens: 8192, responseMimeType: "application/json" },
+    });
+    const text = r.text;
+    if (!text) throw new Error("Gemini returned empty response");
+    const parsed = JSON.parse(text);
+    const normalized = normalizeContentJSON(parsed);
+    // Validate: if mainCaption is too short, fall back to GPT-4o
+    if (!normalized.mainCaption || normalized.mainCaption.length < 20) {
+      throw new Error(`Gemini returned incomplete content (mainCaption missing). Keys: ${JSON.stringify(Object.keys(parsed))}`);
+    }
+    return normalized;
+  } catch (err: any) {
+    console.warn("Gemini content failed, falling back to GPT-4o:", err?.message);
+    const r = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_tokens: 2000,
+      response_format: { type: "json_object" },
+      messages: [{ role: "user", content: prompt }],
+    });
+    const parsed = JSON.parse(r.choices[0]?.message?.content ?? "{}");
+    return normalizeContentJSON(parsed);
+  }
 }
 
 // ── Content types config ────────────────────────────────────────────────────────

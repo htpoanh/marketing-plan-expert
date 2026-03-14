@@ -168,17 +168,74 @@ const gemini = new GoogleGenAI({
   httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
 });
 
+// Normalize content JSON — handle Gemini returning array, wrong field names, nested structures
+function normalizeContentJSON(raw: any): any {
+  if (!raw || typeof raw !== "object") return {};
+  // If Gemini returns an array, take first element
+  let data = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+  // If nested (e.g., { CONTENT_IDEA_1: { ... } }), unwrap first value
+  const keys = Object.keys(data);
+  if (keys.length === 1 && typeof data[keys[0]] === "object" && !Array.isArray(data[keys[0]])) {
+    const inner = data[keys[0]];
+    // Only unwrap if inner looks like content (has at least one of the expected fields)
+    const hasContentFields = ["hook", "hooks", "mainCaption", "caption", "CAPTION", "HOOK", "HOOKS"].some(f => f in inner);
+    if (hasContentFields) data = inner;
+  }
+  // Normalize field names (uppercase or alternative naming)
+  return {
+    hooks: normalizeHooks(data.hooks ?? data.HOOKS ?? data.hook ?? data.HOOK),
+    hook: normalizeHook(data.hook ?? data.HOOK ?? data.hooks ?? data.HOOKS),
+    mainCaption: data.mainCaption ?? data.CAPTION ?? data.caption ?? data.mainContent ?? data.MAIN_CAPTION ?? "",
+    shortCaption: data.shortCaption ?? data.SHORT_CAPTION ?? data.shortContent ?? "",
+    cta: data.cta ?? data.CTA ?? data.callToAction ?? data.CALL_TO_ACTION ?? "",
+    hashtags: normalizeHashtags(data.hashtags ?? data.HASHTAGS ?? data.tags ?? data.TAGS),
+    imagePrompt: data.imagePrompt ?? data.IMAGE_PROMPT ?? data.imageprompt ?? "",
+    videoPrompt: data.videoPrompt ?? data.VIDEO_PROMPT ?? "",
+  };
+}
+
+function normalizeHooks(val: any): string[] {
+  if (Array.isArray(val)) return val.filter(v => typeof v === "string");
+  if (typeof val === "string" && val.length > 0) return [val];
+  return [];
+}
+
+function normalizeHook(val: any): string {
+  if (typeof val === "string" && val.length > 0) return val;
+  if (Array.isArray(val) && val.length > 0) return val[0];
+  return "";
+}
+
+function normalizeHashtags(val: any): string[] {
+  if (Array.isArray(val)) return val.filter(v => typeof v === "string");
+  if (typeof val === "string") return val.split(/\s+/).filter(v => v.startsWith("#"));
+  return [];
+}
+
 async function callGeminiJSON(prompt: string, systemPrompt?: string): Promise<any> {
   const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-  const response = await gemini.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-    config: {
-      maxOutputTokens: 8192,
-      responseMimeType: "application/json",
-    },
-  });
-  return JSON.parse(response.text ?? "{}");
+  try {
+    const response = await gemini.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+      config: {
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+      },
+    });
+    const text = response.text;
+    if (!text) throw new Error("Gemini returned empty response");
+    const parsed = JSON.parse(text);
+    const normalized = normalizeContentJSON(parsed);
+    // Validate required fields — if Gemini returned garbage, fall back to GPT-4o
+    const hasContent = (normalized.mainCaption && normalized.mainCaption.length > 20) ||
+                       (normalized.hooks && normalized.hooks.length > 0);
+    if (!hasContent) throw new Error(`Gemini returned incomplete content structure: ${JSON.stringify(Object.keys(parsed))}`);
+    return normalized;
+  } catch (err: any) {
+    console.warn("Gemini content failed, falling back to GPT-4o:", err?.message);
+    return callOpenAIJSON(prompt, systemPrompt ?? "Du bist ein professioneller Social-Media-Texter für den deutschen Markt.");
+  }
 }
 
 router.get("/marketing-models", (_req, res) => {

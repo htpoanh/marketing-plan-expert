@@ -279,14 +279,18 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   const handleSync = async () => {
     if (!placeId.trim()) return;
     setSyncing(true);
     setResult(null);
     setError(null);
+    setErrorStatus(null);
     try {
-      const r = await fetch("/api/reviews/sync", {
+      const r = await fetch(`${BASE}/api/reviews/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId, placeId: placeId.trim() }),
@@ -294,6 +298,7 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
       const data = await r.json();
       if (!r.ok) {
         setError(data.error ?? "Lỗi không xác định");
+        setErrorStatus(data.status ?? null);
         return;
       }
       setResult(data);
@@ -304,7 +309,8 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
         toast({ title: "Đã cập nhật — không có đánh giá mới" });
       }
     } catch (e) {
-      setError("Không kết nối được. Kiểm tra lại Google API Key.");
+      setError("Không kết nối được máy chủ.");
+      setErrorStatus(null);
     } finally {
       setSyncing(false);
     }
@@ -378,12 +384,40 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
 
       {/* Error */}
       {error && (
-        <div className="flex gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-red-400">Lỗi kết nối Google</p>
-            <p className="text-xs text-muted-foreground mt-1">{error}</p>
+        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-3">
+          <div className="flex gap-3 items-start">
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-red-400">Lỗi kết nối Google</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{error}</p>
+            </div>
           </div>
+
+          {/* Step-by-step fix for REQUEST_DENIED */}
+          {(errorStatus === "REQUEST_DENIED" || error.includes("invalid") || error.includes("REQUEST_DENIED")) && (
+            <div className="p-3 bg-background/50 rounded-lg space-y-3 border border-red-500/20">
+              <p className="text-xs font-bold text-foreground">Cách sửa — cần tạo Google API Key hợp lệ:</p>
+              <ol className="space-y-2">
+                {[
+                  { step: "1", text: "Truy cập", link: "https://console.cloud.google.com/apis/credentials", linkText: "Google Cloud Console → APIs & Services → Credentials" },
+                  { step: "2", text: "Nhấn + CREATE CREDENTIALS → API key → copy key vừa tạo" },
+                  { step: "3", text: "Vào", link: "https://console.cloud.google.com/apis/library/places-backend.googleapis.com", linkText: "Places API", suffix: "→ nhấn ENABLE để bật" },
+                  { step: "4", text: "Trong Replit: vào phần Secrets → cập nhật GOOGLE_API_KEY bằng key mới vừa tạo" },
+                  { step: "5", text: "Restart ứng dụng và thử đồng bộ lại" },
+                ].map(item => (
+                  <li key={item.step} className="flex gap-2 text-xs text-muted-foreground">
+                    <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 font-bold text-[10px]">{item.step}</span>
+                    <span>
+                      {item.text}{" "}
+                      {item.link && <a href={item.link} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5">{item.linkText} <ExternalLink className="w-2.5 h-2.5" /></a>}
+                      {item.suffix && " " + item.suffix}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-muted-foreground/60">* Google cấp miễn phí $200/tháng cho Places API — đủ dùng cho cửa hàng nhỏ.</p>
+            </div>
+          )}
         </div>
       )}
 

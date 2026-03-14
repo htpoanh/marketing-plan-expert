@@ -186,7 +186,19 @@ router.post("/sync", async (req, res) => {
     const data = await response.json() as any;
 
     if (data.status !== "OK") {
-      return res.status(400).json({ error: `Google API error: ${data.status}. ${data.error_message ?? ""}` });
+      let hint = "";
+      if (data.status === "REQUEST_DENIED") {
+        hint = " → Vui lòng kiểm tra GOOGLE_API_KEY: key cần bật 'Places API' tại Google Cloud Console (console.cloud.google.com) và không bị giới hạn server IP.";
+      } else if (data.status === "INVALID_REQUEST") {
+        hint = " → Place ID không đúng định dạng. Vui lòng kiểm tra lại Google Place ID của cửa hàng.";
+      } else if (data.status === "NOT_FOUND") {
+        hint = " → Không tìm thấy địa điểm với Place ID này. Vui lòng kiểm tra lại.";
+      }
+      return res.status(400).json({
+        error: `Google API lỗi: ${data.status}.${hint}`,
+        status: data.status,
+        rawMessage: data.error_message,
+      });
     }
 
     const gReviews = data.result?.reviews ?? [];

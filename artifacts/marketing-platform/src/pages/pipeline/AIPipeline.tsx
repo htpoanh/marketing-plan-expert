@@ -444,7 +444,7 @@ function RunPipelineTab() {
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-2">Từ khóa thịnh hành</h4>
                       <div className="flex flex-wrap gap-2">
-                        {result.trendData.keywords.map((kw: string, i: number) => (
+                        {(result.trendData.keywords ?? []).map((kw: string, i: number) => (
                           <span key={i} className="px-3 py-1 bg-secondary text-sm rounded-full border border-border/50">{kw}</span>
                         ))}
                       </div>
@@ -454,7 +454,7 @@ function RunPipelineTab() {
                       <div className="p-4 bg-secondary/30 rounded-xl border border-border/50">
                         <h4 className="text-sm font-medium text-muted-foreground mb-2">Góc tiếp cận đề xuất</h4>
                         <ul className="space-y-1">
-                          {result.trendData.recommendedAngles.map((angle: string, i: number) => (
+                          {(result.trendData.recommendedAngles ?? []).map((angle: string, i: number) => (
                             <li key={i} className="text-sm flex items-start gap-2">
                               <span className="text-primary mt-0.5">•</span> {angle}
                             </li>
@@ -510,7 +510,7 @@ function RunPipelineTab() {
                     <div>
                       <h4 className="text-sm font-bold text-foreground mb-3">Hooks Thu Hút</h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {result.contentData.hooks.map((hook: string, i: number) => (
+                        {(result.contentData.hooks ?? []).map((hook: string, i: number) => (
                           <div key={i} className="p-3 bg-secondary/50 rounded-xl text-sm border border-border/50 relative group">
                             <span className="absolute -top-2 -left-2 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">{i+1}</span>
                             {hook}
@@ -529,7 +529,7 @@ function RunPipelineTab() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {result.contentData.hashtags.map((tag: string, i: number) => (
+                      {(result.contentData.hashtags ?? []).map((tag: string, i: number) => (
                         <span key={i} className="text-sm font-medium text-primary bg-primary/10 px-2 py-1 rounded">{tag}</span>
                       ))}
                     </div>

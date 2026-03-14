@@ -68,7 +68,7 @@ function RunPipelineTab() {
     brandId: 0,
     topic: "",
     goal: "",
-    platform: "Facebook",
+    platforms: ["Facebook"] as string[],
     contentCount: 1,
     storeSituation: ""
   });
@@ -98,12 +98,19 @@ function RunPipelineTab() {
     setCurrentStep(0);
     setResult(null);
 
-    runMutation.mutate({ data: formData }, {
+    if (formData.platforms.length === 0) {
+      toast({ title: "Lỗi", description: "Vui lòng chọn ít nhất 1 nền tảng", variant: "destructive" });
+      return;
+    }
+
+    runMutation.mutate({ data: { ...formData, platform: formData.platforms.join(",") } }, {
       onSuccess: (data) => {
         setIsRunning(false);
         setCurrentStep(AGENT_STEPS.length);
         setResult(data);
-        toast({ title: "Thành công", description: "Đã hoàn thành pipeline" });
+        const totalPlans = data.savedPlanIds?.length ?? 0;
+        const platList = formData.platforms.join(", ");
+        toast({ title: "Thành công", description: `Đã tạo ${totalPlans} bài viết cho ${platList}` });
       },
       onError: (err) => {
         setIsRunning(false);
@@ -180,20 +187,34 @@ function RunPipelineTab() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Nền tảng</label>
+              <label className="text-sm font-medium flex items-center justify-between">
+                <span>Nền tảng</span>
+                {formData.platforms.length > 0 && (
+                  <span className="text-xs text-primary font-normal">{formData.platforms.join(", ")}</span>
+                )}
+              </label>
               <div className="grid grid-cols-3 gap-2">
-                {['Facebook', 'Instagram', 'TikTok'].map(plat => (
-                  <button
-                    key={plat}
-                    type="button"
-                    disabled={isRunning}
-                    onClick={() => setFormData({...formData, platform: plat})}
-                    className={`py-2 text-sm rounded-lg border font-medium transition-all ${formData.platform === plat ? 'bg-primary/20 border-primary text-primary' : 'bg-secondary/30 border-border/50 text-muted-foreground hover:bg-secondary'} disabled:opacity-50`}
-                  >
-                    {plat}
-                  </button>
-                ))}
+                {['Facebook', 'Instagram', 'TikTok'].map(plat => {
+                  const selected = formData.platforms.includes(plat);
+                  return (
+                    <button
+                      key={plat}
+                      type="button"
+                      disabled={isRunning}
+                      onClick={() => {
+                        const next = selected
+                          ? formData.platforms.filter(p => p !== plat)
+                          : [...formData.platforms, plat];
+                        setFormData({ ...formData, platforms: next });
+                      }}
+                      className={`py-2 text-sm rounded-lg border font-medium transition-all ${selected ? 'bg-primary/20 border-primary text-primary' : 'bg-secondary/30 border-border/50 text-muted-foreground hover:bg-secondary'} disabled:opacity-50`}
+                    >
+                      {plat}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="text-xs text-muted-foreground">Chọn nhiều nền tảng — AI sẽ viết nội dung riêng cho từng nền tảng</p>
             </div>
             
             <div className="space-y-2">
@@ -289,7 +310,7 @@ function RunPipelineTab() {
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                 <div>
                   <h3 className="font-bold text-emerald-600 dark:text-emerald-400">Pipeline hoàn tất thành công!</h3>
-                  <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">Đã tạo và lưu {result.contentCount} bài viết vào kho nội dung.</p>
+                  <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">Đã tạo và lưu {result.savedPlanIds?.length ?? result.contentCount} bài viết cho {result.platform} vào kho nội dung.</p>
                 </div>
               </div>
               <Link href="/calendar" className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">

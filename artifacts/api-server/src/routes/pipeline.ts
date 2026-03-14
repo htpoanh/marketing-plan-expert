@@ -113,18 +113,23 @@ const grok = new OpenAI({
 
 const SYSTEM_JSON = "Bạn là chuyên gia marketing AI. Luôn trả về JSON hợp lệ theo đúng cấu trúc yêu cầu, không có markdown hay code block.";
 
-// Agent 1: Grok — real-time trends & market research
+// Agent 1: Grok — real-time trends & market research (fallback: OpenAI)
 async function callGrokJSON(prompt: string): Promise<any> {
-  const response = await grok.chat.completions.create({
-    model: "grok-3",
-    max_tokens: 4096,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_JSON },
-      { role: "user", content: prompt },
-    ],
-  });
-  return JSON.parse(response.choices[0]?.message?.content ?? "{}");
+  try {
+    const response = await grok.chat.completions.create({
+      model: "grok-3",
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_JSON },
+        { role: "user", content: prompt },
+      ],
+    });
+    return JSON.parse(response.choices[0]?.message?.content ?? "{}");
+  } catch (err: any) {
+    console.warn("Grok unavailable, falling back to OpenAI for Trend Research:", err?.message);
+    return callOpenAIJSON(prompt);
+  }
 }
 
 // Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering
@@ -205,6 +210,12 @@ router.post("/run", async (req, res) => {
     return res.status(400).json({ error: "Thiếu thông tin bắt buộc: brandId, topic, goal, platform" });
   }
 
+  // platform có thể là string đơn hoặc comma-separated (Facebook,Instagram,TikTok)
+  const platforms: string[] = typeof platform === "string"
+    ? platform.split(",").map((p: string) => p.trim()).filter(Boolean)
+    : [platform];
+  const platformLabel = platforms.join(", ");
+
   const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
   if (!brand) return res.status(400).json({ error: "Thương hiệu không tồn tại" });
 
@@ -212,7 +223,7 @@ router.post("/run", async (req, res) => {
     brandId,
     topic,
     goal,
-    platform,
+    platform: platformLabel,
     contentCount,
     storeSituation: storeSituation || null,
     status: "running",
@@ -237,7 +248,7 @@ THÔNG TIN PHÂN TÍCH:
 - Địa điểm: ${brand.branchLocation}
 - Chủ đề: ${topic}
 - Tháng hiện tại: ${month}
-- Nền tảng: ${platform}${situationBlock}
+- Nền tảng: ${platformLabel}${situationBlock}
 
 Hãy phân tích xu hướng và trả về JSON (không markdown):
 {
@@ -295,8 +306,15 @@ Trả về JSON (không markdown):
     const strategyData = await callOpenAIJSON(strategyPrompt);
     await db.update(pipelineRunsTable).set({ strategyData }).where(eq(pipelineRunsTable.id, runId));
 
-    // ─── AGENT 3: CONTENT WRITER ───────────────────────────────────────────────
-    const contentPrompt = `Bạn là copywriter hàng đầu, chuyên gia viết nội dung viral cho ${platform}.
+    // ─── AGENT 3 & 4: PER-PLATFORM CONTENT + PROMPT ────────────────────────────
+    const savedPlanIds: number[] = [];
+    const count = Math.max(1, Math.min(contentCount, 5));
+    let lastContentData: any = null;
+    let lastPromptData: any = null;
+
+    for (const plat of platforms) {
+      // Agent 3: Gemini — viết nội dung cho từng nền tảng
+      const contentPrompt = `Bạn là copywriter hàng đầu, chuyên gia viết nội dung viral cho ${plat}.
 
 THƯƠNG HIỆU:
 - Tên: ${brand.brandName}
@@ -318,7 +336,7 @@ XU HƯỚNG:
 YÊU CẦU:
 - Chủ đề: ${topic}
 - Mục tiêu: ${goal}
-- Nền tảng: ${platform}
+- Nền tảng: ${plat}
 
 Viết nội dung THEO ĐÚNG MÔ HÌNH ${strategyData.marketingModel} và trả về JSON (không markdown):
 {
@@ -330,20 +348,20 @@ Viết nội dung THEO ĐÚNG MÔ HÌNH ${strategyData.marketingModel} và trả
 }
 
 Yêu cầu:
-- hooks: 3 câu mở đầu theo phong cách ${platform}, gây chú ý ngay 3 giây đầu
+- hooks: 3 câu mở đầu theo phong cách ${plat}, gây chú ý ngay 3 giây đầu
 - hashtags: 15-25 hashtags (mix trending + local ${brand.branchLocation} + conversion)
 - mainCaption: PHẢI tuân theo cấu trúc mô hình ${strategyData.marketingModel}
 - Toàn bộ nội dung tiếng Việt tự nhiên, không cứng nhắc`;
 
-    const contentData = await callGeminiJSON(contentPrompt);
-    await db.update(pipelineRunsTable).set({ contentData }).where(eq(pipelineRunsTable.id, runId));
+      const contentData = await callGeminiJSON(contentPrompt);
+      lastContentData = contentData;
 
-    // ─── AGENT 4: PROMPT GENERATOR ─────────────────────────────────────────────
-    const promptPrompt = `Bạn là chuyên gia AI prompt engineering cho hình ảnh và video marketing.
+      // Agent 4: OpenAI — tạo prompt ảnh/video cho từng nền tảng
+      const promptPrompt = `Bạn là chuyên gia AI prompt engineering cho hình ảnh và video marketing.
 
 THÔNG TIN BÀI ĐĂNG:
 - Thương hiệu: ${brand.brandName} | Ngành: ${brand.industry}
-- Nền tảng: ${platform}
+- Nền tảng: ${plat}
 - Chủ đề: ${topic}
 - Caption chính: ${contentData.mainCaption?.substring(0, 200)}...
 - Phong cách thương hiệu: ${brand.brandVoice}
@@ -363,43 +381,43 @@ Tạo prompts chuyên nghiệp và trả về JSON (không markdown):
 Yêu cầu:
 - imagePrompt: cực kỳ chi tiết (ánh sáng, góc, màu sắc, bố cục, phong cách, chất lượng)
 - videoPrompt: mô tả từng cảnh, chuyển động camera, hiệu ứng, âm thanh gợi ý
-- Phù hợp với định dạng ${platform} (tỉ lệ, độ dài)
+- Phù hợp với định dạng ${plat} (tỉ lệ, độ dài)
 - Phản ánh đúng tone thương hiệu và cảm xúc mục tiêu`;
 
-    const promptData = await callOpenAIJSON(promptPrompt);
-    await db.update(pipelineRunsTable).set({ promptData }).where(eq(pipelineRunsTable.id, runId));
+      const promptData = await callOpenAIJSON(promptPrompt);
+      lastPromptData = promptData;
 
-    // ─── SAVE TO CONTENT PLANS ─────────────────────────────────────────────────
-    const savedPlanIds: number[] = [];
-    const count = Math.max(1, Math.min(contentCount, 5));
-    const hook = Array.isArray(contentData.hooks) ? contentData.hooks[0] : "";
-    const hashtags = Array.isArray(contentData.hashtags) ? contentData.hashtags.join(" ") : "";
+      const hashtags = Array.isArray(contentData.hashtags) ? contentData.hashtags.join(" ") : "";
 
-    for (let i = 0; i < count; i++) {
-      const publishDate = new Date();
-      publishDate.setDate(publishDate.getDate() + i * 2);
+      for (let i = 0; i < count; i++) {
+        const publishDate = new Date();
+        publishDate.setDate(publishDate.getDate() + i * 2 + platforms.indexOf(plat));
 
-      const [plan] = await db.insert(contentPlansTable).values({
-        brandId,
-        publishDate,
-        platform,
-        contentType: "post",
-        topic,
-        hook: Array.isArray(contentData.hooks) ? contentData.hooks[i % contentData.hooks.length] : hook,
-        caption: contentData.mainCaption ?? null,
-        shortCaption: contentData.shortCaption ?? null,
-        cta: contentData.cta ?? null,
-        hashtags: hashtags || null,
-        imagePrompt: promptData.imagePrompt ?? null,
-        videoPrompt: promptData.videoPrompt ?? null,
-        status: "draft",
-      }).returning();
+        const [plan] = await db.insert(contentPlansTable).values({
+          brandId,
+          publishDate,
+          platform: plat,
+          contentType: "post",
+          topic,
+          hook: Array.isArray(contentData.hooks) ? contentData.hooks[i % contentData.hooks.length] : "",
+          caption: contentData.mainCaption ?? null,
+          shortCaption: contentData.shortCaption ?? null,
+          cta: contentData.cta ?? null,
+          hashtags: hashtags || null,
+          imagePrompt: promptData.imagePrompt ?? null,
+          videoPrompt: promptData.videoPrompt ?? null,
+          status: "draft",
+        }).returning();
 
-      savedPlanIds.push(plan.id);
+        savedPlanIds.push(plan.id);
+      }
     }
 
+    const contentData = lastContentData ?? {};
+    const promptData = lastPromptData ?? {};
+
     const [updated] = await db.update(pipelineRunsTable)
-      .set({ status: "completed", savedPlanIds, updatedAt: new Date() })
+      .set({ status: "completed", savedPlanIds, contentData, promptData, updatedAt: new Date() })
       .where(eq(pipelineRunsTable.id, runId))
       .returning();
 

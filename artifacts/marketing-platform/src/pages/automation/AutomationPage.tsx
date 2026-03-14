@@ -63,10 +63,11 @@ interface AutomationLog {
   details: { trendTopic?: string; summary?: string; contentIds?: number[] } | null;
 }
 
-function BrandAutomationCard({ item, onSave, onRunNow }: {
+function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
   item: BrandSettings;
   onSave: (brandId: number, settings: any) => void;
   onRunNow: (brandId: number) => void;
+  onRunTest: (brandId: number, settings: any) => Promise<void>;
 }) {
   const { brand, settings } = item;
   const [local, setLocal] = useState({
@@ -82,6 +83,8 @@ function BrandAutomationCard({ item, onSave, onRunNow }: {
   });
   const [showToken, setShowToken] = useState(false);
   const [running, setRunning] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [dirty, setDirty] = useState(false);
 
   const toggleContentType = (ct: string) => {
@@ -260,7 +263,7 @@ function BrandAutomationCard({ item, onSave, onRunNow }: {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {dirty && (
               <button
                 onClick={() => { onSave(brand.id, local); setDirty(false); }}
@@ -270,14 +273,42 @@ function BrandAutomationCard({ item, onSave, onRunNow }: {
               </button>
             )}
             <button
+              onClick={async () => {
+                setTesting(true);
+                setTestResult(null);
+                if (dirty) { onSave(brand.id, local); setDirty(false); }
+                try {
+                  await onRunTest(brand.id, local);
+                  setTestResult({ ok: true, message: "✅ Đã tạo 1 bài Facebook Post và gửi tới Make.com → Metricool!" });
+                } catch (e: any) {
+                  setTestResult({ ok: false, message: e.message });
+                } finally {
+                  setTesting(false);
+                }
+              }}
+              disabled={testing || running}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 text-sm font-semibold transition-colors disabled:opacity-50"
+            >
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {testing ? "Đang gửi 1 bài..." : "🧪 Chạy thử 1 bài"}
+            </button>
+            <button
               onClick={async () => { setRunning(true); await onRunNow(brand.id); setRunning(false); }}
-              disabled={running}
+              disabled={running || testing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-sm font-semibold transition-colors disabled:opacity-50"
             >
-              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {running ? "Đang chạy..." : "Chạy ngay"}
+              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {running ? "Đang chạy..." : "Chạy hết (9 bài)"}
             </button>
           </div>
+
+          {/* Test result banner */}
+          {testResult && (
+            <div className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${testResult.ok ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300" : "bg-red-500/10 border-red-500/20 text-red-300"}`}>
+              {testResult.ok ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+              <p>{testResult.message}</p>
+            </div>
+          )}
 
           {/* Last run summary */}
           {settings?.lastRunSummary && (
@@ -330,6 +361,19 @@ export default function AutomationPage() {
     },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
+
+  const handleRunTest = async (brandId: number, currentSettings: any) => {
+    const r = await fetch(`${BASE}/api/automation/run/${brandId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ testMode: true }),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error ?? "Lỗi không xác định");
+    queryClient.invalidateQueries({ queryKey: ["automation-settings"] });
+    queryClient.invalidateQueries({ queryKey: ["automation-logs"] });
+    return data;
+  };
 
   const handleRunNow = async (brandId: number) => {
     try {
@@ -462,6 +506,7 @@ export default function AutomationPage() {
                 item={item}
                 onSave={(brandId, settings) => saveMutation.mutate({ brandId, settings })}
                 onRunNow={handleRunNow}
+                onRunTest={handleRunTest}
               />
             ))
           )}

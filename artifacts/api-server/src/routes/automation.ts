@@ -489,7 +489,7 @@ router.post("/run", async (req, res) => {
 // ── POST /automation/run/:brandId — run for single brand manually ─────────────
 router.post("/run/:brandId", async (req, res) => {
   const brandId = parseInt(req.params.brandId);
-  const { dryRun = false } = req.body;
+  const { dryRun = false, testMode = false } = req.body;
 
   try {
     const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
@@ -519,7 +519,12 @@ router.post("/run/:brandId", async (req, res) => {
       };
     }
 
-    const result = await runAutomationForBrand(brand, settings, dryRun);
+    // Test mode: override settings to only create 1 Facebook post
+    const runSettings = testMode
+      ? { ...settings, platforms: "Facebook", contentTypes: "post", autoApprove: true }
+      : settings;
+
+    const result = await runAutomationForBrand(brand, runSettings, dryRun);
 
     if (!dryRun && settings.id > 0) {
       await db.update(automationSettingsTable)
@@ -551,8 +556,8 @@ router.post("/run/:brandId", async (req, res) => {
         const contentDetails = planDetails.map(p => ({
           id: p.id,
           brandName: brand.brandName,
-          metricoolAccountId: settings.metricoolAccountId ?? "",
-          metricoolToken: settings.metricoolToken ?? "",
+          metricoolAccountId: runSettings.metricoolAccountId ?? "",
+          metricoolToken: runSettings.metricoolToken ?? "",
           platform: p.platform,
           metricoolNetwork: platformMap[p.platform] ?? p.platform.toLowerCase(),
           contentType: p.contentType,

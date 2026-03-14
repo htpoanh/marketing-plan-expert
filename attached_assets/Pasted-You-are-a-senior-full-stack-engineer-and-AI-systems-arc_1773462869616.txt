@@ -1,0 +1,192 @@
+You are a senior full-stack engineer and AI systems architect. Build a production-ready MVP web application called **AI Marketing Strategist Platform**.
+
+Goal:
+A web tool that uses AI agents to analyze marketing models, detect trends, generate marketing strategies, produce social media content, and create prompts for images/videos. Content must go through an approval dashboard before publishing.
+
+Tech stack:
+
+* Frontend: Next.js (App Router) + TailwindCSS
+* Backend: Next.js API routes
+* Database: Supabase PostgreSQL
+* Storage: Supabase Storage
+* AI Engine: Gemini API (Google)
+* Optional integration hooks: Make.com / Metricool
+* Deployment-ready for Replit environment
+
+Core system concept:
+The platform acts as an **AI marketing strategist**, not just a caption generator.
+It evaluates business goals and selects the correct marketing framework automatically.
+
+Main Marketing Frameworks stored in database:
+
+* AIDA
+* STP
+* 4P / 7P
+* Marketing Funnel
+* Content Pillars
+* Hook-Value-CTA
+* Local SEO strategy
+* Viral social media strategy
+
+Functional modules:
+
+1. **Project / Brand Setup**
+   Fields:
+
+* brand_name
+* industry (nail salon, restaurant, retail, etc.)
+* branch_location
+* target_audience
+* brand_voice
+* website_url
+* social_links
+
+2. **Trend Research Agent**
+   AI reads:
+
+* Google Trends keywords
+* seasonal events
+* trending marketing topics
+
+Output:
+
+* trending_keywords
+* trend_score
+* recommended_angles
+* suggested_content_topics
+
+3. **Marketing Strategy Engine**
+   Input:
+
+* brand data
+* campaign goal
+* platform (Facebook, Instagram, TikTok)
+* trend data
+
+AI must:
+
+* choose the most suitable marketing model
+* explain briefly why
+* generate a structured strategy
+
+Output structure:
+{
+marketing_model,
+reasoning,
+campaign_angle,
+funnel_stage,
+target_emotion,
+CTA_strategy
+}
+
+4. **Content Generator Agent**
+   Generates:
+
+* 3 viral hooks
+* main caption
+* short caption
+* CTA
+* hashtag sets (trend + local + conversion)
+
+5. **Media Prompt Generator**
+   Creates:
+
+* image_prompt
+* video_prompt
+* visual_style
+* camera_direction
+* overlay_text
+
+6. **Content Plan Generator**
+   Automatically produce a 7-day or 30-day content plan.
+
+Fields:
+
+* publish_date
+* platform
+* content_type
+* hook
+* caption
+* hashtags
+* image_prompt
+* video_prompt
+
+7. **Approval Dashboard**
+   Status workflow:
+   draft → review → approved → scheduled → posted
+
+Admin actions:
+
+* edit text
+* regenerate AI output
+* approve / reject
+* send to publishing automation
+
+8. **Publishing Integration**
+   When status = approved:
+   trigger webhook for:
+
+* Make.com
+* Metricool
+
+9. **Prompt Feedback Learning**
+   Users can rate generated prompts:
+   good / bad
+
+Store feedback to table:
+prompt_feedback
+
+Future generations should prioritize high-rated prompts.
+
+Database tables:
+
+brands
+campaigns
+trend_signals
+marketing_models
+content_plans
+generated_assets
+prompt_feedback
+approval_logs
+
+UI Pages:
+
+* Dashboard
+* Brand manager
+* Campaign planner
+* AI strategy generator
+* Content calendar
+* Review & approval panel
+* Prompt feedback panel
+
+UX requirements:
+
+* clean SaaS style
+* responsive layout
+* card-based content previews
+* calendar view for scheduled posts
+
+AI calls:
+Use Gemini API for:
+
+* strategy generation
+* content writing
+* prompt creation
+
+Structure the code cleanly with reusable services for:
+
+* aiService
+* trendService
+* strategyEngine
+* contentGenerator
+
+Provide:
+
+* folder structure
+* API routes
+* Supabase schema
+* example environment variables
+* instructions to run locally in Replit
+
+Focus on clarity and modular architecture.
+Do not add unnecessary features beyond the described MVP.

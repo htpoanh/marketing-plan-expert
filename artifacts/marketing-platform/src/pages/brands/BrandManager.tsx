@@ -6,15 +6,26 @@ import {
   useDeleteBrand,
   getListBrandsQueryKey
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Store, Plus, MapPin, Target, Megaphone, Trash2, Edit3, X } from "lucide-react";
+import { Store, Plus, MapPin, Target, Megaphone, Trash2, Edit3, X, Bot } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+type AiProfile = { id: number; profileName: string; industry: string | null; isDefault: boolean };
 
 export default function BrandManager() {
   const { data: brands, isLoading } = useListBrands();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const { data: profiles = [] } = useQuery<AiProfile[]>({
+    queryKey: ["/api/ai-profiles"],
+    queryFn: async () => {
+      const r = await fetch("/api/ai-profiles");
+      if (!r.ok) throw new Error();
+      return r.json();
+    },
+  });
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -26,6 +37,7 @@ export default function BrandManager() {
     address: "",
     phone: "",
     businessHours: "",
+    aiProfileId: "" as string,
     targetAudience: "",
     brandVoice: "",
   });
@@ -63,7 +75,7 @@ export default function BrandManager() {
 
   const resetForm = () => {
     setEditingId(null);
-    setFormData({ brandName: "", industry: "", branchLocation: "", address: "", phone: "", businessHours: "", targetAudience: "", brandVoice: "" });
+    setFormData({ brandName: "", industry: "", branchLocation: "", address: "", phone: "", businessHours: "", aiProfileId: "", targetAudience: "", brandVoice: "" });
   };
 
   const handleEdit = (brand: any) => {
@@ -75,6 +87,7 @@ export default function BrandManager() {
       address: brand.address ?? "",
       phone: brand.phone ?? "",
       businessHours: brand.businessHours ?? "",
+      aiProfileId: brand.aiProfileId ? String(brand.aiProfileId) : "",
       targetAudience: brand.targetAudience,
       brandVoice: brand.brandVoice,
     });
@@ -83,10 +96,11 @@ export default function BrandManager() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = { ...formData, aiProfileId: formData.aiProfileId ? Number(formData.aiProfileId) : undefined };
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data: formData });
+      updateMutation.mutate({ id: editingId, data: payload as any });
     } else {
-      createMutation.mutate({ data: formData });
+      createMutation.mutate({ data: payload as any });
     }
   };
 
@@ -145,6 +159,14 @@ export default function BrandManager() {
                 </div>
                 
                 <div className="space-y-3 flex-1">
+                  {(brand as any).aiProfileId && (
+                    <div className="flex items-center gap-1.5">
+                      <Bot className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                        {profiles.find(p => p.id === (brand as any).aiProfileId)?.profileName ?? "AI Profile"}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex gap-2 text-sm text-muted-foreground">
                     <MapPin className="w-4 h-4 shrink-0 text-primary/70 mt-0.5" />
                     <span className="line-clamp-1">{brand.branchLocation}</span>
@@ -208,6 +230,25 @@ export default function BrandManager() {
                     Địa chỉ đầy đủ <span className="text-xs text-muted-foreground font-normal">(AI tự điền vào caption)</span>
                   </label>
                   <input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="Vd: 123 Nguyễn Huệ, Quận 1, TP.HCM" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-primary" />
+                    Profile AI cho cửa hàng này
+                  </label>
+                  <select
+                    value={formData.aiProfileId}
+                    onChange={e => setFormData({...formData, aiProfileId: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  >
+                    <option value="">Dùng Profile Mặc định</option>
+                    {profiles.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.isDefault ? "⭐ " : ""}{p.profileName}{p.industry ? ` — ${p.industry}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">AI sẽ viết content theo đúng phong cách ngành của cửa hàng này.</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Khách hàng mục tiêu</label>

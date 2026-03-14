@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { pipelineRunsTable, contentPlansTable, brandsTable, aiAgentConfigsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { pipelineRunsTable, contentPlansTable, brandsTable, aiAgentConfigsTable, aiProfilesTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 
@@ -255,8 +255,18 @@ router.post("/run", async (req, res) => {
   const modelList = MARKETING_MODELS.map(m => `- ${m.name} (${m.fullName}): ${m.whenToUse}`).join("\n");
 
   try {
-    // ─── LOAD AGENT CONFIGS ─────────────────────────────────────────────────────
-    const agentConfigs = await db.select().from(aiAgentConfigsTable);
+    // ─── LOAD AGENT CONFIGS (từ profile của brand hoặc default) ─────────────────
+    let profileId: number | null = brand.aiProfileId ?? null;
+    if (!profileId) {
+      const [defaultProfile] = await db
+        .select()
+        .from(aiProfilesTable)
+        .where(eq(aiProfilesTable.isDefault, true));
+      profileId = defaultProfile?.id ?? null;
+    }
+    const agentConfigs = profileId
+      ? await db.select().from(aiAgentConfigsTable).where(eq(aiAgentConfigsTable.profileId, profileId))
+      : await db.select().from(aiAgentConfigsTable);
     const grokConfig = agentConfigs.find(a => a.agentKey === "grok");
     const openaiConfig = agentConfigs.find(a => a.agentKey === "openai");
     const geminiConfig = agentConfigs.find(a => a.agentKey === "gemini");

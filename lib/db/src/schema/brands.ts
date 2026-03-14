@@ -1,6 +1,7 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { aiProfilesTable } from "./ai_profiles";
 
 export const brandsTable = pgTable("brands", {
   id: serial("id").primaryKey(),
@@ -10,6 +11,7 @@ export const brandsTable = pgTable("brands", {
   address: text("address"),
   phone: text("phone"),
   businessHours: text("business_hours"),
+  aiProfileId: integer("ai_profile_id").references(() => aiProfilesTable.id),
   targetAudience: text("target_audience").notNull(),
   brandVoice: text("brand_voice").notNull(),
   websiteUrl: text("website_url"),

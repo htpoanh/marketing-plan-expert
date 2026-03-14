@@ -1,3 +1,4 @@
+export * from "./ai_profiles";
 export * from "./brands";
 export * from "./reviews";
 export * from "./content_plans";

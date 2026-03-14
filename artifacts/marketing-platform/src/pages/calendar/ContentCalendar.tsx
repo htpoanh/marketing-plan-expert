@@ -14,12 +14,12 @@ import type { ContentPlan } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type Provider = "dalle3" | "gpt-image-1" | "imagen3";
+type Provider = "dalle3" | "dalle3-natural" | "gpt-image-1";
 
 const PROVIDERS: { id: Provider; label: string; desc: string; color: string }[] = [
-  { id: "dalle3", label: "DALL-E 3", desc: "Chân thực, chi tiết cao — tốt nhất cho sản phẩm & không gian", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
-  { id: "gpt-image-1", label: "GPT-Image", desc: "Sáng tạo & linh hoạt hơn, theo sát phong cách thương hiệu", color: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
-  { id: "imagen3", label: "Google Imagen 3", desc: "Nghệ thuật & phong cách đa dạng — tốt cho lifestyle & fashion", color: "text-purple-400 border-purple-500/30 bg-purple-500/10" },
+  { id: "dalle3", label: "DALL-E 3 — Vivid", desc: "Kịch tính, màu sắc bão hòa cao — nổi bật trên mạng xã hội", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  { id: "dalle3-natural", label: "DALL-E 3 — Natural", desc: "Chân thực tự nhiên, ánh sáng mềm — phù hợp lifestyle & beauty", color: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
+  { id: "gpt-image-1", label: "GPT-Image-1", desc: "Model mới nhất OpenAI — theo sát brief, sáng tạo hơn", color: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
 ];
 
 function getStatusColor(status: string) {

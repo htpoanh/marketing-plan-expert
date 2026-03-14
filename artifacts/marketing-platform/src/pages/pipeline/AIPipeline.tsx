@@ -16,11 +16,11 @@ import { Link } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type ImgProvider = "dalle3" | "gpt-image-1" | "imagen3";
+type ImgProvider = "dalle3" | "dalle3-natural" | "gpt-image-1";
 const IMG_PROVIDERS: { id: ImgProvider; label: string; color: string }[] = [
-  { id: "dalle3", label: "DALL-E 3", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
-  { id: "gpt-image-1", label: "GPT-Image", color: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
-  { id: "imagen3", label: "Google Imagen 3", color: "text-purple-400 border-purple-500/30 bg-purple-500/10" },
+  { id: "dalle3", label: "DALL-E 3 Vivid", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  { id: "dalle3-natural", label: "DALL-E 3 Natural", color: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
+  { id: "gpt-image-1", label: "GPT-Image-1", color: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
 ];
 
 function GenerateImageButton({ planIds, toast }: { planIds: number[]; toast: ReturnType<typeof useToast>["toast"] }) {

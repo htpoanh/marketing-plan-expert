@@ -177,7 +177,7 @@ router.post("/:id/generate-image", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { provider = "dalle3", referenceImages = [], saveToDb = true } = req.body as {
-      provider?: "dalle3" | "gpt-image-1" | "imagen3";
+      provider?: "dalle3" | "dalle3-natural" | "gpt-image-1";
       referenceImages?: string[]; // base64 data URLs for style analysis
       saveToDb?: boolean;
     };
@@ -237,26 +237,27 @@ router.post("/:id/generate-image", async (req, res) => {
     let imageUrl: string | undefined;
     let imageBase64: string | undefined;
 
-    if (provider === "dalle3") {
+    if (provider === "dalle3" || provider === "dalle3-natural") {
       const response = await openai.images.generate({
         model: "dall-e-3",
         prompt: enrichedPrompt,
         n: 1,
         size: "1024x1024",
         quality: "standard",
+        style: provider === "dalle3-natural" ? "natural" : "vivid",
         response_format: "url",
       });
       imageUrl = response.data[0]?.url ?? undefined;
 
     } else if (provider === "gpt-image-1") {
+      // gpt-image-1 uses "low"/"medium"/"high"/"auto" — not "standard"
       const response = await openai.images.generate({
         model: "gpt-image-1",
         prompt: enrichedPrompt,
         n: 1,
         size: "1024x1024",
-        quality: "standard",
+        quality: "medium",
       } as any);
-      // gpt-image-1 returns base64
       const b64 = (response.data[0] as any)?.b64_json;
       if (b64) {
         imageBase64 = `data:image/png;base64,${b64}`;
@@ -265,21 +266,6 @@ router.post("/:id/generate-image", async (req, res) => {
         imageUrl = response.data[0]?.url ?? undefined;
       }
 
-    } else if (provider === "imagen3") {
-      try {
-        const imgResponse = await (ai.models as any).generateImages({
-          model: "imagen-3.0-generate-002",
-          prompt: enrichedPrompt,
-          config: { numberOfImages: 1, aspectRatio: "1:1" },
-        });
-        const imageBytes = imgResponse?.generatedImages?.[0]?.image?.imageBytes;
-        if (imageBytes) {
-          imageBase64 = `data:image/png;base64,${typeof imageBytes === "string" ? imageBytes : Buffer.from(imageBytes).toString("base64")}`;
-          imageUrl = imageBase64;
-        }
-      } catch (imgErr: any) {
-        throw new Error(`Imagen 3 lỗi: ${imgErr?.message ?? "Unknown error"}`);
-      }
     }
 
     if (!imageUrl) return res.status(500).json({ error: "Không tạo được hình ảnh" });

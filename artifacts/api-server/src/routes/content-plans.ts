@@ -176,29 +176,132 @@ router.put("/:id", async (req, res) => {
 router.post("/:id/generate-image", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const { provider = "dalle3", referenceImages = [], saveToDb = true } = req.body as {
+      provider?: "dalle3" | "gpt-image-1" | "imagen3";
+      referenceImages?: string[]; // base64 data URLs for style analysis
+      saveToDb?: boolean;
+    };
+
     const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
 
-    const prompt = plan.imagePrompt;
-    if (!prompt) return res.status(400).json({ error: "Bài viết chưa có image prompt" });
+    // Load brand data for style context
+    const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, plan.brandId));
 
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: prompt.substring(0, 1000),
-      n: 1,
-      size: "1024x1024",
-      quality: "standard",
-    });
+    const basePrompt = plan.imagePrompt ?? `Marketing image for ${plan.topic}`;
 
-    const imageUrl = response.data[0]?.url;
+    // Build brand context string
+    const brandContext = brand ? [
+      brand.industry ? `Industry: ${brand.industry}` : "",
+      brand.brandVoice ? `Brand Voice: ${brand.brandVoice}` : "",
+      brand.targetAudience ? `Target Audience: ${brand.targetAudience}` : "",
+    ].filter(Boolean).join(". ") : "";
+
+    // Analyze reference images for style if provided
+    let styleDescription = "";
+    if (referenceImages.length > 0) {
+      try {
+        const visionMessages: any[] = [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Phân tích phong cách hình ảnh tham chiếu này để dùng làm style guide cho việc tạo hình marketing. Mô tả chi tiết: màu sắc chủ đạo, ánh sáng, bố cục, phong cách nhiếp ảnh, không khí tổng thể, chất liệu/texture, và cách trình bày thương hiệu. Chỉ trả lời mô tả phong cách, không giải thích thêm.`,
+              },
+              ...referenceImages.slice(0, 3).map((img) => ({
+                type: "image_url",
+                image_url: { url: img, detail: "low" },
+              })),
+            ],
+          },
+        ];
+        const visionRes = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: visionMessages,
+          max_tokens: 400,
+        });
+        styleDescription = visionRes.choices[0]?.message?.content ?? "";
+      } catch (e) {
+        console.warn("Vision analysis failed, skipping:", e);
+      }
+    }
+
+    // Build final enriched prompt
+    const parts = [basePrompt];
+    if (brandContext) parts.push(`Brand context: ${brandContext}`);
+    if (styleDescription) parts.push(`Visual style reference: ${styleDescription}`);
+    parts.push("Professional marketing photo. High quality, commercial grade.");
+    const enrichedPrompt = parts.join(" | ").substring(0, 1000);
+
+    let imageUrl: string | undefined;
+    let imageBase64: string | undefined;
+
+    if (provider === "dalle3") {
+      const response = await openai.images.generate({
+        model: "dall-e-3",
+        prompt: enrichedPrompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+        response_format: "url",
+      });
+      imageUrl = response.data[0]?.url ?? undefined;
+
+    } else if (provider === "gpt-image-1") {
+      const response = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt: enrichedPrompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+      } as any);
+      // gpt-image-1 returns base64
+      const b64 = (response.data[0] as any)?.b64_json;
+      if (b64) {
+        imageBase64 = `data:image/png;base64,${b64}`;
+        imageUrl = imageBase64;
+      } else {
+        imageUrl = response.data[0]?.url ?? undefined;
+      }
+
+    } else if (provider === "imagen3") {
+      try {
+        const imgResponse = await (ai.models as any).generateImages({
+          model: "imagen-3.0-generate-002",
+          prompt: enrichedPrompt,
+          config: { numberOfImages: 1, aspectRatio: "1:1" },
+        });
+        const imageBytes = imgResponse?.generatedImages?.[0]?.image?.imageBytes;
+        if (imageBytes) {
+          imageBase64 = `data:image/png;base64,${typeof imageBytes === "string" ? imageBytes : Buffer.from(imageBytes).toString("base64")}`;
+          imageUrl = imageBase64;
+        }
+      } catch (imgErr: any) {
+        throw new Error(`Imagen 3 lỗi: ${imgErr?.message ?? "Unknown error"}`);
+      }
+    }
+
     if (!imageUrl) return res.status(500).json({ error: "Không tạo được hình ảnh" });
 
-    const [updated] = await db.update(contentPlansTable)
-      .set({ imageUrl, updatedAt: new Date() })
-      .where(eq(contentPlansTable.id, id))
-      .returning();
+    // Save to DB if URL-based (skip data URLs which are too large for DB)
+    let updatedPlan = plan;
+    if (saveToDb && imageUrl && !imageUrl.startsWith("data:")) {
+      const [u] = await db.update(contentPlansTable)
+        .set({ imageUrl, updatedAt: new Date() })
+        .where(eq(contentPlansTable.id, id))
+        .returning();
+      if (u) updatedPlan = u;
+    }
 
-    res.json({ imageUrl, plan: updated });
+    res.json({
+      imageUrl,
+      imageBase64: imageUrl?.startsWith("data:") ? imageUrl : undefined,
+      provider,
+      enrichedPrompt,
+      styleDescription: styleDescription || undefined,
+      plan: updatedPlan,
+    });
   } catch (error: any) {
     console.error("Generate image error:", error);
     res.status(500).json({ error: error?.message ?? "Failed to generate image" });

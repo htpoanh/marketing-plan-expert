@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   useListBrands, 
   useRunPipeline, 
@@ -9,50 +9,110 @@ import {
 import { AppLayout } from "@/components/layout/AppLayout";
 import { 
   Sparkles, Bot, Search, BrainCircuit, PenTool, Palette, Save, 
-  ChevronDown, ChevronUp, Copy, CheckCircle2, XCircle, Clock, Trash2, ExternalLink, Eye, X, Image, Loader2
+  ChevronDown, ChevronUp, Copy, CheckCircle2, XCircle, Clock, Trash2, ExternalLink, Eye, X, Image, Loader2, Upload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+type ImgProvider = "dalle3" | "gpt-image-1" | "imagen3";
+const IMG_PROVIDERS: { id: ImgProvider; label: string; color: string }[] = [
+  { id: "dalle3", label: "DALL-E 3", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  { id: "gpt-image-1", label: "GPT-Image", color: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
+  { id: "imagen3", label: "Google Imagen 3", color: "text-purple-400 border-purple-500/30 bg-purple-500/10" },
+];
+
 function GenerateImageButton({ planIds, toast }: { planIds: number[]; toast: ReturnType<typeof useToast>["toast"] }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [provider, setProvider] = useState<ImgProvider>("dalle3");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [images, setImages] = useState<{ id: number; url: string }[]>([]);
+  const [refImages, setRefImages] = useState<string[]>([]);
+  const [images, setImages] = useState<{ id: number; url: string; provider: ImgProvider }[]>([]);
+
+  const handleFileUpload = (files: FileList | null) => {
+    if (!files) return;
+    Array.from(files).slice(0, 3 - refImages.length).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const r = e.target?.result as string;
+        setRefImages(prev => prev.length >= 3 ? prev : [...prev, r]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleGenerate = async () => {
     setLoading(true);
-    const results: { id: number; url: string }[] = [];
+    setDone(false);
+    const results: { id: number; url: string; provider: ImgProvider }[] = [];
     for (const id of planIds) {
       try {
-        const res = await fetch(`${BASE}/api/content-plans/${id}/generate-image`, { method: "POST" });
+        const res = await fetch(`${BASE}/api/content-plans/${id}/generate-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, referenceImages: refImages }),
+        });
         if (res.ok) {
           const data = await res.json();
-          if (data.imageUrl) results.push({ id, url: data.imageUrl });
+          const url = data.imageUrl ?? data.imageBase64;
+          if (url) results.push({ id, url, provider });
         }
       } catch {}
     }
-    setImages(results);
-    setDone(true);
+    setImages(prev => [...results, ...prev.filter(p => p.provider !== provider)]);
+    setDone(results.length === planIds.length);
     setLoading(false);
-    toast({ title: `Đã tạo ${results.length}/${planIds.length} hình ảnh`, description: "Xem hình trong Lịch Nội dung" });
+    toast({ title: `${IMG_PROVIDERS.find(p => p.id === provider)?.label}: Đã tạo ${results.length}/${planIds.length} hình`, description: "Thử AI khác để so sánh kết quả" });
   };
 
   return (
-    <div className="space-y-3">
-      <button
-        onClick={handleGenerate}
-        disabled={loading || done}
-        className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-      >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Image className="w-4 h-4" />}
-        {loading ? `Đang tạo hình (${planIds.length} bài)...` : done ? "Đã tạo xong!" : `Tạo hình DALL-E (${planIds.length} bài)`}
+    <div className="space-y-3 w-full">
+      {/* Provider select pills */}
+      <div className="flex flex-wrap gap-2">
+        {IMG_PROVIDERS.map(p => (
+          <button key={p.id} onClick={() => { setProvider(p.id); setDone(false); }}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${provider === p.id ? p.color : "border-border/50 text-muted-foreground bg-secondary/30 hover:bg-secondary"}`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Reference image upload */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => fileInputRef.current?.click()} disabled={refImages.length >= 3}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border/50 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:border-border transition-all disabled:opacity-40">
+          <Upload className="w-3.5 h-3.5" /> Upload hình mẫu ({refImages.length}/3)
+        </button>
+        {refImages.map((img, i) => (
+          <div key={i} className="relative group">
+            <img src={img} className="w-8 h-8 rounded-md object-cover border border-border/50" alt="" />
+            <button onClick={() => setRefImages(prev => prev.filter((_, j) => j !== i))}
+              className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </div>
+        ))}
+        {refImages.length > 0 && <span className="text-xs text-emerald-400 font-medium">AI sẽ học phong cách từ hình mẫu</span>}
+        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleFileUpload(e.target.files)} />
+      </div>
+
+      {/* Generate button */}
+      <button onClick={handleGenerate} disabled={loading}
+        className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-sm font-bold transition-all disabled:opacity-50">
+        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
+        {loading ? `Đang tạo (${planIds.length} bài)...` : `Tạo hình với ${IMG_PROVIDERS.find(p => p.id === provider)?.label} (${planIds.length} bài)`}
       </button>
+
+      {/* Results grid */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
-          {images.map(img => (
-            <div key={img.id} className="rounded-xl overflow-hidden border border-border/50">
+          {images.map((img, i) => (
+            <div key={i} className="rounded-xl overflow-hidden border border-border/50 space-y-0">
+              <div className={`px-2 py-1 text-xs font-bold ${IMG_PROVIDERS.find(p => p.id === img.provider)?.color ?? ""}`}>
+                {IMG_PROVIDERS.find(p => p.id === img.provider)?.label}
+              </div>
               <img src={img.url} alt={`Plan ${img.id}`} className="w-full object-cover aspect-square" />
             </div>
           ))}

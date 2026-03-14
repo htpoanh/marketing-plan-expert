@@ -12,6 +12,7 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
+import { buildImagePromptGuidance } from "../lib/imagePromptBuilder";
 
 const router: IRouter = Router();
 
@@ -267,11 +268,13 @@ Gib JSON zurück (kein Markdown, keine Erklärungen außerhalb des JSON):
   "shortCaption": "Kurzversion 30-50 Wörter",
   "cta": "Konkreter Handlungsaufruf (1 Satz)",
   "hashtags": ["#hashtag1", "#hashtag2"],
-  "imagePrompt": "Detailed English description for AI image generation, photorealistic, no text in image"
+  "imagePrompt": "..."
 }
 
 hashtags: 12-18 Tags gemischt deutsch+englisch, lokal relevant für ${brand.branchLocation}
-imagePrompt: Englisch, sehr detailliert, Stil passend zum Geschäft`;
+
+FÜR IMAGEPROMPT — FOLGE DIESER ANLEITUNG EXAKT:
+${buildImagePromptGuidance(brand, topic)}`;
 
       const contentData = await callGeminiJSON(contentPrompt);
 

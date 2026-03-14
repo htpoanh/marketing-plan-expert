@@ -4,6 +4,7 @@ import { pipelineRunsTable, contentPlansTable, brandsTable, aiAgentConfigsTable,
 import { eq, and } from "drizzle-orm";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
+import { buildImagePromptGuidance } from "../lib/imagePromptBuilder";
 
 const router: IRouter = Router();
 
@@ -417,7 +418,7 @@ POST INFORMATION:
 
 Create professional prompts and return JSON (no markdown):
 {
-  "imagePrompt": "Detailed English prompt for DALL-E/Midjourney image generation — ultra detailed, lighting, composition, color, quality",
+  "imagePrompt": "...",
   "videoPrompt": "Detailed English prompt for HailuoAI/Sora video generation with scene-by-scene description",
   "visualStyle": "Visual style description for this brand (in German)",
   "cameraDirection": "Camera angles and movements for video (English)",
@@ -426,11 +427,14 @@ Create professional prompts and return JSON (no markdown):
 }
 
 Requirements:
-- imagePrompt: extremely detailed (lighting, angles, colors, composition, style, quality, mood) — in English for best AI generation results
+- imagePrompt: MUST follow the detailed cinematic structure below — extremely detailed prompt in English
 - videoPrompt: describe each scene, camera movements, effects, suggested audio — in English
 - Fits ${plat} format (aspect ratio, duration)
 - Reflects brand tone and target emotion accurately
-- overlayText suggestions should be short punchy German phrases`;
+- overlayText suggestions should be short punchy German phrases
+
+IMAGE PROMPT STRUCTURE — FOLLOW EXACTLY:
+${buildImagePromptGuidance(brand, topic)}`;
 
       const promptData = await callOpenAIJSON(promptPrompt, openaiSystem);
       lastPromptData = promptData;

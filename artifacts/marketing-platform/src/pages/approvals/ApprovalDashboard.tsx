@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send, Calendar, Store } from "lucide-react";
+import { X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send, Calendar, Store, ChevronsDown, ChevronsUp, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
@@ -52,6 +52,8 @@ export default function ApprovalDashboard() {
   const [rejectReason, setRejectReason] = useState("");
   const [publishingId, setPublishingId] = useState<number | null>(null);
   const [schedules, setSchedules] = useState<Record<number, string>>({});
+  const [rewritingId, setRewritingId] = useState<{ id: number; direction: "shorter" | "longer" } | null>(null);
+  const [localCaptions, setLocalCaptions] = useState<Record<number, string>>({});
 
   const rejectMutation = useRejectContentPlan({
     mutation: {
@@ -103,6 +105,26 @@ export default function ApprovalDashboard() {
       toast({ title: "❌ Thất bại", description: e.message, variant: "destructive" });
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const handleRewrite = async (planId: number, direction: "shorter" | "longer") => {
+    setRewritingId({ id: planId, direction });
+    try {
+      const res = await fetch(`${BASE}/api/content-plans/${planId}/rewrite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setLocalCaptions(prev => ({ ...prev, [planId]: cleanText(data.plan?.caption ?? "") }));
+      const label = direction === "shorter" ? "ngắn hơn" : "dài hơn";
+      toast({ title: `✅ Đã viết lại ${label}`, description: `${data.wordCount ?? "?"} từ` });
+    } catch (e: any) {
+      toast({ title: "❌ Lỗi viết lại", description: e.message, variant: "destructive" });
+    } finally {
+      setRewritingId(null);
     }
   };
 
@@ -186,6 +208,12 @@ export default function ApprovalDashboard() {
           <div className="grid grid-cols-1 gap-6">
             {plans.map((plan: any) => {
               const brandName = brands.find((b: any) => b.id === plan.brandId)?.brandName;
+              const displayCaption = localCaptions[plan.id] ?? cleanText(plan.caption);
+              const wordCount = displayCaption.split(/\s+/).filter(Boolean).length;
+              const isRewritingShorter = rewritingId?.id === plan.id && rewritingId.direction === "shorter";
+              const isRewritingLonger = rewritingId?.id === plan.id && rewritingId.direction === "longer";
+              const anyRewriting = isRewritingShorter || isRewritingLonger;
+
               return (
                 <div key={plan.id} className="bg-card rounded-2xl border border-border/50 shadow-xl overflow-hidden flex flex-col lg:flex-row">
                   {/* Content preview */}
@@ -206,12 +234,40 @@ export default function ApprovalDashboard() {
 
                     <h3 className="text-lg font-bold mb-3 text-primary">{cleanText(plan.hook) || plan.topic}</h3>
 
-                    <div className="p-4 bg-secondary/30 rounded-xl mb-4 border border-border/50 space-y-2">
-                      <p className="text-sm text-foreground/90 whitespace-pre-wrap">{cleanText(plan.caption)}</p>
+                    <div className="p-4 bg-secondary/30 rounded-xl mb-3 border border-border/50 space-y-2">
+                      <p className={`text-sm text-foreground/90 whitespace-pre-wrap transition-opacity ${anyRewriting ? "opacity-40" : "opacity-100"}`}>
+                        {displayCaption}
+                      </p>
                       {plan.cta && !plan.caption?.includes(plan.cta) && (
                         <p className="text-sm font-semibold text-amber-400">{cleanText(plan.cta)}</p>
                       )}
                       <p className="text-xs text-muted-foreground">{plan.hashtags}</p>
+                    </div>
+
+                    {/* Rewrite controls */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${
+                        wordCount > 220 ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-secondary border-border/50 text-muted-foreground"
+                      }`}>
+                        <FileText className="w-3 h-3" />
+                        {wordCount} từ {wordCount > 220 && <span className="text-amber-600">/ 250 max</span>}
+                      </span>
+                      <button
+                        onClick={() => handleRewrite(plan.id, "shorter")}
+                        disabled={anyRewriting || publishingId === plan.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isRewritingShorter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronsDown className="w-3.5 h-3.5" />}
+                        Viết ngắn hơn
+                      </button>
+                      <button
+                        onClick={() => handleRewrite(plan.id, "longer")}
+                        disabled={anyRewriting || publishingId === plan.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isRewritingLonger ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronsUp className="w-3.5 h-3.5" />}
+                        Viết dài hơn
+                      </button>
                     </div>
 
                     {plan.imagePrompt && (

@@ -352,6 +352,70 @@ router.post("/:id/generate-image", async (req, res) => {
   }
 });
 
+// ── Rewrite caption shorter or longer (max 250 words) ───────────────────────
+router.post("/:id/rewrite", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { direction } = req.body as { direction: "shorter" | "longer" };
+    if (!direction || !["shorter", "longer"].includes(direction)) {
+      return res.status(400).json({ error: "direction must be 'shorter' or 'longer'" });
+    }
+
+    const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
+    if (!plan) return res.status(404).json({ error: "Content plan not found" });
+
+    const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, plan.brandId));
+
+    const currentCaption = cleanPostText(plan.caption);
+    const currentWordCount = currentCaption.split(/\s+/).filter(Boolean).length;
+
+    const directionInstruction = direction === "shorter"
+      ? `Schreibe die Caption KÜRZER um (Ziel: ${Math.max(60, Math.round(currentWordCount * 0.6))}–${Math.round(currentWordCount * 0.75)} Wörter). Behalte den Kern und die Kernbotschaft. Keine überflüssigen Sätze.`
+      : `Schreibe die Caption AUSFÜHRLICHER (Ziel: ${Math.min(250, Math.round(currentWordCount * 1.4))}–${Math.min(250, Math.round(currentWordCount * 1.6))} Wörter). Füge mehr Details, Emotion oder Storytelling hinzu. MAXIMAL 250 Wörter gesamt.`;
+
+    const systemPrompt = `Du bist ein professioneller Social-Media-Texter für ${brand?.brandName ?? "ein Unternehmen"} in Deutschland.
+REGELN:
+- Schreibe AUSSCHLIESSLICH auf Deutsch
+- Keine Marketing-Labels (AIDA, PAS, Hook:, CTA: usw.) — schreibe fließenden Text
+- ABSOLUTES MAXIMUM: 250 Wörter für den gesamten Caption-Text
+- Behalte den originalen Ton und die Markenidentität
+- Gib NUR den neuen Caption-Text zurück, kein JSON, keine Erklärungen`;
+
+    const userPrompt = `${directionInstruction}
+
+ORIGINAL CAPTION (${currentWordCount} Wörter):
+${currentCaption}
+
+THEMA: ${plan.topic ?? ""}
+HOOK: ${cleanPostText(plan.hook) ?? ""}
+
+Schreibe jetzt den neuen Caption-Text:`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.75,
+      max_tokens: 500,
+    });
+
+    const newCaption = cleanPostText(completion.choices[0]?.message?.content ?? currentCaption);
+
+    const [updated] = await db.update(contentPlansTable)
+      .set({ caption: newCaption, updatedAt: new Date() })
+      .where(eq(contentPlansTable.id, id))
+      .returning();
+
+    const wordCount = newCaption.split(/\s+/).filter(Boolean).length;
+    res.json({ ok: true, plan: updated, wordCount });
+  } catch (error: any) {
+    console.error("Rewrite error:", error);
+    res.status(500).json({ error: error?.message ?? "Failed to rewrite content" });
+  }
+});
+
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

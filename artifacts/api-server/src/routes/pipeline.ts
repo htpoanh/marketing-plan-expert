@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { pipelineRunsTable, contentPlansTable, brandsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import OpenAI from "openai";
-import { ai } from "@workspace/integrations-gemini-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const router: IRouter = Router();
 
@@ -142,8 +142,10 @@ async function callOpenAIJSON(prompt: string): Promise<any> {
 }
 
 // Agent 3: Gemini — creative Vietnamese content writing
+const gemini = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+
 async function callGeminiJSON(prompt: string): Promise<any> {
-  const response = await ai.models.generateContent({
+  const response = await gemini.models.generateContent({
     model: "gemini-2.0-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {

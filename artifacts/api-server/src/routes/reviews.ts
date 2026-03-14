@@ -2,7 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { reviewsTable, brandsTable } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { ai } from "@workspace/integrations-gemini-ai";
+import { GoogleGenAI } from "@google/genai";
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 const router: IRouter = Router();
 

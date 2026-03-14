@@ -147,11 +147,14 @@ async function callOpenAIJSON(prompt: string): Promise<any> {
 }
 
 // Agent 3: Gemini — creative Vietnamese content writing
-const gemini = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+const gemini = new GoogleGenAI({
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+  httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
+});
 
 async function callGeminiJSON(prompt: string): Promise<any> {
   const response = await gemini.models.generateContent({
-    model: "gemini-2.0-flash",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       maxOutputTokens: 8192,

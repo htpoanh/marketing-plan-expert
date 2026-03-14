@@ -541,53 +541,83 @@ router.post("/run/:brandId", async (req, res) => {
         .where(eq(automationSettingsTable.brandId, brandId));
     }
 
-    // Send full content to Make webhook
+    // Send content to Metricool (direct) or Make.com webhook fallback
     const webhookUrl = process.env.MAKE_WEBHOOK_URL;
+    const mcToken = runSettings.metricoolToken;
+    const mcUserId = runSettings.metricoolAccountId;
     let webhookOk = false;
     let webhookErrMsg = "";
-    if (!dryRun && webhookUrl && result.plans?.length > 0) {
-      try {
-        const planDetails = await db.select({
-          id: contentPlansTable.id,
-          brandId: contentPlansTable.brandId,
-          platform: contentPlansTable.platform,
-          contentType: contentPlansTable.contentType,
-          topic: contentPlansTable.topic,
-          caption: contentPlansTable.caption,
-          shortCaption: contentPlansTable.shortCaption,
-          cta: contentPlansTable.cta,
-          hashtags: contentPlansTable.hashtags,
-          imagePrompt: contentPlansTable.imagePrompt,
-          publishDate: contentPlansTable.publishDate,
-        }).from(contentPlansTable).where(inArray(contentPlansTable.id, result.plans));
+    let deliveryMethod = "not_configured";
 
-        const platformMap: Record<string, string> = { "Facebook": "facebook", "Instagram": "instagram", "TikTok": "tiktok" };
-        const contentDetails = planDetails.map(p => ({
-          id: p.id,
-          brandName: brand.brandName,
-          metricoolAccountId: runSettings.metricoolAccountId ?? "",
-          metricoolToken: runSettings.metricoolToken ?? "",
-          platform: p.platform,
-          metricoolNetwork: platformMap[p.platform] ?? p.platform.toLowerCase(),
-          contentType: p.contentType,
-          topic: p.topic,
-          caption: [p.caption, p.cta].filter(Boolean).join("\n\n"),
-          shortCaption: p.shortCaption ?? "",
-          hashtags: p.hashtags ?? "",
-          fullText: [p.caption, p.cta, p.hashtags].filter(Boolean).join("\n\n"),
-          imagePrompt: p.imagePrompt ?? "",
-          publishDate: p.publishDate instanceof Date ? p.publishDate.toISOString() : new Date().toISOString(),
-        }));
+    if (!dryRun && result.plans?.length > 0) {
+      // Fetch full content plan details
+      const planDetails = await db.select({
+        id: contentPlansTable.id,
+        platform: contentPlansTable.platform,
+        caption: contentPlansTable.caption,
+        cta: contentPlansTable.cta,
+        hashtags: contentPlansTable.hashtags,
+        publishDate: contentPlansTable.publishDate,
+      }).from(contentPlansTable).where(inArray(contentPlansTable.id, result.plans));
 
-        const whResp = await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: "manual_run", timestamp: new Date().toISOString(), contentDetails }),
-        });
-        webhookOk = whResp.ok;
-        if (!whResp.ok) webhookErrMsg = `HTTP ${whResp.status}`;
-      } catch (e: any) {
-        webhookErrMsg = e.message;
+      if (mcToken && mcUserId) {
+        // ── DIRECT METRICOOL API ──────────────────────────────────────────────
+        deliveryMethod = "metricool_direct";
+        let successCount = 0;
+        const errors: string[] = [];
+
+        // Group posts by scheduled time (stagger by 5 min each)
+        let offsetMin = 60;
+        for (const plan of planDetails) {
+          try {
+            const fullText = [plan.caption, plan.cta, plan.hashtags].filter(Boolean).join("\n\n");
+            const future = new Date(Date.now() + offsetMin * 60 * 1000);
+            const dt = future.toLocaleString("sv-SE", { timeZone: "Europe/Berlin" }).replace(" ", "T");
+            const mcResult = await mcSchedulePost({
+              userId: String(mcUserId),
+              token: mcToken,
+              text: fullText,
+              networks: [plan.platform.toLowerCase()],
+              scheduledAt: dt,
+              timezone: "Europe/Berlin",
+            });
+            if (mcResult.ok) successCount++;
+            else errors.push(`${plan.platform}: ${mcResult.hint ?? mcResult.status}`);
+            offsetMin += 5;
+          } catch (e: any) {
+            errors.push(`${plan.platform}: ${e.message}`);
+          }
+        }
+
+        webhookOk = successCount > 0;
+        webhookErrMsg = errors.join("; ");
+        console.log(`[direct-metricool] ${successCount}/${planDetails.length} posts scheduled. Errors: ${webhookErrMsg}`);
+
+      } else if (webhookUrl) {
+        // ── MAKE.COM WEBHOOK FALLBACK ─────────────────────────────────────────
+        deliveryMethod = "make_webhook";
+        try {
+          const platformMap: Record<string, string> = { "Facebook": "facebook", "Instagram": "instagram", "TikTok": "tiktok" };
+          const contentDetails = planDetails.map(p => ({
+            id: p.id,
+            brandName: brand.brandName,
+            metricoolAccountId: mcUserId ?? "",
+            metricoolToken: mcToken ?? "",
+            platform: p.platform,
+            metricoolNetwork: platformMap[p.platform] ?? p.platform.toLowerCase(),
+            fullText: [p.caption, p.cta, p.hashtags].filter(Boolean).join("\n\n"),
+            publishDate: p.publishDate instanceof Date ? p.publishDate.toISOString() : new Date().toISOString(),
+          }));
+          const whResp = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event: "manual_run", timestamp: new Date().toISOString(), contentDetails }),
+          });
+          webhookOk = whResp.ok;
+          if (!whResp.ok) webhookErrMsg = `HTTP ${whResp.status}`;
+        } catch (e: any) {
+          webhookErrMsg = e.message;
+        }
       }
     }
 
@@ -598,10 +628,15 @@ router.post("/run/:brandId", async (req, res) => {
         brandName: brand.brandName,
         status: "success",
         plansCreated: result.plans?.length ?? 0,
-        webhookSent: webhookUrl ? true : false,
-        webhookStatus: webhookUrl ? (webhookOk ? "success" : "failed") : "not_configured",
+        webhookSent: (mcToken && mcUserId) || !!webhookUrl ? true : false,
+        webhookStatus: webhookOk ? "success" : (deliveryMethod === "not_configured" ? "not_configured" : "failed"),
         webhookError: webhookErrMsg || null,
-        details: { trendTopic: result.trendTopic, summary: result.summary, contentIds: result.plans ?? [] },
+        details: {
+          trendTopic: result.trendTopic,
+          summary: result.summary,
+          contentIds: result.plans ?? [],
+          deliveryMethod,
+        },
       }).catch(() => {});
     }
 
@@ -611,50 +646,174 @@ router.post("/run/:brandId", async (req, res) => {
   }
 });
 
+// ── Metricool API helpers ─────────────────────────────────────────────────────
+
+/** Fetch simpleProfiles to get internal brandId + network account IDs.
+ *  Pass targetBlogId to pick a specific brand (else returns all). */
+async function mcGetProfiles(userId: string, token: string): Promise<any[]> {
+  // Call with userId as both params — returns ALL brands for this account
+  const r = await fetch(
+    `https://app.metricool.com/api/admin/simpleProfiles?userId=${userId}&blogId=${userId}`,
+    { headers: { "X-Mc-Auth": token } }
+  );
+  if (!r.ok) throw new Error(`simpleProfiles HTTP ${r.status}`);
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
+}
+
+/** Find the correct Metricool profile. 
+ *  metricoolAccountId can be: the userId, or the internal brand ID (preferred). */
+async function mcFindProfile(metricoolAccountId: string, token: string): Promise<any> {
+  const userId = metricoolAccountId; // We'll use as userId to list all brands
+  const profiles = await mcGetProfiles(userId, token);
+  if (!profiles.length) throw new Error("Không tìm thấy brand nào trong Metricool");
+  // If metricoolAccountId matches a specific brand id, use that brand
+  const exactMatch = profiles.find(p => String(p.id) === String(metricoolAccountId));
+  if (exactMatch) return exactMatch;
+  // Otherwise return first brand
+  return profiles[0];
+}
+
+const MC_NETWORK_MAP: Record<string, string> = {
+  facebook: "FACEBOOK",
+  instagram: "INSTAGRAM",
+  tiktok: "TIKTOK",
+  twitter: "TWITTER",
+  linkedin: "LINKEDIN",
+  youtube: "YOUTUBE",
+};
+
+/**
+ * Schedule a post directly to Metricool using the correct API format.
+ * userId = metricoolAccountId field (user's numeric Metricool ID)
+ */
+async function mcSchedulePost(opts: {
+  userId: string;
+  token: string;
+  text: string;
+  networks: string[];          // e.g. ["facebook","instagram"]
+  scheduledAt?: string;        // ISO datetime local (Europe/Berlin)
+  timezone?: string;
+}): Promise<{ ok: boolean; status: number; data?: any; hint?: string }> {
+  const { userId, token, text, networks, timezone = "Europe/Berlin" } = opts;
+
+  // 1. Find the correct brand profile by userId/brandId
+  let profile: any;
+  try {
+    profile = await mcFindProfile(userId, token);
+  } catch (e: any) {
+    return { ok: false, status: 401, hint: e.message };
+  }
+  const internalBlogId = profile.id;
+  const realUserId = profile.userId ?? profile.ownerUserId ?? userId;
+
+  // 2. Build providers array based on requested networks
+  const providers: any[] = [];
+  for (const net of networks) {
+    const mcNet = MC_NETWORK_MAP[net.toLowerCase()];
+    if (!mcNet) continue;
+    // Get the network account ID from the profile
+    let accountId: string | null = null;
+    if (net.toLowerCase() === "facebook" && profile.facebookPageId) accountId = profile.facebookPageId;
+    else if (net.toLowerCase() === "instagram" && profile.fbBusinessId) accountId = profile.fbBusinessId;
+    else if (net.toLowerCase() === "tiktok" && profile.tiktok) accountId = profile.tiktok;
+    if (accountId) providers.push({ network: mcNet, id: accountId });
+  }
+
+  if (!providers.length) {
+    // Fallback: try facebook with facebookPageId
+    if (profile.facebookPageId) {
+      providers.push({ network: "FACEBOOK", id: profile.facebookPageId });
+    } else {
+      return { ok: false, status: 400, hint: "Không tìm thấy tài khoản mạng xã hội nào được kết nối trong Metricool." };
+    }
+  }
+
+  // 3. Build date — use Berlin local time, minimum 60 min in the future
+  let dt: string;
+  if (opts.scheduledAt) {
+    dt = opts.scheduledAt.slice(0, 19);
+  } else {
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    // toLocaleString("sv-SE") gives "2026-03-14 12:00:00" which is ISO-like
+    dt = future.toLocaleString("sv-SE", { timeZone: "Europe/Berlin" }).replace(" ", "T");
+  }
+
+  const payload = {
+    text,
+    publicationDate: { dateTime: dt, timezone },
+    providers,
+    autoPublish: true,
+  };
+
+  console.log("[mcSchedulePost] userId=%s blogId=%s payload=%s", userId, internalBlogId, JSON.stringify(payload));
+
+  const mcRes = await fetch(
+    `https://app.metricool.com/api/v2/scheduler/posts?userId=${realUserId}&blogId=${internalBlogId}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Mc-Auth": token },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const mcText = await mcRes.text();
+  let mcData: any;
+  try { mcData = JSON.parse(mcText); } catch { mcData = { raw: mcText.slice(0, 500) }; }
+  console.log("[mcSchedulePost] response:", mcRes.status, mcText.slice(0, 300));
+
+  if (!mcRes.ok) {
+    let hint = "";
+    if (mcRes.status === 401) hint = "Token không hợp lệ hoặc hết hạn. Vào Metricool → Settings → API → Generate Token mới.";
+    else if (mcRes.status === 403) hint = "Token không có quyền đăng bài.";
+    else if (mcRes.status === 404) hint = "Blog không tìm thấy (blogId=" + internalBlogId + ")";
+    else if (mcRes.status === 422) hint = "Dữ liệu không hợp lệ: " + JSON.stringify(mcData).slice(0, 200);
+    else hint = JSON.stringify(mcData).slice(0, 200);
+    return { ok: false, status: mcRes.status, data: mcData, hint };
+  }
+  return { ok: true, status: mcRes.status, data: mcData };
+}
+
+// ── GET /automation/metricool-brands — list all Metricool brands for a token ─────────────
+router.get("/metricool-brands", async (req, res) => {
+  const { userId, token } = req.query as { userId?: string; token?: string };
+  if (!userId || !token) return res.status(400).json({ ok: false, error: "Thiếu userId hoặc token" });
+  try {
+    const profiles = await mcGetProfiles(userId, token);
+    const brands = profiles
+      .filter(p => p.id && p.label)
+      .map(p => ({
+        id: p.id,
+        label: p.label,
+        facebook: p.facebookPageId ?? null,
+        instagram: p.instagram ?? null,
+        tiktok: p.tiktok ?? null,
+      }));
+    return res.json({ ok: true, userId: profiles[0]?.userId ?? userId, brands });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── POST /automation/test-metricool/:brandId — direct Metricool ping (bypass Make.com) ─────
 router.post("/test-metricool/:brandId", async (req, res) => {
-  const brandId = parseInt(req.params.brandId);
-  const { blogId, metricoolToken, text, scheduledAt } = req.body;
+  const { blogId: userId, metricoolToken, text, scheduledAt } = req.body;
 
-  if (!blogId) return res.status(400).json({ ok: false, error: "Thiếu Blog ID (blogId)" });
-  if (!metricoolToken) return res.status(400).json({ ok: false, error: "Thiếu Metricool API Token (metricoolToken)" });
+  if (!userId) return res.status(400).json({ ok: false, error: "Thiếu User ID (blogId field)" });
+  if (!metricoolToken) return res.status(400).json({ ok: false, error: "Thiếu Metricool API Token" });
 
-  // Test payload: a simple post scheduled +10 min from now
-  const postDate = scheduledAt ?? new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 16);
-  const caption = text ?? "Test von AI Marketer 🚀 #Test";
+  const caption = text ?? "✅ Test von AI Marketer — Verbindung erfolgreich! #KIMarketing";
 
   try {
-    const payload = {
-      blogId: String(blogId),
-      networks: [{ type: "facebook", text: caption }],
-      date: postDate,
-    };
-    console.log("[test-metricool] Sending to Metricool:", JSON.stringify(payload));
-
-    const mcRes = await fetch("https://app.metricool.com/api/v2/planning", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${metricoolToken}`,
-      },
-      body: JSON.stringify(payload),
+    const result = await mcSchedulePost({
+      userId: String(userId),
+      token: metricoolToken,
+      text: caption,
+      networks: ["facebook"],
+      scheduledAt,
+      timezone: "Europe/Berlin",
     });
-
-    const mcText = await mcRes.text();
-    let mcData: any;
-    try { mcData = JSON.parse(mcText); } catch { mcData = { raw: mcText }; }
-
-    console.log("[test-metricool] Metricool response:", mcRes.status, mcText);
-
-    if (!mcRes.ok) {
-      let hint = "";
-      if (mcRes.status === 401) hint = "Token không hợp lệ hoặc hết hạn. Vào Metricool → Settings → API → Generate Token mới.";
-      else if (mcRes.status === 403) hint = "Token không có quyền. Kiểm tra quyền API trong Metricool.";
-      else if (mcRes.status === 404) hint = "Blog ID không tìm thấy. Kiểm tra lại Blog ID trong Metricool → Settings → My account.";
-      else if (mcRes.status === 422) hint = "Dữ liệu không hợp lệ. Kiểm tra format ngày hoặc network type.";
-      return res.json({ ok: false, status: mcRes.status, hint, metricoolResponse: mcData });
-    }
-    return res.json({ ok: true, status: mcRes.status, metricoolResponse: mcData, sentPayload: payload });
+    return res.json({ ok: result.ok, status: result.status, hint: result.hint, metricoolResponse: result.data });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e.message });
   }

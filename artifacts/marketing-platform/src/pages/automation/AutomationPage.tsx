@@ -88,6 +88,8 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
   const [dirty, setDirty] = useState(false);
   const [pingingMetricool, setPingingMetricool] = useState(false);
   const [pingResult, setPingResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
+  const [fetchingBrands, setFetchingBrands] = useState(false);
+  const [mcBrands, setMcBrands] = useState<{ id: number; label: string; facebook: string | null }[] | null>(null);
 
   const toggleContentType = (ct: string) => {
     const current = local.contentTypes.split(",").filter(Boolean);
@@ -220,12 +222,12 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
             </p>
             <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Blog ID (Account ID trong Metricool)</label>
+                <label className="text-xs text-muted-foreground">User ID (Account ID trong Metricool)</label>
                 <input
                   type="text"
                   value={local.metricoolAccountId}
                   onChange={e => { setLocal(p => ({ ...p, metricoolAccountId: e.target.value })); setDirty(true); }}
-                  placeholder="VD: 123456 — Lấy từ Metricool → Settings → My account → Blog ID"
+                  placeholder="VD: 4371661 — URL Metricool: ?userId=XXXXX"
                   className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-muted-foreground/40"
                 />
               </div>
@@ -254,6 +256,43 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
               Mỗi tiệm có thể đăng vào fanpage riêng — nhập Blog ID + Token tương ứng. Tìm Blog ID tại{" "}
               <a href="https://app.metricool.com" target="_blank" rel="noreferrer" className="text-primary hover:underline">app.metricool.com</a> → Settings → My account.
             </p>
+            {/* Fetch brands button */}
+            <button
+              onClick={async () => {
+                if (!local.metricoolToken) { setMcBrands(null); setPingResult({ ok: false, message: "Hãy nhập API Token trước!" }); return; }
+                setFetchingBrands(true); setMcBrands(null);
+                try {
+                  const uid = local.metricoolAccountId || "0";
+                  const r = await fetch(`${BASE}/api/automation/metricool-brands?userId=${uid}&token=${encodeURIComponent(local.metricoolToken)}`);
+                  const data = await r.json();
+                  if (data.ok) setMcBrands(data.brands);
+                  else setPingResult({ ok: false, message: `❌ ${data.error}` });
+                } catch (e: any) {
+                  setPingResult({ ok: false, message: `❌ ${e.message}` });
+                } finally { setFetchingBrands(false); }
+              }}
+              disabled={fetchingBrands}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border/50 hover:bg-secondary/50 text-muted-foreground text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              {fetchingBrands ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>🔍</span>}
+              {fetchingBrands ? "Đang tải..." : "Xem danh sách brands Metricool"}
+            </button>
+            {mcBrands && (
+              <div className="border border-border/50 rounded-xl overflow-hidden text-xs">
+                <p className="px-3 py-2 bg-secondary/30 text-muted-foreground font-semibold">Chọn brand → tự điền Brand ID:</p>
+                {mcBrands.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => { setLocal(p => ({ ...p, metricoolAccountId: String(b.id) })); setDirty(true); setMcBrands(null); }}
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-primary/10 text-left border-t border-border/20 transition-colors"
+                  >
+                    <span className="font-medium text-foreground">{b.label}</span>
+                    <span className="font-mono text-muted-foreground">{b.id}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Direct Metricool ping button */}
             <button
               onClick={async () => {
@@ -317,8 +356,9 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
                 setTestResult(null);
                 if (dirty) { onSave(brand.id, local); setDirty(false); }
                 try {
-                  await onRunTest(brand.id, local);
-                  setTestResult({ ok: true, message: "✅ Đã tạo 1 bài Facebook Post và gửi tới Make.com → Metricool!" });
+                  const r = await onRunTest(brand.id, local);
+                  const method = local.metricoolToken ? "trực tiếp vào Metricool" : "tới Make.com → Metricool";
+                  setTestResult({ ok: true, message: `✅ Đã tạo 1 bài Facebook Post và gửi ${method}! Kiểm tra trong Metricool Planner.` });
                 } catch (e: any) {
                   setTestResult({ ok: false, message: e.message });
                 } finally {

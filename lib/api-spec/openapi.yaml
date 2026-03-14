@@ -1112,6 +1112,8 @@ components:
           type: string
         contentCount:
           type: integer
+        storeSituation:
+          type: string
       required:
         - brandId
         - topic

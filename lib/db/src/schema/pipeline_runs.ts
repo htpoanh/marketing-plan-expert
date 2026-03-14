@@ -8,6 +8,7 @@ export const pipelineRunsTable = pgTable("pipeline_runs", {
   goal: text("goal").notNull(),
   platform: text("platform").notNull(),
   contentCount: integer("content_count").default(1).notNull(),
+  storeSituation: text("store_situation"),
   status: text("status").default("running").notNull(),
   trendData: jsonb("trend_data"),
   strategyData: jsonb("strategy_data"),

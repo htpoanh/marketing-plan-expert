@@ -234,6 +234,7 @@ export interface RunPipelineBody {
   goal: string;
   platform: string;
   contentCount?: number;
+  storeSituation?: string;
 }
 
 export interface TrendData {

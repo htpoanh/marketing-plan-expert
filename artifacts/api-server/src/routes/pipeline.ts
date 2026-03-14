@@ -154,7 +154,7 @@ router.delete("/runs/:id", async (req, res) => {
 });
 
 router.post("/run", async (req, res) => {
-  const { brandId, topic, goal, platform, contentCount = 1 } = req.body;
+  const { brandId, topic, goal, platform, contentCount = 1, storeSituation } = req.body;
 
   if (!brandId || !topic || !goal || !platform) {
     return res.status(400).json({ error: "Thiếu thông tin bắt buộc: brandId, topic, goal, platform" });
@@ -169,6 +169,7 @@ router.post("/run", async (req, res) => {
     goal,
     platform,
     contentCount,
+    storeSituation: storeSituation || null,
     status: "running",
     savedPlanIds: [],
   }).returning();
@@ -180,6 +181,10 @@ router.post("/run", async (req, res) => {
 
   try {
     // ─── AGENT 1: TREND RESEARCH ───────────────────────────────────────────────
+    const situationBlock = storeSituation
+      ? `\nTÌNH TRẠNG HIỆN TẠI CỦA CỬA HÀNG:\n${storeSituation}\n`
+      : "";
+
     const trendPrompt = `Bạn là chuyên gia phân tích xu hướng thị trường với 10 năm kinh nghiệm.
 
 THÔNG TIN PHÂN TÍCH:
@@ -187,7 +192,7 @@ THÔNG TIN PHÂN TÍCH:
 - Địa điểm: ${brand.branchLocation}
 - Chủ đề: ${topic}
 - Tháng hiện tại: ${month}
-- Nền tảng: ${platform}
+- Nền tảng: ${platform}${situationBlock}
 
 Hãy phân tích xu hướng và trả về JSON (không markdown):
 {
@@ -216,8 +221,7 @@ THÔNG TIN THƯƠNG HIỆU:
 - Ngành: ${brand.industry}
 - Địa điểm: ${brand.branchLocation}
 - Khách hàng mục tiêu: ${brand.targetAudience}
-- Giọng điệu: ${brand.brandVoice}
-
+- Giọng điệu: ${brand.brandVoice}${situationBlock}
 YÊU CẦU CHIẾN LƯỢC:
 - Chủ đề: ${topic}
 - Mục tiêu: ${goal}
@@ -254,7 +258,7 @@ THƯƠNG HIỆU:
 - Ngành: ${brand.industry}
 - Giọng điệu: ${brand.brandVoice}
 - Khách hàng: ${brand.targetAudience}
-- Địa điểm: ${brand.branchLocation}
+- Địa điểm: ${brand.branchLocation}${situationBlock}
 
 CHIẾN LƯỢC ĐÃ CHỌN:
 - Mô hình: ${strategyData.marketingModel} (${strategyData.modelExplanation})

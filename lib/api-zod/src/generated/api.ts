@@ -23,6 +23,7 @@ export const RunPipelineBody = zod.object({
   goal: zod.string(),
   platform: zod.string(),
   contentCount: zod.number().optional(),
+  storeSituation: zod.string().optional(),
 });
 
 export const RunPipelineResponse = zod.object({

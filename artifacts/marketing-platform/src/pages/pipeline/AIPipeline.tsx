@@ -69,7 +69,8 @@ function RunPipelineTab() {
     topic: "",
     goal: "",
     platform: "Facebook",
-    contentCount: 1
+    contentCount: 1,
+    storeSituation: ""
   });
 
   const [isRunning, setIsRunning] = useState(false);
@@ -136,6 +137,22 @@ function RunPipelineTab() {
                   <option key={b.id} value={b.id}>{b.brandName}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                Tình trạng cửa hàng
+                <span className="text-xs text-muted-foreground font-normal">(không bắt buộc)</span>
+              </label>
+              <textarea
+                rows={4}
+                value={formData.storeSituation}
+                onChange={e => setFormData({...formData, storeSituation: e.target.value})}
+                disabled={isRunning}
+                placeholder={"Vd: Tiệm mới mở được 2 tháng, lượng khách chưa đông, chủ yếu khách walk-in, chưa có nhiều review Google. Muốn tăng nhận diện và kéo khách đặt lịch trước..."}
+                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:ring-2 focus:ring-primary/50 outline-none disabled:opacity-50 resize-none text-sm leading-relaxed"
+              />
+              <p className="text-xs text-muted-foreground">AI sẽ phân tích tình trạng thực tế và đưa ra chiến lược phù hợp hơn</p>
             </div>
 
             <div className="space-y-2">
@@ -630,6 +647,13 @@ function RunDetailModal({ id, onClose }: { id: number; onClose: () => void }) {
                   <p className="font-medium text-sm">{run.contentCount}</p>
                 </div>
               </div>
+
+              {run.storeSituation && (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                  <span className="text-xs text-amber-500/80 font-medium uppercase tracking-wide block mb-1">Tình trạng cửa hàng</span>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{run.storeSituation}</p>
+                </div>
+              )}
 
               {run.errorMessage && (
                 <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl text-sm">

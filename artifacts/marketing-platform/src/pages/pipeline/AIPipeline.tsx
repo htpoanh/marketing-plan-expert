@@ -339,21 +339,37 @@ function RunPipelineTab() {
               />
             </div>
 
-            <button 
-              type="submit"
-              disabled={isRunning || runMutation.isPending}
-              className="w-full py-4 rounded-xl font-bold bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isRunning ? (
-                <span className="animate-pulse flex items-center gap-2">
-                  <Bot className="w-5 h-5 animate-spin" /> Đang chạy Agents...
-                </span>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" /> Chạy Pipeline AI
-                </>
+            <div className="flex gap-2">
+              <button 
+                type="submit"
+                disabled={isRunning || runMutation.isPending}
+                className="flex-1 py-4 rounded-xl font-bold bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isRunning ? (
+                  <span className="animate-pulse flex items-center gap-2">
+                    <Bot className="w-5 h-5 animate-spin" /> Đang chạy Agents...
+                  </span>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" /> Chạy Pipeline AI
+                  </>
+                )}
+              </button>
+              {isRunning && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    runMutation.reset();
+                    setIsRunning(false);
+                    setCurrentStep(0);
+                    toast({ title: "Đã dừng", description: "Pipeline đã bị hủy. Các bài đã lưu trước đó vẫn còn trong Phê duyệt." });
+                  }}
+                  className="px-4 py-4 rounded-xl font-bold bg-destructive/10 border border-destructive/30 text-destructive hover:bg-destructive/20 transition-all flex items-center gap-2"
+                >
+                  <X className="w-5 h-5" /> Dừng
+                </button>
               )}
-            </button>
+            </div>
           </form>
         </div>
       </div>
@@ -372,10 +388,24 @@ function RunPipelineTab() {
 
         {isRunning && (
           <div className="bg-card rounded-2xl border border-border/50 p-8 shadow-xl">
-            <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
-              <Bot className="w-6 h-6 text-primary animate-bounce" /> 
-              Pipeline đang xử lý...
-            </h3>
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-xl font-bold flex items-center gap-3">
+                <Bot className="w-6 h-6 text-primary animate-bounce" /> 
+                Pipeline đang xử lý...
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  runMutation.reset();
+                  setIsRunning(false);
+                  setCurrentStep(0);
+                  toast({ title: "Đã dừng", description: "Pipeline đã bị hủy. Các bài đã lưu trước đó vẫn còn trong Phê duyệt." });
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-destructive/10 border border-destructive/30 text-destructive hover:bg-destructive/20 transition-all"
+              >
+                <X className="w-4 h-4" /> Dừng lại
+              </button>
+            </div>
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
               {AGENT_STEPS.map((step, idx) => {
                 const isActive = currentStep === idx;

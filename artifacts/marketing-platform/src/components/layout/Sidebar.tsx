@@ -11,9 +11,12 @@ import {
   Bot,
   Zap,
   MessagesSquare,
+  LogOut,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navigation = [
   { name: "Tổng quan", href: "/", icon: LayoutDashboard },
@@ -52,6 +55,7 @@ const navigation = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const { username, logout } = useAuth();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     "Đánh giá Google": true,
     "Nội dung AI": true,
@@ -139,14 +143,25 @@ export function Sidebar() {
         })}
       </nav>
       
-      <div className="p-4 border-t border-border/50">
-        <div className="bg-gradient-to-br from-primary/10 to-transparent p-4 rounded-xl border border-primary/20">
-          <p className="text-xs font-medium text-primary mb-1">PRO Plan</p>
-          <p className="text-xs text-muted-foreground mb-3">Mở khóa toàn bộ sức mạnh AI</p>
-          <button className="w-full py-2 bg-primary/20 hover:bg-primary text-primary hover:text-white rounded-lg text-xs font-semibold transition-colors">
-            Nâng cấp ngay
-          </button>
+      {/* User info + Logout */}
+      <div className="p-4 border-t border-border/50 space-y-3">
+        <div className="flex items-center gap-2 px-1">
+          <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <User className="w-4 h-4 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground truncate">{username ?? "Admin"}</p>
+            <p className="text-xs text-muted-foreground">Quản trị viên</p>
+          </div>
         </div>
+
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
+        >
+          <LogOut className="w-4 h-4" />
+          Đăng xuất
+        </button>
       </div>
     </div>
   );

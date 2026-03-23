@@ -28,15 +28,16 @@ app.use(cors({
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-const sessionSecret = process.env["SESSION_SECRET"];
-if (!sessionSecret) {
-  throw new Error("SESSION_SECRET environment variable is required but was not provided.");
-}
-
 const isProd = process.env["NODE_ENV"] === "production";
 
+const sessionSecret = process.env["SESSION_SECRET"];
+if (!sessionSecret && isProd) {
+  throw new Error("SESSION_SECRET environment variable is required in production but was not provided.");
+}
+const effectiveSecret = sessionSecret ?? "dev-only-secret-not-for-production-use";
+
 app.use(session({
-  secret: sessionSecret,
+  secret: effectiveSecret,
   resave: false,
   saveUninitialized: false,
   cookie: {

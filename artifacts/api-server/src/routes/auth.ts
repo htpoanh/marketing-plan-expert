@@ -6,10 +6,11 @@ router.post("/login", (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
 
   const expectedUsername = process.env["ADMIN_USERNAME"] ?? "admin";
-  const expectedPassword = process.env["ADMIN_PASSWORD"] ?? "";
+  const expectedPassword = process.env["ADMIN_PASSWORD"];
 
   if (!expectedPassword) {
-    return res.status(503).json({ error: "ADMIN_PASSWORD environment variable is not configured." });
+    console.warn("[auth] ADMIN_PASSWORD is not set. Login is disabled until it is configured in Replit Secrets.");
+    return res.status(503).json({ error: "Hệ thống chưa được cấu hình mật khẩu. Vui lòng liên hệ quản trị viên." });
   }
 
   if (username === expectedUsername && password === expectedPassword) {

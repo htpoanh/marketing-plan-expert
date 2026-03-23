@@ -69,13 +69,13 @@ function ProtectedRoutes() {
 
 function AppRouter() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (!isLoading && isAuthenticated && location === "/login") {
       navigate("/");
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, location, navigate]);
 
   if (isLoading) {
     return (

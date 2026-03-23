@@ -16,7 +16,7 @@ app.use(cors({
   credentials: true,
   origin: allowedOrigins.length > 0
     ? (origin, cb) => {
-        if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+        if (!origin || allowedOrigins.some(o => origin === o || origin === `${o}/`)) {
           cb(null, true);
         } else {
           cb(new Error(`CORS blocked: ${origin}`));

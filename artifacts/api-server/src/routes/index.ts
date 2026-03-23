@@ -24,15 +24,22 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   return res.status(401).json({ error: "Unauthorized — please log in" });
 }
 
-router.use("/brands", requireAdmin, brandsRouter);
-router.use("/reviews", requireAdmin, reviewsRouter);
-router.use("/content", requireAdmin, contentRouter);
-router.use("/content-plans", requireAdmin, contentPlansRouter);
-router.use("/pipeline", requireAdmin, pipelineRouter);
-router.use("/ai-agents", requireAdmin, aiAgentsRouter);
-router.use("/ai-profiles", requireAdmin, aiProfilesRouter);
-router.use("/automation", requireAdmin, automationRouter);
-router.use("/ad-analysis", requireAdmin, adAnalysisRouter);
-router.use("/messenger", requireAdmin, messengerRouter);
+router.use((req: Request, res: Response, next: NextFunction) => {
+  const PUBLIC_PREFIXES = ["/healthz", "/auth/"];
+  const isPublic = PUBLIC_PREFIXES.some(p => req.path === p || req.path.startsWith(p));
+  if (isPublic) return next();
+  return requireAdmin(req, res, next);
+});
+
+router.use("/brands", brandsRouter);
+router.use("/reviews", reviewsRouter);
+router.use("/content", contentRouter);
+router.use("/content-plans", contentPlansRouter);
+router.use("/pipeline", pipelineRouter);
+router.use("/ai-agents", aiAgentsRouter);
+router.use("/ai-profiles", aiProfilesRouter);
+router.use("/automation", automationRouter);
+router.use("/ad-analysis", adAnalysisRouter);
+router.use("/messenger", messengerRouter);
 
 export default router;

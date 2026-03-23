@@ -7,14 +7,33 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
+const allowedOrigins = (process.env["REPLIT_DOMAINS"] ?? "")
+  .split(",")
+  .map(d => `https://${d.trim()}`)
+  .filter(Boolean);
+
 app.use(cors({
   credentials: true,
-  origin: true,
+  origin: allowedOrigins.length > 0
+    ? (origin, cb) => {
+        if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+          cb(null, true);
+        } else {
+          cb(new Error(`CORS blocked: ${origin}`));
+        }
+      }
+    : false,
 }));
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-const sessionSecret = process.env["SESSION_SECRET"] ?? "fallback-dev-secret-change-in-production";
+const sessionSecret = process.env["SESSION_SECRET"];
+if (!sessionSecret) {
+  throw new Error("SESSION_SECRET environment variable is required but was not provided.");
+}
+
+const isProd = process.env["NODE_ENV"] === "production";
 
 app.use(session({
   secret: sessionSecret,
@@ -22,8 +41,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env["NODE_ENV"] === "production",
-    sameSite: process.env["NODE_ENV"] === "production" ? "none" : "lax",
+    secure: isProd,
+    sameSite: isProd ? "strict" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));

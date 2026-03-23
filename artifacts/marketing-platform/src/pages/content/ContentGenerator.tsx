@@ -4,6 +4,14 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Sparkles, Copy, CalendarPlus, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+type ContentFormat = "Post" | "Story" | "Reel";
+
+const CONTENT_FORMATS: { id: ContentFormat; aspectRatio: string; wordCount: string; desc: string }[] = [
+  { id: "Post", aspectRatio: "1:1", wordCount: "150–300 từ", desc: "Ảnh vuông / bài viết dài" },
+  { id: "Story", aspectRatio: "9:16", wordCount: "50–80 từ", desc: "Dọc tràn màn hình, nhanh" },
+  { id: "Reel", aspectRatio: "9:16", wordCount: "80–150 từ", desc: "Video ngắn thu hút" },
+];
+
 export default function ContentGenerator() {
   const { data: brands } = useListBrands();
   const { toast } = useToast();
@@ -17,6 +25,8 @@ export default function ContentGenerator() {
     additionalContext: ""
   });
 
+  const [contentFormat, setContentFormat] = useState<ContentFormat>("Post");
+
   const generateMutation = useGenerateContent();
   const createPlanMutation = useCreateContentPlan();
 
@@ -26,7 +36,13 @@ export default function ContentGenerator() {
       toast({ title: "Lỗi", description: "Vui lòng chọn cửa hàng", variant: "destructive" });
       return;
     }
-    generateMutation.mutate({ data: formData });
+    const fmt = CONTENT_FORMATS.find(f => f.id === contentFormat)!;
+    generateMutation.mutate({
+      data: {
+        ...formData,
+        additionalContext: `Loại bài: ${contentFormat} (${fmt.aspectRatio}, ${fmt.wordCount}). Vui lòng tạo nội dung phù hợp với định dạng ${contentFormat}.`
+      }
+    });
   };
 
   const handleSaveToPlan = () => {
@@ -38,9 +54,9 @@ export default function ContentGenerator() {
         brandId: formData.brandId,
         publishDate: new Date().toISOString(),
         platform: formData.platform,
-        contentType: formData.contentType,
+        contentType: `${contentFormat} – ${formData.contentType}`,
         topic: formData.topic,
-        hook: content.hooks[0], // Pick first hook by default
+        hook: content.hooks[0],
         caption: content.mainCaption,
         shortCaption: content.shortCaption,
         cta: content.cta,
@@ -54,6 +70,8 @@ export default function ContentGenerator() {
       }
     });
   };
+
+  const selectedFmt = CONTENT_FORMATS.find(f => f.id === contentFormat)!;
 
   return (
     <AppLayout>
@@ -98,6 +116,27 @@ export default function ContentGenerator() {
                       {plat}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Content Format Toggle */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Loại nội dung</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {CONTENT_FORMATS.map(fmt => (
+                    <button
+                      key={fmt.id}
+                      type="button"
+                      onClick={() => setContentFormat(fmt.id)}
+                      className={`py-2.5 text-sm rounded-lg border font-medium transition-all flex flex-col items-center gap-0.5 ${contentFormat === fmt.id ? 'bg-accent/20 border-accent text-accent' : 'bg-secondary/30 border-border/50 text-muted-foreground hover:bg-secondary'}`}
+                    >
+                      <span className="font-bold">{fmt.id}</span>
+                      <span className="text-[10px] opacity-75">{fmt.aspectRatio}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="px-3 py-2 bg-secondary/30 rounded-lg border border-border/40 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{selectedFmt.id}:</span> {selectedFmt.desc} · <span className="text-primary font-medium">{selectedFmt.wordCount}</span>
                 </div>
               </div>
 
@@ -154,7 +193,12 @@ export default function ContentGenerator() {
             ) : generateMutation.data ? (
               <div className="bg-card rounded-2xl border border-border/50 overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="p-6 border-b border-border/50 flex justify-between items-center bg-secondary/20">
-                  <h3 className="font-bold text-lg">Kết quả tạo nội dung</h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-bold text-lg">Kết quả tạo nội dung</h3>
+                    <span className="px-2.5 py-1 bg-accent/15 text-accent text-xs font-bold rounded-full border border-accent/30">
+                      {contentFormat} · {selectedFmt.aspectRatio} · {selectedFmt.wordCount}
+                    </span>
+                  </div>
                   <button 
                     onClick={handleSaveToPlan}
                     disabled={createPlanMutation.isPending}

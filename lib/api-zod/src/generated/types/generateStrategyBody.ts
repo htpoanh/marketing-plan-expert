@@ -11,4 +11,6 @@ export interface GenerateStrategyBody {
   campaignGoal: string;
   platform: string;
   duration?: string;
+  /** @nullable */
+  storeSituation?: string | null;
 }

@@ -281,7 +281,7 @@ router.delete("/runs/:id", async (req, res) => {
 });
 
 router.post("/run", async (req, res) => {
-  const { brandId, topic, goal, platform, contentCount = 1, storeSituation } = req.body;
+  const { brandId, topic, goal, platform, contentCount = 1, storeSituation, contentFormat } = req.body;
 
   if (!brandId || !topic || !goal || !platform) {
     return res.status(400).json({ error: "Thiếu thông tin bắt buộc: brandId, topic, goal, platform" });
@@ -441,13 +441,13 @@ TRENDS:
 ANFORDERUNGEN:
 - Thema: ${topic}
 - Ziel: ${goal}
-- Plattform: ${plat}
+- Plattform: ${plat}${contentFormat ? `\n- Loại nội dung: ${contentFormat}` : ""}
 
 Schreibe Content GENAU NACH DEM ${strategyData.marketingModel}-MODELL und gib JSON zurück (kein Markdown):
 {
   "hooks": ["starker Hook 1", "starker Hook 2", "starker Hook 3"],
-  "mainCaption": "vollständige Caption 150-300 Wörter nach dem ${strategyData.marketingModel}-Modell",
-  "shortCaption": "kurze Caption 50-80 Wörter für Story/Reel",
+  "mainCaption": "vollständige Caption nach dem ${strategyData.marketingModel}-Modell${contentFormat ? ` angepasst an das Format ${contentFormat}` : " 150-300 Wörter"}",
+  "shortCaption": "kurze Caption für Story/Reel",
   "cta": "konkreter und überzeugender Call-to-Action",
   "hashtags": ["#hashtag1", "#hashtag2", "..."]
 }
@@ -455,7 +455,7 @@ Schreibe Content GENAU NACH DEM ${strategyData.marketingModel}-MODELL und gib JS
 Anforderungen:
 - hooks: 3 Eröffnungssätze im ${plat}-Stil, die in den ersten 3 Sekunden Aufmerksamkeit erregen
 - hashtags: 15-25 Hashtags (Mix aus Trending + Lokal ${brand.branchLocation} + Conversion), deutsche und englische Hashtags
-- mainCaption: MUSS der Logik des ${strategyData.marketingModel}-Modells folgen, ABER KEINE sichtbaren Labels — kein "Hook:", "Value:", "CTA:", "Attention:", "Problem:", "Story:", "Step 1:" oder jegliche Struktur-Annotationen im Text. Der Text fließt natürlich ohne sichtbare Framework-Labels.
+- mainCaption: MUSS der Logik des ${strategyData.marketingModel}-Modells folgen, ABER KEINE sichtbaren Labels — kein "Hook:", "Value:", "CTA:", "Attention:", "Problem:", "Story:", "Step 1:" oder jegliche Struktur-Annotationen im Text. Der Text fließt natürlich ohne sichtbare Framework-Labels.${contentFormat ? `\n- Passe die Länge und Stil des Inhalts an "${contentFormat}" an` : ""}
 - GESAMTER CONTENT AUF DEUTSCH — natürlich, nicht steif, authentisch`;
 
       const contentData = await callGeminiJSON(contentPrompt, geminiSystem);

@@ -129,6 +129,7 @@ export interface GenerateStrategyBody {
   campaignGoal: string;
   platform: string;
   duration?: string;
+  storeSituation?: string;
 }
 
 export interface MarketingStrategy {
@@ -239,6 +240,7 @@ export interface RunPipelineBody {
   platform: string;
   contentCount?: number;
   storeSituation?: string;
+  contentFormat?: string;
 }
 
 export interface TrendData {

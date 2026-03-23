@@ -13,4 +13,6 @@ export interface RunPipelineBody {
   platform: string;
   contentCount?: number;
   storeSituation?: string;
+  /** @nullable */
+  contentFormat?: string | null;
 }

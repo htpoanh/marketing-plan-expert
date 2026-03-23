@@ -11,3 +11,4 @@ export * from "./automation_logs";
 export * from "./messenger_configs";
 export * from "./messenger_sessions";
 export * from "./appointments";
+export * from "./strategies";

@@ -25,13 +25,9 @@ function cleanText(text: string | null | undefined): string {
     .trim();
 }
 
-// Helper: default schedule = tomorrow 10:00 (local time)
-function defaultScheduleValue(publishDate?: string | Date | null): string {
-  const base = publishDate ? new Date(publishDate) : new Date();
-  if (!publishDate || base <= new Date()) {
-    base.setDate(base.getDate() + 1);
-    base.setHours(10, 0, 0, 0);
-  }
+// Helper: default schedule = now + 24 hours (unconditional)
+function defaultScheduleValue(): string {
+  const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`;
 }
@@ -74,8 +70,8 @@ export default function ApprovalDashboard() {
     if (rejectingId) rejectMutation.mutate({ id: rejectingId, data: { reason: rejectReason } });
   };
 
-  const getSchedule = (plan: { id: number; publishDate: string | Date }) =>
-    schedules[plan.id] ?? defaultScheduleValue(plan.publishDate);
+  const getSchedule = (plan: { id: number }) =>
+    schedules[plan.id] ?? defaultScheduleValue();
 
   const handleApproveAndPublish = async (planId: number, scheduledLocal: string) => {
     setPublishingId(planId);

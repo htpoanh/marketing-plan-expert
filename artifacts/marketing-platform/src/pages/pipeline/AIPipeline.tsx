@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { 
   useListBrands, 
   useRunPipeline, 
@@ -167,20 +167,31 @@ export default function AIPipeline() {
   );
 }
 
+type ContentFormat = "Post" | "Story" | "Reel";
+
+const CONTENT_FORMATS: { id: ContentFormat; aspectRatio: string; wordCount: string; desc: string }[] = [
+  { id: "Post", aspectRatio: "1:1", wordCount: "150–300 từ", desc: "Ảnh vuông / bài viết dài" },
+  { id: "Story", aspectRatio: "9:16", wordCount: "50–80 từ", desc: "Dọc tràn màn hình, nhanh" },
+  { id: "Reel", aspectRatio: "9:16", wordCount: "80–150 từ", desc: "Video ngắn thu hút" },
+];
+
 function RunPipelineTab() {
   const { data: brands } = useListBrands();
   const { toast } = useToast();
   const runMutation = useRunPipeline();
-  
+
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+
   const [formData, setFormData] = useState({
-    brandId: 0,
-    topic: "",
-    goal: "",
-    platforms: ["Facebook"] as string[],
+    brandId: urlParams.get("brandId") ? Number(urlParams.get("brandId")) : 0,
+    topic: urlParams.get("topic") ?? "",
+    goal: urlParams.get("goal") ?? "",
+    platforms: urlParams.get("platform") ? [urlParams.get("platform")!] : ["Facebook"] as string[],
     contentCount: 1,
-    storeSituation: ""
+    storeSituation: urlParams.get("storeSituation") ?? ""
   });
 
+  const [contentFormat, setContentFormat] = useState<ContentFormat>("Post");
   const [isRunning, setIsRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [result, setResult] = useState<any>(null);
@@ -211,7 +222,8 @@ function RunPipelineTab() {
       return;
     }
 
-    runMutation.mutate({ data: { ...formData, platform: formData.platforms.join(",") } }, {
+    const fmt = CONTENT_FORMATS.find(f => f.id === contentFormat)!;
+    runMutation.mutate({ data: { ...formData, platform: formData.platforms.join(","), contentFormat: `${contentFormat} (${fmt.aspectRatio}, ${fmt.wordCount})` } }, {
       onSuccess: (data) => {
         setIsRunning(false);
         setCurrentStep(AGENT_STEPS.length);
@@ -323,6 +335,33 @@ function RunPipelineTab() {
                 })}
               </div>
               <p className="text-xs text-muted-foreground">Chọn nhiều nền tảng — AI sẽ viết nội dung riêng cho từng nền tảng</p>
+            </div>
+
+            {/* Content Format Toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Loại nội dung</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CONTENT_FORMATS.map(fmt => (
+                  <button
+                    key={fmt.id}
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => setContentFormat(fmt.id)}
+                    className={`py-2.5 text-sm rounded-lg border font-medium transition-all flex flex-col items-center gap-0.5 disabled:opacity-50 ${contentFormat === fmt.id ? 'bg-accent/20 border-accent text-accent' : 'bg-secondary/30 border-border/50 text-muted-foreground hover:bg-secondary'}`}
+                  >
+                    <span className="font-bold">{fmt.id}</span>
+                    <span className="text-[10px] opacity-75">{fmt.aspectRatio}</span>
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const f = CONTENT_FORMATS.find(f => f.id === contentFormat)!;
+                return (
+                  <div className="px-3 py-2 bg-secondary/30 rounded-lg border border-border/40 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{f.id}:</span> {f.desc} · <span className="text-primary font-medium">{f.wordCount}</span>
+                  </div>
+                );
+              })()}
             </div>
             
             <div className="space-y-2">

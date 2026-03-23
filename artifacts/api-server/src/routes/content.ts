@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { brandsTable } from "@workspace/db/schema";
+import { brandsTable, strategiesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 const ai = new GoogleGenAI({
@@ -83,12 +83,70 @@ Yêu cầu:
   }
 });
 
+// Lightweight situation analysis: extract topic & goal suggestions from store situation text
+router.post("/analyze-situation", async (req, res) => {
+  try {
+    const { situation, brandId } = req.body;
+    if (!situation || !situation.trim()) {
+      return res.status(400).json({ error: "Cần có mô tả tình trạng" });
+    }
+
+    let brandContext = "";
+    if (brandId) {
+      const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
+      if (brand) {
+        brandContext = `\nNGÀNH: ${brand.industry} — ${brand.branchLocation}`;
+      }
+    }
+
+    const prompt = `Phân tích ngắn gọn tình trạng kinh doanh sau và trích xuất các gợi ý Topic và Mục tiêu marketing phù hợp.${brandContext}
+
+TÌNH TRẠNG:
+${situation}
+
+Trả về JSON (không markdown):
+{
+  "suggestedTopics": ["topic ngắn gọn 1", "topic 2", "topic 3"],
+  "suggestedGoals": ["mục tiêu 1", "mục tiêu 2", "mục tiêu 3"]
+}
+
+Yêu cầu:
+- suggestedTopics: 3 chủ đề bài viết cụ thể, ngắn gọn (5-15 từ) phù hợp với tình trạng
+- suggestedGoals: 3 mục tiêu chiến dịch rõ ràng (5-15 từ) phù hợp với tình trạng`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        maxOutputTokens: 1024,
+        responseMimeType: "application/json",
+      },
+    });
+
+    let result;
+    try {
+      result = JSON.parse(response.text ?? "{}");
+    } catch {
+      result = { suggestedTopics: [], suggestedGoals: [] };
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error analyzing situation:", error);
+    res.status(500).json({ error: "Failed to analyze situation" });
+  }
+});
+
 router.post("/strategy", async (req, res) => {
   try {
-    const { brandId, campaignGoal, platform, duration } = req.body;
+    const { brandId, campaignGoal, platform, duration, storeSituation } = req.body;
 
     const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
     if (!brand) return res.status(404).json({ error: "Brand not found" });
+
+    const situationBlock = storeSituation
+      ? `\nTÌNH TRẠNG HIỆN TẠI CỦA CỬA HÀNG:\n${storeSituation}\n`
+      : "";
 
     const prompt = `Bạn là chuyên gia chiến lược marketing với 15 năm kinh nghiệm. Phân tích và tạo chiến lược marketing cho:
 
@@ -98,7 +156,7 @@ THƯƠNG HIỆU:
 - Địa điểm: ${brand.branchLocation}
 - Khách hàng mục tiêu: ${brand.targetAudience}
 - Giọng điệu: ${brand.brandVoice}
-
+${situationBlock}
 YÊU CẦU CHIẾN LƯỢC:
 - Nền tảng: ${platform}
 - Mục tiêu: ${campaignGoal}
@@ -141,7 +199,30 @@ Trả về JSON (không markdown):
       };
     }
 
-    res.json(result);
+    // Persist strategy result to DB
+    let persistError: string | null = null;
+    try {
+      await db.insert(strategiesTable).values({
+        brandId,
+        platform,
+        campaignGoal,
+        duration: duration ?? null,
+        storeSituation: storeSituation ?? null,
+        marketingModel: result.marketingModel ?? null,
+        reasoning: result.reasoning ?? null,
+        campaignAngle: result.campaignAngle ?? null,
+        funnelStage: result.funnelStage ?? null,
+        targetEmotion: result.targetEmotion ?? null,
+        ctaStrategy: result.ctaStrategy ?? null,
+        suggestedTopics: result.suggestedTopics ?? [],
+      });
+    } catch (dbErr) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      console.warn("Failed to persist strategy to DB:", msg);
+      persistError = msg;
+    }
+
+    res.json({ ...result, ...(persistError ? { _persistError: persistError } : {}) });
   } catch (error) {
     console.error("Error generating strategy:", error);
     res.status(500).json({ error: "Failed to generate strategy" });

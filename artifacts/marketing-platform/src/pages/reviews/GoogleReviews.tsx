@@ -306,6 +306,8 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   const [manualPath, setManualPath] = useState("");
   const [savingManualPath, setSavingManualPath] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [syncingAllPlaces, setSyncingAllPlaces] = useState(false);
+  const [syncAllResult, setSyncAllResult] = useState<{ totalImported: number; totalSkipped: number; brands: any[] } | null>(null);
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -466,6 +468,34 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
       toast({ title: "Không kết nối được máy chủ", variant: "destructive" });
     } finally {
       setGmbSyncing(false);
+    }
+  };
+
+  const handleSyncAllPlaces = async () => {
+    setSyncingAllPlaces(true);
+    setSyncAllResult(null);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/sync-all-places`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Lỗi đồng bộ Places API", description: data.error ?? "Lỗi không xác định", variant: "destructive" });
+        return;
+      }
+      setSyncAllResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
+      if (data.totalImported > 0) {
+        toast({ title: `Đã nhập ${data.totalImported} đánh giá mới từ tất cả cửa hàng!` });
+      } else {
+        toast({ title: "Đã đồng bộ tất cả — không có đánh giá mới" });
+      }
+    } catch {
+      toast({ title: "Không kết nối được máy chủ", variant: "destructive" });
+    } finally {
+      setSyncingAllPlaces(false);
     }
   };
 
@@ -734,6 +764,14 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
                 {gmbSyncing ? "Đang đồng bộ tất cả..." : "Đồng bộ tất cả Reviews"}
               </button>
               <button
+                onClick={handleSyncAllPlaces}
+                disabled={syncingAllPlaces}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/25"
+              >
+                {syncingAllPlaces ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {syncingAllPlaces ? "Đang tải tất cả..." : "Đồng bộ qua Places API"}
+              </button>
+              <button
                 onClick={handleGmbDisconnect}
                 disabled={disconnecting}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50 transition-all"
@@ -742,6 +780,37 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
                 {disconnecting ? "Đang ngắt..." : "Ngắt kết nối"}
               </button>
             </div>
+
+            {/* Sync All Places result */}
+            {syncAllResult && (
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <p className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
+                  <Check className="w-4 h-4" /> Đồng bộ Places API thành công!
+                </p>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-emerald-400">{syncAllResult.totalImported}</p>
+                    <p className="text-xs text-muted-foreground">Đánh giá mới</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-foreground/60">{syncAllResult.totalSkipped}</p>
+                    <p className="text-xs text-muted-foreground">Bỏ qua (đã có)</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {syncAllResult.brands.map((b: any) => (
+                    <div key={b.brandId} className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="truncate">{b.brandName}</span>
+                      {b.error ? (
+                        <span className="text-red-400 shrink-0 ml-2">Lỗi</span>
+                      ) : (
+                        <span className="text-emerald-400 shrink-0 ml-2">+{b.imported} mới</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* GMB sync result */}
             {gmbSyncResult && (

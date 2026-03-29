@@ -339,6 +339,74 @@ router.post("/sync", async (req, res) => {
   }
 });
 
+// ─── SYNC ALL BRANDS via Places API ───────────────────────────────────────────
+router.post("/sync-all-places", async (req, res) => {
+  try {
+    const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+    if (!GOOGLE_API_KEY) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
+
+    const brands = await db.execute(
+      sql`SELECT id, brand_name, google_place_id FROM brands WHERE google_place_id IS NOT NULL AND google_place_id != '' ORDER BY id`
+    );
+
+    let totalImported = 0;
+    let totalSkipped = 0;
+    const results: { brandId: number; brandName: string; imported: number; skipped: number; error?: string }[] = [];
+
+    for (const brand of brands.rows as any[]) {
+      try {
+        const response = await fetch(
+          `https://places.googleapis.com/v1/places/${encodeURIComponent(brand.google_place_id)}?languageCode=vi`,
+          {
+            headers: {
+              "X-Goog-Api-Key": GOOGLE_API_KEY,
+              "X-Goog-FieldMask": "displayName,rating,reviews",
+            },
+          }
+        );
+        const data = await response.json() as any;
+        if (!response.ok) {
+          results.push({ brandId: brand.id, brandName: brand.brand_name, imported: 0, skipped: 0, error: data.error?.message ?? "API error" });
+          continue;
+        }
+
+        const gReviews: any[] = data.reviews ?? [];
+        let imported = 0;
+        let skipped = 0;
+        for (const gr of gReviews) {
+          const googleReviewId = gr.name ?? `${gr.authorAttribution?.displayName}_${gr.rating}_${gr.publishTime}`;
+          const existing = await db.execute(
+            sql`SELECT id FROM reviews WHERE brand_id = ${brand.id} AND google_review_id = ${googleReviewId} LIMIT 1`
+          );
+          if (existing.rows.length > 0) { skipped++; continue; }
+          const publishTime = gr.publishTime ? new Date(gr.publishTime) : new Date();
+          await db.insert(reviewsTable).values({
+            brandId: brand.id,
+            reviewerName: gr.authorAttribution?.displayName ?? "Ẩn danh",
+            rating: gr.rating ?? 5,
+            reviewText: gr.text?.text ?? gr.originalText?.text ?? null,
+            reviewDate: publishTime,
+            replied: false,
+            googleReviewId,
+          });
+          imported++;
+        }
+        totalImported += imported;
+        totalSkipped += skipped;
+        results.push({ brandId: brand.id, brandName: brand.brand_name, imported, skipped });
+      } catch (e) {
+        results.push({ brandId: brand.id, brandName: brand.brand_name, imported: 0, skipped: 0, error: String(e) });
+      }
+    }
+
+    console.log(`[sync-all-places] Done: ${totalImported} imported, ${totalSkipped} skipped across ${brands.rows.length} brands`);
+    res.json({ success: true, totalImported, totalSkipped, brands: results });
+  } catch (error) {
+    console.error("[sync-all-places] Error:", error);
+    res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ tất cả Reviews." });
+  }
+});
+
 // ─── REVIEWS CRUD ─────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {

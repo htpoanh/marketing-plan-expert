@@ -56,6 +56,56 @@ router.post("/seed", requireAdmin, async (req, res) => {
   }
 });
 
+function parseSqlStatements(sqlContent: string): string[] {
+  const statements: string[] = [];
+  let current = "";
+  let inString = false;
+  let i = 0;
+
+  while (i < sqlContent.length) {
+    const ch = sqlContent[i];
+
+    if (inString) {
+      current += ch;
+      if (ch === "'") {
+        if (sqlContent[i + 1] === "'") {
+          current += sqlContent[i + 1];
+          i += 2;
+          continue;
+        } else {
+          inString = false;
+        }
+      }
+    } else {
+      if (ch === "'") {
+        inString = true;
+        current += ch;
+      } else if (ch === "-" && sqlContent[i + 1] === "-") {
+        while (i < sqlContent.length && sqlContent[i] !== "\n") i++;
+        i++;
+        continue;
+      } else if (ch === ";") {
+        const stmt = current.trim();
+        if (stmt) statements.push(stmt);
+        current = "";
+        i++;
+        continue;
+      } else if (ch === "\\" && current.trim() === "") {
+        while (i < sqlContent.length && sqlContent[i] !== "\n") i++;
+        i++;
+        continue;
+      } else {
+        current += ch;
+      }
+    }
+    i++;
+  }
+
+  const last = current.trim();
+  if (last) statements.push(last);
+  return statements;
+}
+
 router.post("/full-seed", requireAdmin, async (req, res) => {
   try {
     const sqlPath = path.join(__dirname, "seed_data.sql");
@@ -64,27 +114,7 @@ router.post("/full-seed", requireAdmin, async (req, res) => {
     }
 
     const sqlContent = fs.readFileSync(sqlPath, "utf8");
-
-    const lines = sqlContent.split("\n");
-    const statements: string[] = [];
-    let current = "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("--") || trimmed === "") {
-        if (current.trim()) {
-          statements.push(current.trim());
-          current = "";
-        }
-        continue;
-      }
-      current += line + "\n";
-      if (trimmed.endsWith(";")) {
-        statements.push(current.trim());
-        current = "";
-      }
-    }
-    if (current.trim()) statements.push(current.trim());
+    const statements = parseSqlStatements(sqlContent);
 
     const client = await (pool as any).connect();
     let executed = 0;
@@ -94,24 +124,33 @@ router.post("/full-seed", requireAdmin, async (req, res) => {
     try {
       for (const stmt of statements) {
         const s = stmt.trim();
-        if (!s || s.startsWith("--")) continue;
+        if (!s) continue;
         const upper = s.toUpperCase();
-        if (upper.startsWith("SET ") || upper.startsWith("SELECT PG_CATALOG") || upper.startsWith("\\")) {
+
+        if (
+          upper.startsWith("SET ") ||
+          upper.startsWith("SELECT PG_CATALOG") ||
+          upper.startsWith("SELECT SETVAL")
+        ) {
+          try { await client.query(s); } catch {}
           skipped++;
           continue;
         }
 
         const isInsert = upper.startsWith("INSERT INTO PUBLIC.");
-        const fixedStmt = isInsert ? s.replace(/INSERT INTO public\./i, "INSERT INTO ") : s;
-        const onConflict = isInsert && !upper.includes("ON CONFLICT")
-          ? fixedStmt.replace(/;$/, " ON CONFLICT DO NOTHING;")
-          : fixedStmt;
+        if (!isInsert && !upper.startsWith("SELECT SETVAL")) {
+          skipped++;
+          continue;
+        }
+
+        const fixedStmt = s.replace(/^INSERT INTO public\./i, "INSERT INTO ");
+        const finalStmt = fixedStmt + " ON CONFLICT DO NOTHING";
 
         try {
-          await client.query(onConflict);
+          await client.query(finalStmt);
           executed++;
         } catch (e: any) {
-          errors.push(e.message.substring(0, 100));
+          errors.push(e.message.substring(0, 120));
           skipped++;
         }
       }
@@ -121,8 +160,8 @@ router.post("/full-seed", requireAdmin, async (req, res) => {
 
     return res.json({
       ok: true,
-      message: `Full seed hoàn tất: ${executed} statements thực thi, ${skipped} bỏ qua.`,
-      errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+      message: `Full seed hoàn tất: ${executed} rows inserted, ${skipped} skipped.`,
+      errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
     });
   } catch (e: any) {
     console.error("Full seed error:", e);

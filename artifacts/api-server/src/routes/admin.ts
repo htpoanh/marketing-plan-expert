@@ -198,6 +198,24 @@ router.post("/migrate", requireAdmin, async (req, res) => {
 
     // reviews missing columns
     `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS source text`,
+
+    // strategies table (defined in Drizzle schema but not yet created)
+    `CREATE TABLE IF NOT EXISTS strategies (
+      id serial PRIMARY KEY,
+      brand_id integer NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      platform text NOT NULL,
+      campaign_goal text NOT NULL,
+      duration text,
+      store_situation text,
+      marketing_model text,
+      reasoning text,
+      campaign_angle text,
+      funnel_stage text,
+      target_emotion text,
+      cta_strategy text,
+      suggested_topics jsonb DEFAULT '[]'::jsonb,
+      created_at timestamp NOT NULL DEFAULT now()
+    )`,
   ];
 
   const results: { sql: string; ok: boolean; error?: string }[] = [];

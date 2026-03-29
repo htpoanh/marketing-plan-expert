@@ -478,12 +478,15 @@ router.post("/sync-gmb", async (req, res) => {
       const result = await ensureAccountId(parseInt(brandId), tokens.access_token as string);
       accountId = result.accountId ?? "";
       if (!accountId) {
-        const isQuota = !result.apiEnableUrl; // quota error has no enable URL
         return res.status(400).json({
-          error: isQuota
-            ? "Vượt giới hạn API Google (rate limit). Vui lòng đợi 1-2 phút rồi thử lại."
-            : "Chưa bật API 'My Business Account Management'. Nhấn nút bên dưới để bật rồi thử lại.",
+          error: result.rateLimited
+            ? "API Google đang trong thời gian chờ (quota). Dùng 'Nhập thủ công' bên dưới để thiết lập ngay."
+            : result.apiEnableUrl
+              ? "Chưa bật API 'My Business Account Management'. Nhấn nút bên dưới để bật rồi thử lại."
+              : "Không thể lấy Account ID. Dùng 'Nhập thủ công' bên dưới.",
           apiEnableUrl: result.apiEnableUrl,
+          rateLimited: result.rateLimited ?? false,
+          showManual: true,
         });
       }
       console.log(`[sync-gmb] Recovered account_id: ${accountId}`);

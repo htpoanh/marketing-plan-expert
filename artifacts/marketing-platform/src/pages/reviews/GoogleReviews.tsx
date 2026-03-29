@@ -449,10 +449,12 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
       const data = await r.json();
       if (!r.ok) {
         if (data.apiEnableUrl) setGmbApiEnableUrl(data.apiEnableUrl);
+        if (data.showManual) setShowManualInput(true);
         toast({ title: "Lỗi đồng bộ", description: data.error ?? "Lỗi không xác định", variant: "destructive" });
         return;
       }
       setGmbApiEnableUrl(null);
+      setShowManualInput(false);
       setGmbSyncResult({ imported: data.imported, skipped: data.skipped, total: data.total });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
       if (data.imported > 0) {
@@ -661,23 +663,38 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
               <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
                 <div>
                   <p className="text-xs font-semibold text-amber-400 mb-1">Nhập đường dẫn địa điểm thủ công</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Vào <strong>business.google.com</strong> → chọn cửa hàng → xem URL dạng:<br />
-                    <code className="text-amber-300 bg-black/20 px-1 rounded">accounts/&#123;ID&#125;/locations/&#123;ID&#125;</code>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+                    Cần nhập đường dẫn dạng: <code className="text-amber-300 bg-black/20 px-1 rounded">accounts/XXXXX/locations/YYYYY</code>
                   </p>
+                  <p className="text-xs text-muted-foreground font-medium mb-1">Cách lấy đường dẫn:</p>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Mở link bên dưới (đăng nhập bằng tài khoản Google quản lý doanh nghiệp)</li>
+                    <li>Nhấn <strong>Authorize APIs</strong> → chọn tài khoản → cho phép truy cập</li>
+                    <li>Ở bước 2, nhấn <strong>Execute</strong> — kết quả hiển thị <code className="text-amber-300">name: "accounts/XXXXX"</code></li>
+                    <li>Vào bước 3, nhập <code className="text-amber-300">accounts/XXXXX</code> vào ô <strong>parent</strong> rồi Execute — kết quả có <code className="text-amber-300">name: "accounts/XXXXX/locations/YYYYY"</code></li>
+                    <li>Copy toàn bộ đường dẫn <code className="text-amber-300">accounts/.../locations/...</code> vào ô bên dưới</li>
+                  </ol>
+                  <a
+                    href="https://developers.google.com/oauthplayground/?scope=https://www.googleapis.com/auth/business.manage"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-2 text-xs text-amber-400 hover:text-amber-300 underline"
+                  >
+                    Mở Google OAuth Playground →
+                  </a>
                 </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={manualPath}
                     onChange={e => setManualPath(e.target.value)}
-                    placeholder="accounts/123456789/locations/987654321"
+                    placeholder="accounts/123456789012345678/locations/987654321098765432"
                     className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                   />
                   <button
                     onClick={handleSaveManualPath}
                     disabled={savingManualPath || !manualPath.trim()}
-                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 hover:opacity-90 transition-all"
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 hover:opacity-90 transition-all whitespace-nowrap"
                   >
                     {savingManualPath ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Lưu"}
                   </button>

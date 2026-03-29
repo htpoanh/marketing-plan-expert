@@ -101,15 +101,29 @@ function getFrontendUrl(): string {
 export interface EnsureAccountResult {
   accountId: string | null;
   apiEnableUrl?: string;
+  rateLimited?: boolean; // true when we're holding back due to quota cooldown
 }
 
-async function tryFetchAccounts(
-  url: string,
-  headers: Record<string, string>
-): Promise<{ accountId: string; accountName: string } | { error: string; apiEnableUrl?: string } | null> {
+// Per-brand cooldown: don't re-attempt within COOLDOWN_MS after a quota error
+const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const lastQuotaError = new Map<number, number>(); // brandId → timestamp
+
+type FetchAccountsResult =
+  | { accountId: string; accountName: string }
+  | { error: string; isQuota?: boolean; apiEnableUrl?: string }
+  | null;
+
+async function tryFetchAccounts(url: string, headers: Record<string, string>): Promise<FetchAccountsResult> {
   try {
     const res = await fetch(url, { headers });
-    const data = (await res.json()) as Record<string, any>;
+    let data: Record<string, any>;
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      data = (await res.json()) as Record<string, any>;
+    } else {
+      // Non-JSON response (e.g. HTML error page) — not the accounts API
+      return { error: `Non-JSON response (HTTP ${res.status})` };
+    }
 
     if (res.ok) {
       const accounts: any[] = data.accounts ?? [];
@@ -121,9 +135,9 @@ async function tryFetchAccounts(
     }
 
     const msg: string = data?.error?.message ?? `HTTP ${res.status}`;
-    // Extract the Console activation URL from Google's error message
+    const isQuota = msg.toLowerCase().includes("quota exceeded") || res.status === 429;
     const urlMatch = msg.match(/https:\/\/console\.developers\.google\.com\/apis\/[^\s]+/);
-    return { error: msg, apiEnableUrl: urlMatch ? urlMatch[0] : undefined };
+    return { error: msg, isQuota, apiEnableUrl: urlMatch ? urlMatch[0] : undefined };
   } catch (e) {
     return { error: String(e) };
   }
@@ -133,8 +147,17 @@ export async function ensureAccountId(
   brandId: number,
   accessToken: string
 ): Promise<EnsureAccountResult> {
+  // Cooldown check — if we hit quota recently, don't hammer the API again
+  const lastError = lastQuotaError.get(brandId) ?? 0;
+  if (Date.now() - lastError < COOLDOWN_MS) {
+    const retryInMin = Math.ceil((COOLDOWN_MS - (Date.now() - lastError)) / 60_000);
+    console.warn(`[google-auth] ensureAccountId: in cooldown for brandId ${brandId}, retry in ~${retryInMin}m`);
+    return { accountId: null, rateLimited: true };
+  }
+
   const headers = { Authorization: `Bearer ${accessToken}` };
   let lastApiEnableUrl: string | undefined;
+  let hitQuota = false;
 
   // Attempt 1: My Business Account Management API (v1)
   const r1 = await tryFetchAccounts(
@@ -142,6 +165,7 @@ export async function ensureAccountId(
     headers
   );
   if (r1 && "accountId" in r1 && r1.accountId) {
+    lastQuotaError.delete(brandId);
     await db.execute(sql`
       UPDATE google_oauth_tokens
       SET account_id = ${r1.accountId}, account_name = ${r1.accountName}, updated_at = NOW()
@@ -151,41 +175,34 @@ export async function ensureAccountId(
     return { accountId: r1.accountId };
   }
   if (r1 && "error" in r1) {
-    console.warn("[google-auth] Account Management API failed:", r1.error);
-    if (r1.apiEnableUrl) lastApiEnableUrl = r1.apiEnableUrl;
+    console.warn("[google-auth] v1 accounts API:", r1.error.slice(0, 120));
+    if ((r1 as any).isQuota) hitQuota = true;
+    if ((r1 as any).apiEnableUrl) lastApiEnableUrl = (r1 as any).apiEnableUrl;
+    // If quota hit, stop immediately — don't waste quota on more calls
+    if (hitQuota) {
+      lastQuotaError.set(brandId, Date.now());
+      console.warn(`[google-auth] Quota hit — cooldown set for brandId ${brandId}`);
+      return { accountId: null, rateLimited: true };
+    }
   }
 
-  // Attempt 2: My Business API v4 (legacy)
+  // Attempt 2: My Business API v4 (legacy) — only if v1 failed for non-quota reason
   const r2 = await tryFetchAccounts(
     "https://mybusiness.googleapis.com/v4/accounts",
     headers
   );
   if (r2 && "accountId" in r2 && r2.accountId) {
+    lastQuotaError.delete(brandId);
     await db.execute(sql`
       UPDATE google_oauth_tokens
       SET account_id = ${r2.accountId}, account_name = ${r2.accountName}, updated_at = NOW()
       WHERE brand_id = ${brandId}
     `);
-    console.log(`[google-auth] ensureAccountId (v4 legacy): ${r2.accountId}`);
+    console.log(`[google-auth] ensureAccountId (v4): ${r2.accountId}`);
     return { accountId: r2.accountId };
   }
   if (r2 && "error" in r2) {
-    console.warn("[google-auth] Legacy v4 accounts API failed:", r2.error);
-    if (r2.apiEnableUrl) lastApiEnableUrl = r2.apiEnableUrl;
-  }
-
-  // Attempt 3: Business Profile Performance API — different base, same token
-  const r3 = await tryFetchAccounts(
-    "https://businessprofileperformance.googleapis.com/v1/locations",
-    headers
-  );
-  if (r3 && "accountId" in r3 && r3.accountId) {
-    await db.execute(sql`
-      UPDATE google_oauth_tokens
-      SET account_id = ${r3.accountId}, account_name = ${r3.accountName}, updated_at = NOW()
-      WHERE brand_id = ${brandId}
-    `);
-    return { accountId: r3.accountId };
+    console.warn("[google-auth] v4 accounts API:", r2.error.slice(0, 120));
   }
 
   console.error("[google-auth] ensureAccountId: all attempts failed for brandId", brandId);

@@ -97,33 +97,76 @@ function getFrontendUrl(): string {
 }
 
 // ─── ACCOUNT ID HELPER ───────────────────────────────────────────────────────
-// Tries to fetch & persist the GMB account ID if it wasn't saved at OAuth time.
+// Tries multiple endpoints to fetch & persist the GMB account ID.
+// Falls back from the newer Account Management API to the legacy v4 endpoint.
 export async function ensureAccountId(
   brandId: number,
   accessToken: string
 ): Promise<string | null> {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  // Attempt 1: newer Account Management API (requires "My Business Account Management API" enabled)
   try {
     const res = await fetch(
       "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers }
     );
-    const data = (await res.json()) as Record<string, any>;
-    const accounts: any[] = data.accounts ?? [];
-    if (accounts.length === 0) return null;
-
-    const accountId = (accounts[0].name as string) ?? "";
-    const accountName = (accounts[0].accountName as string) ?? accountId;
-
-    await db.execute(sql`
-      UPDATE google_oauth_tokens
-      SET account_id = ${accountId}, account_name = ${accountName}, updated_at = NOW()
-      WHERE brand_id = ${brandId}
-    `);
-    return accountId;
+    if (res.ok) {
+      const data = (await res.json()) as Record<string, any>;
+      const accounts: any[] = data.accounts ?? [];
+      if (accounts.length > 0) {
+        const accountId = (accounts[0].name as string) ?? "";
+        const accountName = (accounts[0].accountName as string) ?? accountId;
+        if (accountId) {
+          await db.execute(sql`
+            UPDATE google_oauth_tokens
+            SET account_id = ${accountId}, account_name = ${accountName}, updated_at = NOW()
+            WHERE brand_id = ${brandId}
+          `);
+          console.log(`[google-auth] ensureAccountId (v1): ${accountId}`);
+          return accountId;
+        }
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.warn("[google-auth] Account Management API failed:", (err as any)?.error?.message ?? res.status);
+    }
   } catch (e) {
-    console.error("[google-auth] ensureAccountId failed:", e);
-    return null;
+    console.warn("[google-auth] ensureAccountId v1 error:", e);
   }
+
+  // Attempt 2: legacy v4 My Business API (older but more widely enabled)
+  try {
+    const res = await fetch(
+      "https://mybusiness.googleapis.com/v4/accounts",
+      { headers }
+    );
+    if (res.ok) {
+      const data = (await res.json()) as Record<string, any>;
+      const accounts: any[] = data.accounts ?? [];
+      if (accounts.length > 0) {
+        const accountId = (accounts[0].name as string) ?? "";
+        const accountName = (accounts[0].accountName as string) ?? accountId;
+        if (accountId) {
+          await db.execute(sql`
+            UPDATE google_oauth_tokens
+            SET account_id = ${accountId}, account_name = ${accountName}, updated_at = NOW()
+            WHERE brand_id = ${brandId}
+          `);
+          console.log(`[google-auth] ensureAccountId (v4 legacy): ${accountId}`);
+          return accountId;
+        }
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.warn("[google-auth] Legacy v4 accounts API failed:", (err as any)?.error?.message ?? res.status);
+    }
+  } catch (e) {
+    console.warn("[google-auth] ensureAccountId v4 error:", e);
+  }
+
+  console.error("[google-auth] ensureAccountId: all attempts failed for brandId", brandId);
+  return null;
 }
 
 // ─── TOKEN HELPER ─────────────────────────────────────────────────────────────
@@ -407,6 +450,40 @@ router.get("/locations", async (req, res) => {
   } catch (err) {
     console.error("[google-auth/locations] Error:", err);
     res.status(500).json({ error: "Failed to fetch locations" });
+  }
+});
+
+// PUT /set-manual-path  — manually set location path (accounts/xxx/locations/yyy)
+// Used when the API-based location list fails (e.g. Account Management API not enabled)
+router.put("/set-manual-path", async (req, res) => {
+  const { brandId, locationPath } = req.body as { brandId?: number; locationPath?: string };
+  if (!brandId || !locationPath)
+    return res.status(400).json({ error: "brandId and locationPath required" });
+
+  // locationPath must look like accounts/.../locations/...
+  if (!locationPath.includes("/locations/")) {
+    return res.status(400).json({
+      error: "Định dạng không hợp lệ. Cần có dạng: accounts/XXXXXX/locations/YYYYYY",
+    });
+  }
+
+  try {
+    await ensureTable();
+
+    // Extract accountId from path: "accounts/123456789/locations/..."
+    const accountId = locationPath.split("/locations/")[0] ?? "";
+
+    await db.execute(sql`
+      UPDATE google_oauth_tokens
+      SET location_id   = ${locationPath},
+          location_name = ${"Địa điểm thủ công"},
+          account_id    = CASE WHEN (account_id IS NULL OR account_id = '') THEN ${accountId} ELSE account_id END,
+          updated_at    = NOW()
+      WHERE brand_id = ${brandId}
+    `);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to set manual path" });
   }
 });
 

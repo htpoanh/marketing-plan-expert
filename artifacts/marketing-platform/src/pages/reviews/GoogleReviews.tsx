@@ -302,6 +302,9 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   const [gmbLocations, setGmbLocations] = useState<{ id: string; name: string }[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [manualPath, setManualPath] = useState("");
+  const [savingManualPath, setSavingManualPath] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -403,6 +406,32 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
       setGmbLocations([]);
     } catch {
       toast({ title: "Lỗi lưu địa điểm", variant: "destructive" });
+    }
+  };
+
+  const handleSaveManualPath = async () => {
+    if (!manualPath.trim()) return;
+    setSavingManualPath(true);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/google-auth/set-manual-path`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ brandId, locationPath: manualPath.trim() }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Lỗi", description: data.error, variant: "destructive" });
+      } else {
+        toast({ title: "Đã lưu đường dẫn địa điểm!" });
+        setManualPath("");
+        setShowManualInput(false);
+        refetchGmbStatus();
+      }
+    } catch {
+      toast({ title: "Lỗi kết nối", variant: "destructive" });
+    } finally {
+      setSavingManualPath(false);
     }
   };
 
@@ -587,14 +616,22 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
 
             {/* Location picker */}
             {gmbLocations.length === 0 ? (
-              <button
-                onClick={handleLoadLocations}
-                disabled={loadingLocations}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:bg-secondary transition-all disabled:opacity-50"
-              >
-                {loadingLocations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
-                {loadingLocations ? "Đang tải địa điểm..." : "Xem / Đổi địa điểm"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleLoadLocations}
+                  disabled={loadingLocations}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:bg-secondary transition-all disabled:opacity-50"
+                >
+                  {loadingLocations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                  {loadingLocations ? "Đang tải địa điểm..." : "Xem / Đổi địa điểm"}
+                </button>
+                <button
+                  onClick={() => setShowManualInput(v => !v)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                >
+                  Nhập thủ công
+                </button>
+              </div>
             ) : (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground font-medium">Chọn địa điểm:</p>
@@ -613,6 +650,35 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
                     {loc.id === gmbStatus.locationId && <Check className="w-3.5 h-3.5 ml-auto" />}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Manual location path input */}
+            {showManualInput && (
+              <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-amber-400 mb-1">Nhập đường dẫn địa điểm thủ công</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Vào <strong>business.google.com</strong> → chọn cửa hàng → xem URL dạng:<br />
+                    <code className="text-amber-300 bg-black/20 px-1 rounded">accounts/&#123;ID&#125;/locations/&#123;ID&#125;</code>
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manualPath}
+                    onChange={e => setManualPath(e.target.value)}
+                    placeholder="accounts/123456789/locations/987654321"
+                    className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    onClick={handleSaveManualPath}
+                    disabled={savingManualPath || !manualPath.trim()}
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 hover:opacity-90 transition-all"
+                  >
+                    {savingManualPath ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Lưu"}
+                  </button>
+                </div>
               </div>
             )}
 

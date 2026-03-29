@@ -169,6 +169,61 @@ router.post("/full-seed", requireAdmin, async (req, res) => {
   }
 });
 
+router.post("/migrate", requireAdmin, async (req, res) => {
+  const migrations = [
+    // Session table for connect-pg-simple
+    `CREATE TABLE IF NOT EXISTS "session" (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+    )`,
+    `CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`,
+
+    // pipeline_runs missing columns
+    `ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS store_situation text`,
+
+    // content_plans missing columns
+    `ALTER TABLE content_plans ADD COLUMN IF NOT EXISTS image_url text`,
+    `ALTER TABLE content_plans ADD COLUMN IF NOT EXISTS prompt_rating varchar(10)`,
+    `ALTER TABLE content_plans ADD COLUMN IF NOT EXISTS is_selected boolean DEFAULT false`,
+
+    // automation_settings missing columns
+    `ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS metricool_account_id text`,
+    `ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS metricool_token text`,
+
+    // ai_agent_configs missing columns
+    `ALTER TABLE ai_agent_configs ADD COLUMN IF NOT EXISTS profile_id integer`,
+
+    // reviews missing columns
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS source text`,
+  ];
+
+  const client = await (pool as any).connect();
+  const results: { sql: string; ok: boolean; error?: string }[] = [];
+  try {
+    for (const m of migrations) {
+      try {
+        await client.query(m);
+        results.push({ sql: m.substring(0, 60), ok: true });
+      } catch (e: any) {
+        results.push({ sql: m.substring(0, 60), ok: false, error: e.message.substring(0, 100) });
+      }
+    }
+  } finally {
+    client.release();
+  }
+
+  const failed = results.filter(r => !r.ok);
+  return res.json({
+    ok: failed.length === 0,
+    total: migrations.length,
+    success: results.filter(r => r.ok).length,
+    failed: failed.length,
+    errors: failed.map(r => `${r.sql}: ${r.error}`),
+  });
+});
+
 router.get("/status", requireAdmin, async (req, res) => {
   try {
     const brands = await db.execute(sql`SELECT COUNT(*) as cnt FROM brands`);

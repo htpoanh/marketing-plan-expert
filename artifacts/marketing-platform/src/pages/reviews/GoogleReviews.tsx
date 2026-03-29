@@ -320,7 +320,41 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   });
 
   const handleGmbConnect = () => {
-    window.location.href = `${BASE}/api/reviews/google-auth/url?brandId=${brandId}`;
+    const authUrl = `${BASE}/api/reviews/google-auth/url?brandId=${brandId}`;
+    const popup = window.open(
+      authUrl,
+      "google-business-auth",
+      "width=550,height=680,left=200,top=100,resizable=yes,scrollbars=yes"
+    );
+
+    if (!popup) {
+      // Popup blocked — fall back to full-page redirect
+      window.location.href = authUrl;
+      return;
+    }
+
+    // Listen for postMessage from popup callback page
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "GOOGLE_AUTH_SUCCESS") {
+        window.removeEventListener("message", onMessage);
+        clearInterval(pollId);
+        popup.close();
+        refetchGmbStatus();
+        toast({ title: "Đã kết nối Google Business Profile!", description: "Bạn có thể đồng bộ tất cả đánh giá ngay bây giờ." });
+      }
+    };
+    window.addEventListener("message", onMessage);
+
+    // Polling fallback: re-check status every 2s until popup closes
+    const pollId = setInterval(async () => {
+      if (popup.closed) {
+        clearInterval(pollId);
+        window.removeEventListener("message", onMessage);
+        // Popup closed — refetch to see if connection succeeded
+        refetchGmbStatus();
+        return;
+      }
+    }, 2000);
   };
 
   const handleGmbDisconnect = async () => {

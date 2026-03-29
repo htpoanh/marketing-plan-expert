@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { reviewsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import crypto from "crypto";
 
 const router: IRouter = Router();
 
@@ -28,7 +27,59 @@ async function ensureTable() {
   dbSetupDone = true;
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ─── STATE SIGNING (HMAC-SHA256) ─────────────────────────────────────────────
+// Prevents OAuth state tampering / unauthorized brand token overwrite.
+// State format: base64url({ brandId, ts }) + "." + HMAC
+
+function getStateSecret(): string {
+  return process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD ?? "gmb-state-secret-fallback";
+}
+
+function signState(brandId: string): string {
+  const payload = JSON.stringify({ brandId, ts: Date.now() });
+  const encoded = Buffer.from(payload).toString("base64url");
+  const sig = crypto
+    .createHmac("sha256", getStateSecret())
+    .update(encoded)
+    .digest("base64url");
+  return `${encoded}.${sig}`;
+}
+
+function verifyState(state: string): { brandId: string } | null {
+  try {
+    const dotIdx = state.lastIndexOf(".");
+    if (dotIdx === -1) return null;
+
+    const encoded = state.slice(0, dotIdx);
+    const sig = state.slice(dotIdx + 1);
+
+    // Verify HMAC
+    const expectedSig = crypto
+      .createHmac("sha256", getStateSecret())
+      .update(encoded)
+      .digest("base64url");
+
+    // Constant-time comparison to prevent timing attacks
+    if (!crypto.timingSafeEqual(Buffer.from(sig, "base64url"), Buffer.from(expectedSig, "base64url"))) {
+      console.warn("[google-auth] State HMAC mismatch — possible tampering");
+      return null;
+    }
+
+    const { brandId, ts } = JSON.parse(Buffer.from(encoded, "base64url").toString()) as Record<string, any>;
+
+    // State is valid for 10 minutes only
+    if (Date.now() - Number(ts) > 10 * 60 * 1000) {
+      console.warn("[google-auth] State expired");
+      return null;
+    }
+
+    return { brandId: String(brandId) };
+  } catch {
+    return null;
+  }
+}
+
+// ─── URL HELPERS ─────────────────────────────────────────────────────────────
 function getCallbackUrl(): string {
   const domain =
     process.env.REPLIT_DOMAINS?.split(",")[0] ??
@@ -45,6 +96,7 @@ function getFrontendUrl(): string {
   return `https://${domain}/reviews`;
 }
 
+// ─── TOKEN HELPER ─────────────────────────────────────────────────────────────
 export async function getValidTokens(brandId: number): Promise<Record<string, any> | null> {
   await ensureTable();
   const rows = await db.execute(sql`
@@ -98,16 +150,18 @@ export async function getValidTokens(brandId: number): Promise<Record<string, an
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
 // GET /url?brandId=X  →  redirect to Google OAuth consent
+// Protected by auth middleware (admin must be logged in)
 router.get("/url", async (req, res) => {
   const brandId = req.query.brandId as string;
   if (!brandId) return res.status(400).json({ error: "brandId required" });
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
-    return res
-      .status(503)
-      .json({ error: "GOOGLE_CLIENT_ID chưa được cài đặt trong Secrets." });
+    return res.status(503).json({ error: "GOOGLE_CLIENT_ID chưa được cài đặt trong Secrets." });
   }
+
+  // Sign state to prevent CSRF / brand-swapping attacks
+  const signedState = signState(brandId);
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", clientId);
@@ -116,14 +170,15 @@ router.get("/url", async (req, res) => {
   url.searchParams.set("scope", "https://www.googleapis.com/auth/business.manage");
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
-  url.searchParams.set("state", brandId);
+  url.searchParams.set("state", signedState);
 
   res.redirect(url.toString());
 });
 
 // GET /callback  — PUBLIC route, called by Google after user consent
+// State is HMAC-verified before any token is stored.
 router.get("/callback", async (req, res) => {
-  const { code, state: brandId, error } = req.query;
+  const { code, state: rawState, error } = req.query;
   const frontendUrl = getFrontendUrl();
 
   if (error) {
@@ -132,17 +187,24 @@ router.get("/callback", async (req, res) => {
     );
   }
 
-  if (!code || !brandId) {
+  if (!code || !rawState) {
     return res.redirect(`${frontendUrl}?googleAuthError=missing_params&tab=sync`);
   }
+
+  // Verify HMAC-signed state — reject any tampered/invalid state
+  const verified = verifyState(rawState as string);
+  if (!verified) {
+    console.warn("[google-auth/callback] Invalid or tampered state parameter");
+    return res.redirect(`${frontendUrl}?googleAuthError=invalid_state&tab=sync`);
+  }
+
+  const { brandId } = verified;
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return res.redirect(
-      `${frontendUrl}?googleAuthError=missing_credentials&tab=sync`
-    );
+    return res.redirect(`${frontendUrl}?googleAuthError=missing_credentials&tab=sync`);
   }
 
   try {
@@ -164,9 +226,7 @@ router.get("/callback", async (req, res) => {
 
     if (!tokenRes.ok || !tokenData.access_token) {
       console.error("[google-auth/callback] Token exchange failed:", tokenData);
-      return res.redirect(
-        `${frontendUrl}?googleAuthError=token_exchange_failed&tab=sync`
-      );
+      return res.redirect(`${frontendUrl}?googleAuthError=token_exchange_failed&tab=sync`);
     }
 
     // Fetch Google Business Profile account info
@@ -191,11 +251,12 @@ router.get("/callback", async (req, res) => {
       ? Date.now() + Number(tokenData.expires_in) * 1000
       : null;
 
+    // Store tokens, keyed by brandId (which was verified via HMAC)
     await db.execute(sql`
       INSERT INTO google_oauth_tokens
         (brand_id, access_token, refresh_token, expiry_date, account_id, account_name, updated_at)
       VALUES
-        (${parseInt(brandId as string)}, ${tokenData.access_token as string},
+        (${parseInt(brandId)}, ${tokenData.access_token as string},
          ${(tokenData.refresh_token as string) ?? null}, ${expiryDate},
          ${accountId}, ${accountName}, NOW())
       ON CONFLICT (brand_id) DO UPDATE
@@ -207,7 +268,25 @@ router.get("/callback", async (req, res) => {
             updated_at    = NOW()
     `);
 
-    return res.redirect(`${frontendUrl}?googleConnected=true&tab=sync`);
+    // Return a simple HTML page that notifies the opener window and closes itself
+    return res.send(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Kết nối thành công</title></head>
+<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0">
+  <div style="text-align:center;padding:2rem">
+    <div style="font-size:3rem;margin-bottom:1rem">✅</div>
+    <h2 style="margin:0 0 .5rem;color:#4ade80">Đã kết nối Google Business!</h2>
+    <p style="color:#94a3b8;margin:0">Đang đóng cửa sổ này...</p>
+  </div>
+  <script>
+    // Notify the opener window
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', brandId: '${brandId}' }, '*');
+    }
+    setTimeout(function() { window.close(); }, 1500);
+  </script>
+</body>
+</html>`);
   } catch (err) {
     console.error("[google-auth/callback] Unexpected error:", err);
     return res.redirect(`${frontendUrl}?googleAuthError=server_error&tab=sync`);
@@ -230,15 +309,11 @@ router.get("/status", async (req, res) => {
     `);
 
     if (rows.rows.length === 0) {
-      return res.json({
-        connected: false,
-        hasCredentials: hasClientId && hasClientSecret,
-      });
+      return res.json({ connected: false, hasCredentials: hasClientId && hasClientSecret });
     }
 
     const row = rows.rows[0] as Record<string, any>;
-    const isExpired =
-      row.expiry_date && Date.now() > Number(row.expiry_date);
+    const isExpired = row.expiry_date && Date.now() > Number(row.expiry_date);
 
     return res.json({
       connected: true,
@@ -263,9 +338,7 @@ router.delete("/disconnect", async (req, res) => {
 
   try {
     await ensureTable();
-    await db.execute(sql`
-      DELETE FROM google_oauth_tokens WHERE brand_id = ${parseInt(brandId)}
-    `);
+    await db.execute(sql`DELETE FROM google_oauth_tokens WHERE brand_id = ${parseInt(brandId)}`);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to disconnect" });

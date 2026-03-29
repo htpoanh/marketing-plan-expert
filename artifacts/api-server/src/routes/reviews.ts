@@ -502,10 +502,9 @@ router.post("/sync-gmb", async (req, res) => {
       });
     }
 
-    // Paginate through all reviews
+    // Paginate through ALL reviews — no artificial cap
     let pageToken = "";
     let allReviews: any[] = [];
-    let page = 0;
 
     do {
       const url = new URL(`https://mybusiness.googleapis.com/v4/${locationPath}/reviews`);
@@ -519,15 +518,23 @@ router.post("/sync-gmb", async (req, res) => {
 
       if (!reviewsRes.ok) {
         console.error("[sync-gmb] Business Profile API error:", reviewsData);
+        // If we already have some reviews, return partial success rather than failing entirely
+        if (allReviews.length > 0) {
+          console.warn(`[sync-gmb] Partial sync: ${allReviews.length} reviews fetched before error`);
+          break;
+        }
         return res.status(400).json({
           error: reviewsData.error?.message ?? "Lỗi từ Google Business Profile API",
         });
       }
 
-      allReviews = allReviews.concat(reviewsData.reviews ?? []);
+      const page: any[] = reviewsData.reviews ?? [];
+      allReviews = allReviews.concat(page);
       pageToken = reviewsData.nextPageToken ?? "";
-      page++;
-    } while (pageToken && page < 20);
+
+      // Safety: stop if a page returns 0 reviews to prevent infinite loop
+      if (page.length === 0) break;
+    } while (pageToken);
 
     // GMB API rating map
     const ratingMap: Record<string, number> = {

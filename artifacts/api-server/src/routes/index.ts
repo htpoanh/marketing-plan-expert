@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import authRouter from "./auth";
 import brandsRouter from "./brands";
 import reviewsRouter from "./reviews";
+import googleAuthRouter from "./google-auth";
 import contentRouter from "./content";
 import contentPlansRouter from "./content-plans";
 import pipelineRouter from "./pipeline";
@@ -25,13 +26,18 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 router.use((req: Request, res: Response, next: NextFunction) => {
-  const PUBLIC_PREFIXES = ["/healthz", "/auth/"];
+  const PUBLIC_PREFIXES = [
+    "/healthz",
+    "/auth/",
+    "/reviews/google-auth/callback",
+  ];
   const isPublic = PUBLIC_PREFIXES.some(p => req.path === p || req.path.startsWith(p));
   if (isPublic) return next();
   return requireAdmin(req, res, next);
 });
 
 router.use("/brands", brandsRouter);
+router.use("/reviews/google-auth", googleAuthRouter);
 router.use("/reviews", reviewsRouter);
 router.use("/content", contentRouter);
 router.use("/content-plans", contentPlansRouter);

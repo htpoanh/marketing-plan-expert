@@ -4,6 +4,7 @@ import { reviewsTable, brandsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { getValidTokens } from "./google-auth";
 
 const router: IRouter = Router();
 
@@ -415,20 +416,26 @@ router.post("/:id/generate-reply", async (req, res) => {
       return res.json({ reply, fromTemplate: true });
     }
 
-    // Fallback: generate fresh with AI
-    const starLabel = ["", "rất tệ", "không tốt", "bình thường", "tốt", "tuyệt vời"][review.rating];
-    const prompt = `Bạn là nhân viên CSKH của "${brand?.brandName || "cửa hàng"}".
-Khách ${review.reviewerName} đánh giá ${review.rating} sao (${starLabel}).
-Nội dung: "${review.reviewText || "(Không có nội dung)"}"
-Viết phản hồi 2-4 câu, lịch sự, tự nhiên, phù hợp số sao. Chỉ trả nội dung phản hồi.`;
+    // Fallback: generate fresh with AI (in German)
+    const starLabel = ["", "1 Stern — sehr schlecht", "2 Sterne — unzufrieden", "3 Sterne — durchschnittlich", "4 Sterne — zufrieden", "5 Sterne — ausgezeichnet"][review.rating];
+    const tone = review.rating >= 4 ? "freudig dankend und herzlich einladend" : review.rating === 3 ? "aufrichtig dankend und verbesserungsbereit" : "aufrichtig entschuldigend und lösungsorientiert";
+    const prompt = `Du bist ein professioneller Kundenservice-Mitarbeiter von "${brand?.brandName || "unserem Unternehmen"}".
+Kunde ${review.reviewerName} hat ${review.rating} Sterne gegeben (${starLabel}).
+Bewertung: "${review.reviewText || "(Kein Text)"}"
+Ton: ${tone}
+Schreibe eine natürliche, professionelle Google-Bewertungsantwort auf Deutsch (2–4 Sätze). Nur den Antworttext zurückgeben.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 300 },
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 400,
+      system: "Du bist ein Experte für professionelle deutschsprachige Kundenkommunikation. Du schreibst empathische, authentische Google-Bewertungsantworten.",
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const reply = response.text?.trim() ?? "Cảm ơn bạn đã đánh giá! Chúng tôi rất trân trọng phản hồi của bạn.";
+    const replyBlock = message.content[0];
+    const reply = replyBlock.type === "text"
+      ? replyBlock.text.trim()
+      : "Vielen Dank für Ihre Bewertung! Wir freuen uns über Ihr Feedback.";
     res.json({ reply, fromTemplate: false });
   } catch (error) {
     console.error(error);
@@ -448,6 +455,180 @@ router.post("/:id/reply", async (req, res) => {
     res.json(review);
   } catch (error) {
     res.status(500).json({ error: "Failed to save reply" });
+  }
+});
+
+// ─── GOOGLE BUSINESS PROFILE SYNC (full reviews, no 5-review limit) ──────────
+router.post("/sync-gmb", async (req, res) => {
+  try {
+    const { brandId } = req.body;
+    if (!brandId) return res.status(400).json({ error: "brandId required" });
+
+    const tokens = await getValidTokens(parseInt(brandId));
+    if (!tokens) {
+      return res.status(401).json({
+        error: "Chưa kết nối Google Business Profile. Vui lòng kết nối trước.",
+      });
+    }
+
+    const accountId = tokens.account_id as string;
+    if (!accountId) {
+      return res.status(400).json({ error: "Chưa có Account ID. Vui lòng kết nối lại." });
+    }
+
+    // Determine location path: stored or auto-fetched first location
+    let locationPath = tokens.location_id as string | null;
+    if (!locationPath) {
+      const locRes = await fetch(
+        `https://mybusinessbusinessinformation.googleapis.com/v1/${accountId}/locations?readMask=name,title`,
+        { headers: { Authorization: `Bearer ${tokens.access_token as string}` } }
+      );
+      const locData = (await locRes.json()) as Record<string, any>;
+      const locations: any[] = locData.locations ?? [];
+      if (locations.length > 0) {
+        locationPath = locations[0].name as string;
+        // Persist the auto-selected location
+        await db.execute(sql`
+          UPDATE google_oauth_tokens
+          SET location_id = ${locationPath}, updated_at = NOW()
+          WHERE brand_id = ${parseInt(brandId)}
+        `);
+      }
+    }
+
+    if (!locationPath) {
+      return res.status(400).json({
+        error: "Không tìm thấy địa điểm nào trong Google Business Profile.",
+      });
+    }
+
+    // Paginate through all reviews
+    let pageToken = "";
+    let allReviews: any[] = [];
+    let page = 0;
+
+    do {
+      const url = new URL(`https://mybusiness.googleapis.com/v4/${locationPath}/reviews`);
+      url.searchParams.set("pageSize", "50");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+      const reviewsRes = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${tokens.access_token as string}` },
+      });
+      const reviewsData = (await reviewsRes.json()) as Record<string, any>;
+
+      if (!reviewsRes.ok) {
+        console.error("[sync-gmb] Business Profile API error:", reviewsData);
+        return res.status(400).json({
+          error: reviewsData.error?.message ?? "Lỗi từ Google Business Profile API",
+        });
+      }
+
+      allReviews = allReviews.concat(reviewsData.reviews ?? []);
+      pageToken = reviewsData.nextPageToken ?? "";
+      page++;
+    } while (pageToken && page < 20);
+
+    // GMB API rating map
+    const ratingMap: Record<string, number> = {
+      ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5,
+    };
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const gr of allReviews) {
+      const googleReviewId = (gr.reviewId as string) ?? (gr.name as string);
+      const existing = await db.execute(sql`
+        SELECT id FROM reviews
+        WHERE brand_id = ${parseInt(brandId)} AND google_review_id = ${googleReviewId}
+        LIMIT 1
+      `);
+      if (existing.rows.length > 0) {
+        skipped++;
+        continue;
+      }
+
+      await db.insert(reviewsTable).values({
+        brandId: parseInt(brandId),
+        reviewerName: (gr.reviewer?.displayName as string) ?? "Anonym",
+        rating: ratingMap[gr.starRating as string] ?? 5,
+        reviewText: (gr.comment as string) ?? null,
+        reviewDate: gr.createTime ? new Date(gr.createTime as string) : new Date(),
+        replied: !!(gr.reviewReply),
+        replyText: (gr.reviewReply?.comment as string) ?? null,
+        googleReviewId,
+      });
+      imported++;
+    }
+
+    res.json({ success: true, imported, skipped, total: allReviews.length });
+  } catch (error) {
+    console.error("[sync-gmb] Unexpected error:", error);
+    res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ Google Business Profile." });
+  }
+});
+
+// ─── REPLY TO GOOGLE MAPS (via Business Profile API) ─────────────────────────
+router.post("/reply-gmb/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { replyText } = req.body as { replyText?: string };
+    if (!replyText) return res.status(400).json({ error: "replyText required" });
+
+    const [review] = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id));
+    if (!review) return res.status(404).json({ error: "Review not found" });
+
+    const tokens = await getValidTokens(review.brandId);
+    if (!tokens) {
+      return res.status(401).json({ error: "Chưa kết nối Google Business Profile." });
+    }
+
+    const googleReviewId = review.googleReviewId;
+    if (!googleReviewId) {
+      return res.status(400).json({ error: "Review này không có Google Review ID." });
+    }
+
+    const locationPath = tokens.location_id as string;
+    if (!locationPath) {
+      return res.status(400).json({ error: "Chưa chọn địa điểm trong Google Business Profile." });
+    }
+
+    // Build the full review resource name for the reply endpoint
+    // Format: accounts/{accountId}/locations/{locationId}/reviews/{reviewId}
+    const reviewName = googleReviewId.startsWith("accounts/")
+      ? googleReviewId
+      : `${locationPath}/reviews/${googleReviewId}`;
+
+    const replyRes = await fetch(`https://mybusiness.googleapis.com/v4/${reviewName}/reply`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${tokens.access_token as string}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ comment: replyText }),
+    });
+
+    if (!replyRes.ok) {
+      const errData = (await replyRes.json()) as Record<string, any>;
+      console.error("[reply-gmb] Google API error:", errData);
+      return res.status(400).json({
+        error: (errData.error?.message as string) ?? "Không thể đăng phản hồi lên Google.",
+        raw: errData,
+      });
+    }
+
+    // Also persist locally
+    const [updated] = await db
+      .update(reviewsTable)
+      .set({ replied: true, replyText, replyDate: new Date() })
+      .where(eq(reviewsTable.id, id))
+      .returning();
+
+    res.json({ success: true, review: updated });
+  } catch (error) {
+    console.error("[reply-gmb] Unexpected error:", error);
+    res.status(500).json({ error: "Lỗi máy chủ khi đăng phản hồi lên Google." });
   }
 });
 

@@ -12,7 +12,8 @@ import { format } from "date-fns";
 import {
   Star, Bot, Check, Search, Filter, RefreshCw, Link2,
   Sparkles, Save, ChevronRight, AlertCircle, CloudDownload,
-  MessageSquare, Settings, Info, Loader2, ExternalLink, Edit3
+  MessageSquare, Settings, Info, Loader2, ExternalLink, Edit3,
+  Globe, Unlink, MapPin, Send
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,6 +33,17 @@ type SyncResult = {
   total: number;
   placeName?: string;
   placeRating?: number;
+};
+
+type GmbStatus = {
+  connected: boolean;
+  hasCredentials: boolean;
+  accountId?: string;
+  accountName?: string;
+  locationId?: string;
+  locationName?: string;
+  isExpired?: boolean;
+  updatedAt?: string;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -284,7 +296,108 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   const [keyStatus, setKeyStatus] = useState<{ ok: boolean; message?: string; reason?: string; hint?: string } | null>(null);
   const [checkingKey, setCheckingKey] = useState(false);
 
+  // ── GMB OAuth state ──
+  const [gmbSyncing, setGmbSyncing] = useState(false);
+  const [gmbSyncResult, setGmbSyncResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
+  const [gmbLocations, setGmbLocations] = useState<{ id: string; name: string }[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  // Fetch GMB status
+  const { data: gmbStatus, refetch: refetchGmbStatus } = useQuery<GmbStatus>({
+    queryKey: ["/api/reviews/google-auth/status", brandId],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/reviews/google-auth/status?brandId=${brandId}`, {
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Failed to fetch GMB status");
+      return r.json();
+    },
+    enabled: !!brandId,
+    staleTime: 30_000,
+  });
+
+  const handleGmbConnect = () => {
+    window.location.href = `${BASE}/api/reviews/google-auth/url?brandId=${brandId}`;
+  };
+
+  const handleGmbDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await fetch(`${BASE}/api/reviews/google-auth/disconnect?brandId=${brandId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      toast({ title: "Đã ngắt kết nối Google Business Profile" });
+      refetchGmbStatus();
+    } catch {
+      toast({ title: "Lỗi ngắt kết nối", variant: "destructive" });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleLoadLocations = async () => {
+    setLoadingLocations(true);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/google-auth/locations?brandId=${brandId}`, {
+        credentials: "include",
+      });
+      const data = await r.json();
+      setGmbLocations(data.locations ?? []);
+    } catch {
+      toast({ title: "Lỗi tải danh sách địa điểm", variant: "destructive" });
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+
+  const handleSetLocation = async (locationId: string, locationName: string) => {
+    try {
+      await fetch(`${BASE}/api/reviews/google-auth/set-location`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ brandId, locationId, locationName }),
+      });
+      toast({ title: "Đã chọn địa điểm: " + locationName });
+      refetchGmbStatus();
+      setGmbLocations([]);
+    } catch {
+      toast({ title: "Lỗi lưu địa điểm", variant: "destructive" });
+    }
+  };
+
+  const handleGmbSync = async () => {
+    setGmbSyncing(true);
+    setGmbSyncResult(null);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/sync-gmb`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ brandId }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Lỗi đồng bộ", description: data.error ?? "Lỗi không xác định", variant: "destructive" });
+        return;
+      }
+      setGmbSyncResult({ imported: data.imported, skipped: data.skipped, total: data.total });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
+      if (data.imported > 0) {
+        toast({ title: `Đã nhập ${data.imported} đánh giá mới từ Google Business!` });
+      } else {
+        toast({ title: "Đã đồng bộ — không có đánh giá mới" });
+      }
+    } catch {
+      toast({ title: "Không kết nối được máy chủ", variant: "destructive" });
+    } finally {
+      setGmbSyncing(false);
+    }
+  };
 
   const handleCheckKey = async () => {
     setCheckingKey(true);
@@ -339,6 +452,193 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
 
   return (
     <div className="space-y-6 max-w-2xl">
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* GOOGLE BUSINESS PROFILE OAUTH SECTION                                */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <div className="p-5 bg-card rounded-2xl border border-border/50 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+            <Globe className="w-5 h-5 text-blue-400" />
+          </div>
+          <div className="flex-1">
+            <h2 className="font-bold text-base">Kết nối Google Business Profile</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Không giới hạn 5 đánh giá — và đăng phản hồi trực tiếp lên Google Maps.
+            </p>
+          </div>
+          {gmbStatus?.connected && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs text-emerald-400 font-medium">Đã kết nối</span>
+            </div>
+          )}
+        </div>
+
+        {/* Not configured (no client ID/secret) */}
+        {gmbStatus && !gmbStatus.hasCredentials && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-3">
+            <p className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> Cần cài đặt thêm Google OAuth
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Để kết nối Google Business Profile, cần tạo OAuth credentials trong Google Cloud Console và thêm vào Replit Secrets.
+            </p>
+            <ol className="space-y-2">
+              {[
+                { n: "1", text: "Truy cập", link: "https://console.cloud.google.com/apis/credentials", linkText: "Google Cloud Console → Credentials" },
+                { n: "2", text: "Tạo \"OAuth 2.0 Client ID\" (loại: Web application)" },
+                { n: "3", text: "Thêm Redirect URI:", code: `${window.location.origin}/api/reviews/google-auth/callback` },
+                { n: "4", text: "Copy Client ID và Client Secret → thêm vào Replit Secrets với tên", code: "GOOGLE_CLIENT_ID" },
+                { n: "5", text: "Thêm Client Secret với tên", code: "GOOGLE_CLIENT_SECRET" },
+                { n: "6", text: "Bật", link: "https://console.cloud.google.com/apis/library/mybusiness.googleapis.com", linkText: "Google Business Profile API", suffix: "trong Google Cloud Console" },
+              ].map(item => (
+                <li key={item.n} className="flex gap-2 text-xs text-muted-foreground">
+                  <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 font-bold text-[10px]">{item.n}</span>
+                  <span className="flex-1">
+                    {item.text}{" "}
+                    {item.link && <a href={item.link} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5">{item.linkText} <ExternalLink className="w-2.5 h-2.5" /></a>}
+                    {item.suffix && " " + item.suffix}
+                    {item.code && <code className="ml-1 text-xs bg-secondary px-1 rounded">{item.code}</code>}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {/* Configured but not connected */}
+        {gmbStatus?.hasCredentials && !gmbStatus?.connected && (
+          <div className="space-y-3">
+            <div className="p-3 bg-secondary/30 rounded-xl border border-border/40">
+              <p className="text-xs text-muted-foreground">
+                Nhấn nút bên dưới để đăng nhập Google và cấp quyền truy cập Google Business Profile.
+                Chỉ cần làm một lần — hệ thống sẽ tự động gia hạn sau đó.
+              </p>
+            </div>
+            <button
+              onClick={handleGmbConnect}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-500 text-white font-semibold text-sm hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/25"
+            >
+              <Globe className="w-4 h-4" />
+              Kết nối Google Business
+            </button>
+          </div>
+        )}
+
+        {/* Connected */}
+        {gmbStatus?.connected && (
+          <div className="space-y-3">
+            {/* Account info */}
+            <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-emerald-400">Tài khoản Google Business</p>
+                  <p className="text-xs text-muted-foreground truncate">{gmbStatus.accountName || gmbStatus.accountId}</p>
+                </div>
+              </div>
+              {gmbStatus.locationName && (
+                <div className="flex items-center gap-2 pl-6">
+                  <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <p className="text-xs text-blue-400">Địa điểm: <strong>{gmbStatus.locationName}</strong></p>
+                </div>
+              )}
+              {!gmbStatus.locationName && (
+                <p className="text-xs text-amber-400 pl-6">Chưa chọn địa điểm — tải danh sách để chọn</p>
+              )}
+            </div>
+
+            {/* Location picker */}
+            {gmbLocations.length === 0 ? (
+              <button
+                onClick={handleLoadLocations}
+                disabled={loadingLocations}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:bg-secondary transition-all disabled:opacity-50"
+              >
+                {loadingLocations ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                {loadingLocations ? "Đang tải địa điểm..." : "Xem / Đổi địa điểm"}
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground font-medium">Chọn địa điểm:</p>
+                {gmbLocations.map(loc => (
+                  <button
+                    key={loc.id}
+                    onClick={() => handleSetLocation(loc.id, loc.name)}
+                    className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm text-left transition-all ${
+                      loc.id === gmbStatus.locationId
+                        ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                        : "border-border hover:bg-secondary text-foreground"
+                    }`}
+                  >
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    {loc.name}
+                    {loc.id === gmbStatus.locationId && <Check className="w-3.5 h-3.5 ml-auto" />}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* GMB Sync + Disconnect buttons */}
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={handleGmbSync}
+                disabled={gmbSyncing}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/25"
+              >
+                {gmbSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+                {gmbSyncing ? "Đang đồng bộ tất cả..." : "Đồng bộ tất cả Reviews"}
+              </button>
+              <button
+                onClick={handleGmbDisconnect}
+                disabled={disconnecting}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50 transition-all"
+              >
+                {disconnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
+                {disconnecting ? "Đang ngắt..." : "Ngắt kết nối"}
+              </button>
+            </div>
+
+            {/* GMB sync result */}
+            {gmbSyncResult && (
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <p className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
+                  <Check className="w-4 h-4" /> Đồng bộ Google Business thành công!
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-emerald-400">{gmbSyncResult.imported}</p>
+                    <p className="text-xs text-muted-foreground">Đã nhập</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-foreground/60">{gmbSyncResult.skipped}</p>
+                    <p className="text-xs text-muted-foreground">Bỏ qua</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-foreground">{gmbSyncResult.total}</p>
+                    <p className="text-xs text-muted-foreground">Tổng cộng</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {gmbStatus.isExpired && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <p className="text-xs text-amber-400">Token đã hết hạn. Nhấn "Kết nối lại" để gia hạn.</p>
+                <button onClick={handleGmbConnect} className="mt-2 text-xs text-primary hover:underline">Kết nối lại Google</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-border/30 pt-2">
+        <p className="text-xs text-muted-foreground font-medium mb-4 flex items-center gap-2">
+          <Settings className="w-3.5 h-3.5" /> Hoặc dùng Places API (giới hạn 5 đánh giá gần nhất):
+        </p>
+      </div>
+
       <div>
         <h2 className="font-bold text-lg">Kết nối & Đồng bộ Google Reviews</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -555,7 +855,7 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
 }
 
 // ─── Tab: Danh sách đánh giá ──────────────────────────────────────────────────
-function ReviewsListTab({ brandId, brands }: { brandId: number | undefined; brands: any[]; }) {
+function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | undefined; brands: any[]; gmbConnected: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [generatingId, setGeneratingId] = useState<number | null>(null);
@@ -564,6 +864,36 @@ function ReviewsListTab({ brandId, brands }: { brandId: number | undefined; bran
   const [savingId, setSavingId] = useState<number | null>(null);
   const [filterRating, setFilterRating] = useState<string>("");
   const [filterReplied, setFilterReplied] = useState<string>("");
+  const [postingToGoogleId, setPostingToGoogleId] = useState<number | null>(null);
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  const handlePostToGoogle = async (review: any) => {
+    if (!review.replyText) {
+      toast({ title: "Chưa có nội dung phản hồi để đăng lên Google.", variant: "destructive" });
+      return;
+    }
+    setPostingToGoogleId(review.id);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/reply-gmb/${review.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ replyText: review.replyText }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Lỗi đăng lên Google", description: data.error ?? "Không thể kết nối Google.", variant: "destructive" });
+      } else {
+        toast({ title: "Đã đăng phản hồi lên Google Maps!", description: "Khách hàng sẽ thấy phản hồi của bạn trên Google." });
+        queryClient.invalidateQueries({ queryKey: getListReviewsQueryKey({ brandId }) });
+      }
+    } catch {
+      toast({ title: "Không kết nối được máy chủ", variant: "destructive" });
+    } finally {
+      setPostingToGoogleId(null);
+    }
+  };
 
   const { data: reviews, isLoading } = useListReviews({ brandId, rating: filterRating ? Number(filterRating) : undefined, replied: filterReplied !== "" ? filterReplied === "true" : undefined } as any);
 
@@ -723,13 +1053,13 @@ function ReviewsListTab({ brandId, brands }: { brandId: number | undefined; bran
                     )}
                   </div>
 
-                  {/* Action button */}
-                  <div className="lg:w-40 flex items-start justify-end shrink-0">
+                  {/* Action buttons */}
+                  <div className="lg:w-44 flex flex-col items-stretch gap-2 shrink-0">
                     {!review.replied ? (
                       <button
                         onClick={() => handleAutoReply(review.id)}
                         disabled={generatingId === review.id}
-                        className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm font-medium bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all disabled:opacity-50"
                       >
                         {generatingId === review.id ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> Đang viết...</>
@@ -738,9 +1068,23 @@ function ReviewsListTab({ brandId, brands }: { brandId: number | undefined; bran
                         )}
                       </button>
                     ) : (
-                      <div className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium w-full text-center flex items-center justify-center gap-1.5">
+                      <div className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium text-center flex items-center justify-center gap-1.5">
                         <Check className="w-3.5 h-3.5" /> Đã phản hồi
                       </div>
+                    )}
+                    {/* Post to Google button — shown when GMB connected + review has Google ID + has reply text */}
+                    {gmbConnected && review.googleReviewId && review.replied && review.replyText && (
+                      <button
+                        onClick={() => handlePostToGoogle(review)}
+                        disabled={postingToGoogleId === review.id}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500 hover:text-white hover:border-blue-500 transition-all disabled:opacity-50"
+                      >
+                        {postingToGoogleId === review.id ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang đăng...</>
+                        ) : (
+                          <><Globe className="w-3.5 h-3.5" /> Đăng lên Google</>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -755,11 +1099,64 @@ function ReviewsListTab({ brandId, brands }: { brandId: number | undefined; bran
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function GoogleReviews() {
+  const { toast } = useToast();
   const [tab, setTab] = useState<"list" | "templates" | "sync">("list");
   const [selectedBrand, setSelectedBrand] = useState<number | undefined>(undefined);
   const { data: brands = [] } = useListBrands();
 
   const activeBrandId = selectedBrand ?? brands[0]?.id;
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  // Handle Google OAuth redirect params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("googleConnected");
+    const authError = params.get("googleAuthError");
+    const tabParam = params.get("tab");
+
+    if (tabParam === "sync") setTab("sync");
+
+    if (connected === "true") {
+      toast({ title: "Đã kết nối Google Business Profile!", description: "Bây giờ bạn có thể đồng bộ tất cả đánh giá." });
+    }
+    if (authError) {
+      const errorMsg: Record<string, string> = {
+        access_denied: "Bạn đã từ chối cấp quyền cho Google Business.",
+        token_exchange_failed: "Không thể xác thực với Google. Vui lòng thử lại.",
+        missing_credentials: "Chưa cài đặt GOOGLE_CLIENT_ID hoặc GOOGLE_CLIENT_SECRET.",
+        server_error: "Lỗi máy chủ khi kết nối Google. Vui lòng thử lại.",
+      };
+      toast({
+        title: "Kết nối Google thất bại",
+        description: errorMsg[authError] ?? `Lỗi: ${authError}`,
+        variant: "destructive",
+      });
+    }
+
+    // Clean up URL params
+    if (connected || authError || tabParam) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("googleConnected");
+      url.searchParams.delete("googleAuthError");
+      url.searchParams.delete("tab");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  // Fetch GMB status for the active brand (used by ReviewsListTab)
+  const { data: gmbStatus } = useQuery<GmbStatus>({
+    queryKey: ["/api/reviews/google-auth/status", activeBrandId],
+    queryFn: async () => {
+      if (!activeBrandId) throw new Error("No brand");
+      const r = await fetch(`${BASE}/api/reviews/google-auth/status?brandId=${activeBrandId}`, {
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    enabled: !!activeBrandId,
+    staleTime: 60_000,
+  });
 
   const TABS = [
     { id: "list" as const, label: "Danh sách đánh giá", icon: <MessageSquare className="w-4 h-4" /> },
@@ -808,7 +1205,7 @@ export default function GoogleReviews() {
         {/* Content */}
         {activeBrandId ? (
           <>
-            {tab === "list" && <ReviewsListTab brandId={activeBrandId} brands={brands} />}
+            {tab === "list" && <ReviewsListTab brandId={activeBrandId} brands={brands} gmbConnected={gmbStatus?.connected ?? false} />}
             {tab === "templates" && <TemplatesTab brandId={activeBrandId} />}
             {tab === "sync" && <SyncTab brandId={activeBrandId} brands={brands} />}
           </>

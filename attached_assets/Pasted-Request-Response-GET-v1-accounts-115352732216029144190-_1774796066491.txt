@@ -1,0 +1,152 @@
+Request / Response
+GET /v1/accounts/115352732216029144190/locations?readMask=name,title,storefrontAddress HTTP/1.1
+Host: mybusinessbusinessinformation.googleapis.com
+Content-length: 0
+Authorization: Bearer ya29.a0Aa7MYiqLUsGdOiXpp9LRudZyHAjz69P03H1Po-hihdTs6YH2y6byg9CvU26SOIeb8bp_1-fC9RjgbSvHJUTS7wazezoQz5rTMcldfl9U3u5vO5CdEx_bCIC80NLWRwFR_tdZVfrkGFx-ZN4Oy-b6tyLTmcSu-Jh9PHkRP4koD6t9m2xmfmGETpR52Uc2RGw1LShCSNsaCgYKAVgSARISFQHGX2Mi4HidNZx04G_3VaurBnIbYA0206
+HTTP/1.1 200 OK
+Content-length: 3352
+X-xss-protection: 0
+Content-location: https://mybusinessbusinessinformation.googleapis.com/v1/accounts/115352732216029144190/locations?readMask=name,title,storefrontAddress
+X-content-type-options: nosniff
+Transfer-encoding: chunked
+Vary: Origin, X-Origin, Referer
+Server: ESF
+-content-encoding: gzip
+Date: Sun, 29 Mar 2026 14:54:15 GMT
+X-frame-options: SAMEORIGIN
+Alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+Content-type: application/json; charset=UTF-8
+{
+  "locations": [
+    {
+      "storefrontAddress": {
+        "postalCode": "88131", 
+        "regionCode": "DE", 
+        "locality": "Lindau (Bodensee)", 
+        "addressLines": [
+          "Rickenbacher Stra\u00dfe 8"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/7872518409999468440", 
+      "title": "Paradise Nails"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "87435", 
+        "regionCode": "DE", 
+        "locality": "Kempten (Allg\u00e4u)", 
+        "addressLines": [
+          "August-Fischer-Platz 1"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/2935268863225561774", 
+      "title": "Halong Salon De Beaut\u00e9"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "87435", 
+        "regionCode": "DE", 
+        "locality": "Kempten (Allg\u00e4u)", 
+        "addressLines": [
+          "Klostersteige 15"
+        ], 
+        "languageCode": "vi"
+      }, 
+      "name": "locations/11103224966252694601", 
+      "title": "Coco Nails & Beauty"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "87435", 
+        "regionCode": "DE", 
+        "locality": "Kempten (Allg\u00e4u)", 
+        "addressLines": [
+          "Kotterner Stra\u00dfe 70"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/5846046144461854203", 
+      "title": "Paradise Nails"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "87700", 
+        "regionCode": "DE", 
+        "locality": "Memmingen", 
+        "addressLines": [
+          "Ulmer Str. 7"
+        ], 
+        "languageCode": "it"
+      }, 
+      "name": "locations/6180223505809805618", 
+      "title": "Taki Taki Restaurant"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "88090", 
+        "regionCode": "DE", 
+        "locality": "Immenstaad am Bodensee", 
+        "addressLines": [
+          "Hafencaf\u00e9 Schloss Kirchberg"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/8528726152023101009", 
+      "title": "Hafencaf\u00e9 Schloss Kirchberg"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "88045", 
+        "regionCode": "DE", 
+        "locality": "Friedrichshafen", 
+        "addressLines": [
+          "Schanzstra\u00dfe 16"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/14625288859761771891", 
+      "title": "Paradise Nails"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "87700", 
+        "regionCode": "DE", 
+        "locality": "Memmingen", 
+        "addressLines": [
+          "Kramerstra\u00dfe 10"
+        ], 
+        "languageCode": "it"
+      }, 
+      "name": "locations/16001201643507109647", 
+      "title": "Paradise Nails & Beauty Salon"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "88131", 
+        "regionCode": "DE", 
+        "locality": "Lindau (Bodensee)", 
+        "addressLines": [
+          "Rickenbacher Stra\u00dfe 8"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/18371101008333082108", 
+      "title": "Paradise Nails"
+    }, 
+    {
+      "storefrontAddress": {
+        "postalCode": "87527", 
+        "regionCode": "DE", 
+        "locality": "Sonthofen", 
+        "addressLines": [
+          "Hirschstra\u00dfe 4"
+        ], 
+        "languageCode": "de"
+      }, 
+      "name": "locations/7423608574562575578", 
+      "title": "Restaurant Thai Hoang Sonthofen"
+    }
+  ]
+}

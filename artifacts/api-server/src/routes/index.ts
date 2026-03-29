@@ -12,11 +12,13 @@ import aiProfilesRouter from "./ai-profiles";
 import automationRouter from "./automation";
 import adAnalysisRouter from "./ad-analysis";
 import messengerRouter from "./messenger";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+router.use("/admin", adminRouter);
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.session.isAdmin) {

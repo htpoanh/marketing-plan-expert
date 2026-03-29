@@ -1,7 +1,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { build as esbuild } from "esbuild";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, copyFile } from "fs/promises";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +67,11 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  const sqlSrc = path.resolve(__dirname, "src/seed_data.sql");
+  const sqlDst = path.resolve(distDir, "seed_data.sql");
+  await copyFile(sqlSrc, sqlDst).catch(() => {});
+  console.log("copied seed_data.sql to dist/");
 }
 
 buildAll().catch((err) => {

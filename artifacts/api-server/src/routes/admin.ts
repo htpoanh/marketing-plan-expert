@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import fs from "fs";
+import path from "path";
 
 const router = Router();
 
@@ -19,10 +21,9 @@ router.post("/seed", requireAdmin, async (req, res) => {
     const brandCount = await db.execute(sql`SELECT COUNT(*) as cnt FROM brands`);
     const cnt = Number((brandCount.rows[0] as any).cnt);
     if (cnt > 0) {
-      return res.json({ ok: true, message: `Database đã có dữ liệu (${cnt} brands). Không cần seed.` });
+      return res.json({ ok: true, message: `Database đã có dữ liệu (${cnt} brands). Dùng /admin/full-seed để copy toàn bộ.` });
     }
 
-    // ── 1. AI Profiles ──────────────────────────────────────────────────────
     await db.execute(sql`
       INSERT INTO ai_profiles (id, profile_name, industry, description, is_default, created_at, updated_at) VALUES
       (1, 'Mặc định',                 'Chung',                  NULL, true,  '2026-03-14 07:05:53', '2026-03-14 07:05:53'),
@@ -33,7 +34,6 @@ router.post("/seed", requireAdmin, async (req, res) => {
     `);
     await db.execute(sql`SELECT setval('ai_profiles_id_seq', 4)`);
 
-    // ── 2. Brands ────────────────────────────────────────────────────────────
     await db.execute(sql`
       INSERT INTO brands (id, brand_name, industry, branch_location, target_audience, brand_voice, website_url, facebook_url, instagram_url, tiktok_url, google_place_id, created_at, updated_at, address, phone, business_hours, ai_profile_id) VALUES
       (1,'Happy Wok','F&B','cạnh siêu thị châu á, đối diện trường học nghề nhưng không có chỗ gửi xe. cạnh siêu thị Forum nhưng tỏng forum khách hàng có nhiều lựa chọn hơn','sinh viên  từ 18 , người đức. khách cần ăn take away. website https://www.happy-wok-imbiss.de','Năng động',NULL,NULL,NULL,NULL,'ChIJARXQggl5nEcRDXihr9Tz3_k','2026-03-14 05:45:10','2026-03-29 11:34:12','Kotterner Str. 48, 87435 Kempten (Allgäu)','+49 831 69729590',NULL,3),
@@ -49,9 +49,83 @@ router.post("/seed", requireAdmin, async (req, res) => {
     `);
     await db.execute(sql`SELECT setval('brands_id_seq', 9)`);
 
-    return res.json({ ok: true, message: "Seed thành công: 4 AI profiles + 9 brands đã được tạo. Hãy dùng 'Đồng bộ qua Places API' để import reviews." });
+    return res.json({ ok: true, message: "Seed thành công: 4 AI profiles + 9 brands. Dùng /admin/full-seed để copy toàn bộ dữ liệu." });
   } catch (e: any) {
     console.error("Seed error:", e);
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post("/full-seed", requireAdmin, async (req, res) => {
+  try {
+    const sqlPath = path.join(__dirname, "seed_data.sql");
+    if (!fs.existsSync(sqlPath)) {
+      return res.status(500).json({ ok: false, error: `seed_data.sql not found at ${sqlPath}` });
+    }
+
+    const sqlContent = fs.readFileSync(sqlPath, "utf8");
+
+    const lines = sqlContent.split("\n");
+    const statements: string[] = [];
+    let current = "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("--") || trimmed === "") {
+        if (current.trim()) {
+          statements.push(current.trim());
+          current = "";
+        }
+        continue;
+      }
+      current += line + "\n";
+      if (trimmed.endsWith(";")) {
+        statements.push(current.trim());
+        current = "";
+      }
+    }
+    if (current.trim()) statements.push(current.trim());
+
+    const client = await (pool as any).connect();
+    let executed = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    try {
+      for (const stmt of statements) {
+        const s = stmt.trim();
+        if (!s || s.startsWith("--")) continue;
+        const upper = s.toUpperCase();
+        if (upper.startsWith("SET ") || upper.startsWith("SELECT PG_CATALOG") || upper.startsWith("\\")) {
+          skipped++;
+          continue;
+        }
+
+        const isInsert = upper.startsWith("INSERT INTO PUBLIC.");
+        const fixedStmt = isInsert ? s.replace(/INSERT INTO public\./i, "INSERT INTO ") : s;
+        const onConflict = isInsert && !upper.includes("ON CONFLICT")
+          ? fixedStmt.replace(/;$/, " ON CONFLICT DO NOTHING;")
+          : fixedStmt;
+
+        try {
+          await client.query(onConflict);
+          executed++;
+        } catch (e: any) {
+          errors.push(e.message.substring(0, 100));
+          skipped++;
+        }
+      }
+    } finally {
+      client.release();
+    }
+
+    return res.json({
+      ok: true,
+      message: `Full seed hoàn tất: ${executed} statements thực thi, ${skipped} bỏ qua.`,
+      errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+    });
+  } catch (e: any) {
+    console.error("Full seed error:", e);
     return res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -61,10 +135,16 @@ router.get("/status", requireAdmin, async (req, res) => {
     const brands = await db.execute(sql`SELECT COUNT(*) as cnt FROM brands`);
     const reviews = await db.execute(sql`SELECT COUNT(*) as cnt FROM reviews`);
     const profiles = await db.execute(sql`SELECT COUNT(*) as cnt FROM ai_profiles`);
+    const content = await db.execute(sql`SELECT COUNT(*) as cnt FROM content_plans`);
+    const pipeline = await db.execute(sql`SELECT COUNT(*) as cnt FROM pipeline_runs`);
+    const agents = await db.execute(sql`SELECT COUNT(*) as cnt FROM ai_agent_configs`);
     return res.json({
       ai_profiles: Number((profiles.rows[0] as any).cnt),
       brands: Number((brands.rows[0] as any).cnt),
       reviews: Number((reviews.rows[0] as any).cnt),
+      content_plans: Number((content.rows[0] as any).cnt),
+      pipeline_runs: Number((pipeline.rows[0] as any).cnt),
+      ai_agent_configs: Number((agents.rows[0] as any).cnt),
     });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });

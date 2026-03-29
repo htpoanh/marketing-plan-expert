@@ -102,6 +102,7 @@ function ConfigForm({ brandId, initialConfig, onSaved }: {
       const r = await fetch(getApiUrl(`/api/messenger/config/${brandId}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(form),
       });
       if (!r.ok) throw new Error(await r.text());
@@ -481,6 +482,7 @@ function AppointmentCard({ appt, onAction }: { appt: Appointment; onAction: () =
       const r = await fetch(getApiUrl(`/api/messenger/appointments/${appt.id}/status`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ status }),
       });
       if (!r.ok) throw new Error(await r.text());
@@ -573,7 +575,10 @@ export default function MessengerBot() {
 
   const { data: overview = [], isLoading } = useQuery<BrandOverview[]>({
     queryKey: ["messenger-overview"],
-    queryFn: () => fetch(getApiUrl("/api/messenger/overview")).then(r => r.json()),
+    queryFn: () =>
+      fetch(getApiUrl("/api/messenger/overview"), { credentials: "include" })
+        .then(r => r.json())
+        .then(d => (Array.isArray(d) ? d : [])),
     refetchInterval: 30_000,
   });
 
@@ -583,7 +588,9 @@ export default function MessengerBot() {
       const url = apptFilter === "all"
         ? getApiUrl("/api/messenger/appointments")
         : getApiUrl(`/api/messenger/appointments?brandId=${apptFilter}`);
-      return fetch(url).then(r => r.json());
+      return fetch(url, { credentials: "include" })
+        .then(r => r.json())
+        .then(d => (Array.isArray(d) ? d : []));
     },
     refetchInterval: 15_000,
   });

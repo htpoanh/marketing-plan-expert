@@ -270,11 +270,11 @@ router.post("/sync", async (req, res) => {
     if (!GOOGLE_API_KEY) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
 
     const response = await fetch(
-      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=vi`,
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
       {
         headers: {
           "X-Goog-Api-Key": GOOGLE_API_KEY,
-          "X-Goog-FieldMask": "displayName,rating,reviews",
+          "X-Goog-FieldMask": "displayName,rating,reviews,userRatingCount",
         },
       }
     );
@@ -356,11 +356,11 @@ router.post("/sync-all-places", async (req, res) => {
     for (const brand of brands.rows as any[]) {
       try {
         const response = await fetch(
-          `https://places.googleapis.com/v1/places/${encodeURIComponent(brand.google_place_id)}?languageCode=vi`,
+          `https://places.googleapis.com/v1/places/${encodeURIComponent(brand.google_place_id)}`,
           {
             headers: {
               "X-Goog-Api-Key": GOOGLE_API_KEY,
-              "X-Goog-FieldMask": "displayName,rating,reviews",
+              "X-Goog-FieldMask": "displayName,rating,reviews,userRatingCount",
             },
           }
         );

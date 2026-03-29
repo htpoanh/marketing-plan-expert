@@ -478,8 +478,11 @@ router.post("/sync-gmb", async (req, res) => {
       const result = await ensureAccountId(parseInt(brandId), tokens.access_token as string);
       accountId = result.accountId ?? "";
       if (!accountId) {
+        const isQuota = !result.apiEnableUrl; // quota error has no enable URL
         return res.status(400).json({
-          error: "Không thể lấy Account ID từ Google. Bật API 'My Business Account Management' trong Google Cloud Console rồi kết nối lại.",
+          error: isQuota
+            ? "Vượt giới hạn API Google (rate limit). Vui lòng đợi 1-2 phút rồi thử lại."
+            : "Chưa bật API 'My Business Account Management'. Nhấn nút bên dưới để bật rồi thử lại.",
           apiEnableUrl: result.apiEnableUrl,
         });
       }

@@ -475,10 +475,12 @@ router.post("/sync-gmb", async (req, res) => {
     let accountId = tokens.account_id as string;
     if (!accountId) {
       console.log("[sync-gmb] account_id missing — attempting to fetch from GMB API...");
-      accountId = (await ensureAccountId(parseInt(brandId), tokens.access_token as string)) ?? "";
+      const result = await ensureAccountId(parseInt(brandId), tokens.access_token as string);
+      accountId = result.accountId ?? "";
       if (!accountId) {
         return res.status(400).json({
-          error: "Không thể lấy Account ID từ Google. Vui lòng kiểm tra API 'My Business Account Management' đã được bật trong Google Cloud Console, rồi kết nối lại.",
+          error: "Không thể lấy Account ID từ Google. Bật API 'My Business Account Management' trong Google Cloud Console rồi kết nối lại.",
+          apiEnableUrl: result.apiEnableUrl,
         });
       }
       console.log(`[sync-gmb] Recovered account_id: ${accountId}`);

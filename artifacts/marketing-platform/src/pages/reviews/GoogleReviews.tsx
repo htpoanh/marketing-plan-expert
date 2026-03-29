@@ -299,6 +299,7 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   // ── GMB OAuth state ──
   const [gmbSyncing, setGmbSyncing] = useState(false);
   const [gmbSyncResult, setGmbSyncResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
+  const [gmbApiEnableUrl, setGmbApiEnableUrl] = useState<string | null>(null);
   const [gmbLocations, setGmbLocations] = useState<{ id: string; name: string }[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -447,9 +448,11 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
       });
       const data = await r.json();
       if (!r.ok) {
+        if (data.apiEnableUrl) setGmbApiEnableUrl(data.apiEnableUrl);
         toast({ title: "Lỗi đồng bộ", description: data.error ?? "Lỗi không xác định", variant: "destructive" });
         return;
       }
+      setGmbApiEnableUrl(null);
       setGmbSyncResult({ imported: data.imported, skipped: data.skipped, total: data.total });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
       if (data.imported > 0) {
@@ -679,6 +682,27 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
                     {savingManualPath ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Lưu"}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* API Enable banner — shown when Google returns an activation URL */}
+            {gmbApiEnableUrl && (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-2">
+                <p className="text-xs font-semibold text-red-400">⚠ API chưa được bật</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  API <strong>My Business Account Management</strong> chưa được kích hoạt trong Google Cloud Console. Nhấn nút bên dưới để bật, đợi 1-2 phút rồi đồng bộ lại.
+                </p>
+                <a
+                  href={gmbApiEnableUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
+                >
+                  Bật API ngay →
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  Sau khi bật API, hãy nhấn <strong>"Đồng bộ tất cả Reviews"</strong> lại.
+                </p>
               </div>
             )}
 

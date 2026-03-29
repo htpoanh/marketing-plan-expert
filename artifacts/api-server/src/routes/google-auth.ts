@@ -97,76 +97,99 @@ function getFrontendUrl(): string {
 }
 
 // ─── ACCOUNT ID HELPER ───────────────────────────────────────────────────────
-// Tries multiple endpoints to fetch & persist the GMB account ID.
-// Falls back from the newer Account Management API to the legacy v4 endpoint.
+// Returns { accountId, apiEnableUrl? } — apiEnableUrl is set when the API needs enabling.
+export interface EnsureAccountResult {
+  accountId: string | null;
+  apiEnableUrl?: string;
+}
+
+async function tryFetchAccounts(
+  url: string,
+  headers: Record<string, string>
+): Promise<{ accountId: string; accountName: string } | { error: string; apiEnableUrl?: string } | null> {
+  try {
+    const res = await fetch(url, { headers });
+    const data = (await res.json()) as Record<string, any>;
+
+    if (res.ok) {
+      const accounts: any[] = data.accounts ?? [];
+      if (accounts.length === 0) return null;
+      return {
+        accountId: (accounts[0].name as string) ?? "",
+        accountName: (accounts[0].accountName as string) ?? (accounts[0].name as string) ?? "",
+      };
+    }
+
+    const msg: string = data?.error?.message ?? `HTTP ${res.status}`;
+    // Extract the Console activation URL from Google's error message
+    const urlMatch = msg.match(/https:\/\/console\.developers\.google\.com\/apis\/[^\s]+/);
+    return { error: msg, apiEnableUrl: urlMatch ? urlMatch[0] : undefined };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
 export async function ensureAccountId(
   brandId: number,
   accessToken: string
-): Promise<string | null> {
+): Promise<EnsureAccountResult> {
   const headers = { Authorization: `Bearer ${accessToken}` };
+  let lastApiEnableUrl: string | undefined;
 
-  // Attempt 1: newer Account Management API (requires "My Business Account Management API" enabled)
-  try {
-    const res = await fetch(
-      "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
-      { headers }
-    );
-    if (res.ok) {
-      const data = (await res.json()) as Record<string, any>;
-      const accounts: any[] = data.accounts ?? [];
-      if (accounts.length > 0) {
-        const accountId = (accounts[0].name as string) ?? "";
-        const accountName = (accounts[0].accountName as string) ?? accountId;
-        if (accountId) {
-          await db.execute(sql`
-            UPDATE google_oauth_tokens
-            SET account_id = ${accountId}, account_name = ${accountName}, updated_at = NOW()
-            WHERE brand_id = ${brandId}
-          `);
-          console.log(`[google-auth] ensureAccountId (v1): ${accountId}`);
-          return accountId;
-        }
-      }
-    } else {
-      const err = await res.json().catch(() => ({}));
-      console.warn("[google-auth] Account Management API failed:", (err as any)?.error?.message ?? res.status);
-    }
-  } catch (e) {
-    console.warn("[google-auth] ensureAccountId v1 error:", e);
+  // Attempt 1: My Business Account Management API (v1)
+  const r1 = await tryFetchAccounts(
+    "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
+    headers
+  );
+  if (r1 && "accountId" in r1 && r1.accountId) {
+    await db.execute(sql`
+      UPDATE google_oauth_tokens
+      SET account_id = ${r1.accountId}, account_name = ${r1.accountName}, updated_at = NOW()
+      WHERE brand_id = ${brandId}
+    `);
+    console.log(`[google-auth] ensureAccountId (v1): ${r1.accountId}`);
+    return { accountId: r1.accountId };
+  }
+  if (r1 && "error" in r1) {
+    console.warn("[google-auth] Account Management API failed:", r1.error);
+    if (r1.apiEnableUrl) lastApiEnableUrl = r1.apiEnableUrl;
   }
 
-  // Attempt 2: legacy v4 My Business API (older but more widely enabled)
-  try {
-    const res = await fetch(
-      "https://mybusiness.googleapis.com/v4/accounts",
-      { headers }
-    );
-    if (res.ok) {
-      const data = (await res.json()) as Record<string, any>;
-      const accounts: any[] = data.accounts ?? [];
-      if (accounts.length > 0) {
-        const accountId = (accounts[0].name as string) ?? "";
-        const accountName = (accounts[0].accountName as string) ?? accountId;
-        if (accountId) {
-          await db.execute(sql`
-            UPDATE google_oauth_tokens
-            SET account_id = ${accountId}, account_name = ${accountName}, updated_at = NOW()
-            WHERE brand_id = ${brandId}
-          `);
-          console.log(`[google-auth] ensureAccountId (v4 legacy): ${accountId}`);
-          return accountId;
-        }
-      }
-    } else {
-      const err = await res.json().catch(() => ({}));
-      console.warn("[google-auth] Legacy v4 accounts API failed:", (err as any)?.error?.message ?? res.status);
-    }
-  } catch (e) {
-    console.warn("[google-auth] ensureAccountId v4 error:", e);
+  // Attempt 2: My Business API v4 (legacy)
+  const r2 = await tryFetchAccounts(
+    "https://mybusiness.googleapis.com/v4/accounts",
+    headers
+  );
+  if (r2 && "accountId" in r2 && r2.accountId) {
+    await db.execute(sql`
+      UPDATE google_oauth_tokens
+      SET account_id = ${r2.accountId}, account_name = ${r2.accountName}, updated_at = NOW()
+      WHERE brand_id = ${brandId}
+    `);
+    console.log(`[google-auth] ensureAccountId (v4 legacy): ${r2.accountId}`);
+    return { accountId: r2.accountId };
+  }
+  if (r2 && "error" in r2) {
+    console.warn("[google-auth] Legacy v4 accounts API failed:", r2.error);
+    if (r2.apiEnableUrl) lastApiEnableUrl = r2.apiEnableUrl;
+  }
+
+  // Attempt 3: Business Profile Performance API — different base, same token
+  const r3 = await tryFetchAccounts(
+    "https://businessprofileperformance.googleapis.com/v1/locations",
+    headers
+  );
+  if (r3 && "accountId" in r3 && r3.accountId) {
+    await db.execute(sql`
+      UPDATE google_oauth_tokens
+      SET account_id = ${r3.accountId}, account_name = ${r3.accountName}, updated_at = NOW()
+      WHERE brand_id = ${brandId}
+    `);
+    return { accountId: r3.accountId };
   }
 
   console.error("[google-auth] ensureAccountId: all attempts failed for brandId", brandId);
-  return null;
+  return { accountId: null, apiEnableUrl: lastApiEnableUrl };
 }
 
 // ─── TOKEN HELPER ─────────────────────────────────────────────────────────────
@@ -429,10 +452,10 @@ router.get("/locations", async (req, res) => {
 
     let accountId = tokens.account_id as string;
     if (!accountId) {
-      // account_id may have been missed at OAuth time — try to fetch now
-      accountId = (await ensureAccountId(parseInt(brandId), tokens.access_token as string)) ?? "";
+      const result = await ensureAccountId(parseInt(brandId), tokens.access_token as string);
+      accountId = result.accountId ?? "";
+      if (!accountId) return res.json({ locations: [], apiEnableUrl: result.apiEnableUrl });
     }
-    if (!accountId) return res.json({ locations: [] });
 
     const locRes = await fetch(
       `https://mybusinessbusinessinformation.googleapis.com/v1/${accountId}/locations?readMask=name,title,storefrontAddress`,

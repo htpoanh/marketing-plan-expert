@@ -1056,8 +1056,11 @@ function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | u
     if (review.replyText) {
       navigator.clipboard.writeText(review.replyText).then(() => {
         setCopiedId(review.id);
+        toast({ title: "Đã copy reply!", description: "Paste vào Google Business Profile để gửi phản hồi." });
         setTimeout(() => setCopiedId(null), 3000);
-      }).catch(() => { /* ignore clipboard error */ });
+      }).catch(() => {
+        toast({ title: "Trang Google đã mở", description: "Hãy copy nội dung reply thủ công và paste vào.", variant: "destructive" });
+      });
     }
   };
 

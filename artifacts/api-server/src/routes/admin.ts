@@ -116,46 +116,47 @@ router.post("/full-seed", requireAdmin, async (req, res) => {
     const sqlContent = fs.readFileSync(sqlPath, "utf8");
     const statements = parseSqlStatements(sqlContent);
 
-    const client = await (pool as any).connect();
     let executed = 0;
     let skipped = 0;
     const errors: string[] = [];
 
-    try {
-      for (const stmt of statements) {
-        const s = stmt.trim();
-        if (!s) continue;
-        const upper = s.toUpperCase();
+    for (const stmt of statements) {
+      const s = stmt.trim();
+      if (!s) continue;
+      const upper = s.toUpperCase();
 
-        if (
-          upper.startsWith("SET ") ||
-          upper.startsWith("SELECT PG_CATALOG") ||
-          upper.startsWith("SELECT SETVAL")
-        ) {
-          try { await client.query(s); } catch {}
-          skipped++;
-          continue;
-        }
-
-        const isInsert = upper.startsWith("INSERT INTO PUBLIC.");
-        if (!isInsert && !upper.startsWith("SELECT SETVAL")) {
-          skipped++;
-          continue;
-        }
-
-        const fixedStmt = s.replace(/^INSERT INTO public\./i, "INSERT INTO ");
-        const finalStmt = fixedStmt + " ON CONFLICT DO NOTHING";
-
-        try {
-          await client.query(finalStmt);
-          executed++;
-        } catch (e: any) {
-          errors.push(e.message.substring(0, 120));
-          skipped++;
-        }
+      if (upper.startsWith("SELECT PG_CATALOG")) {
+        skipped++;
+        continue;
       }
-    } finally {
-      client.release();
+
+      if (upper.startsWith("SELECT SETVAL")) {
+        try { await db.execute(sql.raw(s)); } catch {}
+        skipped++;
+        continue;
+      }
+
+      if (upper.startsWith("SET ")) {
+        skipped++;
+        continue;
+      }
+
+      const isInsert = upper.startsWith("INSERT INTO PUBLIC.");
+      if (!isInsert) {
+        skipped++;
+        continue;
+      }
+
+      const fixedStmt = s.replace(/^INSERT INTO public\./i, "INSERT INTO ");
+      const finalStmt = fixedStmt + " ON CONFLICT DO NOTHING";
+
+      try {
+        await db.execute(sql.raw(finalStmt));
+        executed++;
+      } catch (e: any) {
+        errors.push(e.message.substring(0, 120));
+        skipped++;
+      }
     }
 
     return res.json({
@@ -199,19 +200,14 @@ router.post("/migrate", requireAdmin, async (req, res) => {
     `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS source text`,
   ];
 
-  const client = await (pool as any).connect();
   const results: { sql: string; ok: boolean; error?: string }[] = [];
-  try {
-    for (const m of migrations) {
-      try {
-        await client.query(m);
-        results.push({ sql: m.substring(0, 60), ok: true });
-      } catch (e: any) {
-        results.push({ sql: m.substring(0, 60), ok: false, error: e.message.substring(0, 100) });
-      }
+  for (const m of migrations) {
+    try {
+      await db.execute(sql.raw(m));
+      results.push({ sql: m.substring(0, 60), ok: true });
+    } catch (e: any) {
+      results.push({ sql: m.substring(0, 60), ok: false, error: e.message.substring(0, 100) });
     }
-  } finally {
-    client.release();
   }
 
   const failed = results.filter(r => !r.ok);

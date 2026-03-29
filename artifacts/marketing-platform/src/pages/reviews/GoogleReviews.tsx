@@ -1051,15 +1051,14 @@ function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | u
     }
   };
 
-  const handleOpenGoogle = async (review: any) => {
+  const handleOpenGoogle = (review: any) => {
+    window.open("https://business.google.com/reviews", "_blank", "noopener,noreferrer");
     if (review.replyText) {
-      try {
-        await navigator.clipboard.writeText(review.replyText);
+      navigator.clipboard.writeText(review.replyText).then(() => {
         setCopiedId(review.id);
         setTimeout(() => setCopiedId(null), 3000);
-      } catch { /* ignore clipboard error, still open tab */ }
+      }).catch(() => { /* ignore clipboard error */ });
     }
-    window.open("https://business.google.com/reviews", "_blank", "noopener,noreferrer");
   };
 
   const { data: reviews, isLoading } = useListReviews({ brandId, rating: filterRating ? Number(filterRating) : undefined, replied: filterReplied !== "" ? filterReplied === "true" : undefined } as any);

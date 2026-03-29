@@ -130,7 +130,41 @@ function buildSystemPrompt(agentConfig: any, baseRole: string): string {
   return parts.join("\n\n");
 }
 
-// Agent 1: Grok — real-time trends & market research (fallback: OpenAI)
+// Helper: safely parse JSON, strip markdown code fences if present
+function safeParseJSON(text: string): any {
+  // 1. Try direct parse
+  try { return JSON.parse(text); } catch {}
+  // 2. Strip markdown fences: ```json ... ``` or ``` ... ```
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+  }
+  // 3. Extract first {...} block
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch {}
+  }
+  throw new Error("Could not parse JSON from Gemini response");
+}
+
+// Generic Gemini JSON fallback (for strategy/trend data — no content normalization)
+async function callGeminiJSONGeneric(prompt: string, systemPrompt: string): Promise<any> {
+  const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+  const response = await gemini.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+    config: {
+      maxOutputTokens: 16384,
+      responseMimeType: "application/json",
+    },
+  });
+  const text = response.text;
+  if (!text) throw new Error("Gemini returned empty response");
+  return safeParseJSON(text);
+}
+
+// Agent 1: Grok — real-time trends & market research (fallback: OpenAI → Gemini)
 async function callGrokJSON(prompt: string, systemPrompt: string): Promise<any> {
   try {
     const response = await grok.chat.completions.create({
@@ -149,18 +183,23 @@ async function callGrokJSON(prompt: string, systemPrompt: string): Promise<any> 
   }
 }
 
-// Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering
+// Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering (fallback: Gemini)
 async function callOpenAIJSON(prompt: string, systemPrompt: string): Promise<any> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 4096,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
-    ],
-  });
-  return JSON.parse(response.choices[0]?.message?.content ?? "{}");
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+    });
+    return JSON.parse(response.choices[0]?.message?.content ?? "{}");
+  } catch (err: any) {
+    console.warn("OpenAI unavailable, falling back to Gemini:", err?.message);
+    return callGeminiJSONGeneric(prompt, systemPrompt);
+  }
 }
 
 // Agent 3: Gemini — creative German content writing
@@ -267,28 +306,19 @@ Anforderungen:
 
 async function callGeminiJSON(prompt: string, systemPrompt?: string): Promise<any> {
   const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-  try {
-    const response = await gemini.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-      config: {
-        maxOutputTokens: 8192,
-        responseMimeType: "application/json",
-      },
-    });
-    const text = response.text;
-    if (!text) throw new Error("Gemini returned empty response");
-    const parsed = JSON.parse(text);
-    const normalized = normalizeContentJSON(parsed);
-    // Validate required fields — if Gemini returned garbage, fall back to GPT-4o
-    const hasContent = (normalized.mainCaption && normalized.mainCaption.length > 20) ||
-                       (normalized.hooks && normalized.hooks.length > 0);
-    if (!hasContent) throw new Error(`Gemini returned incomplete content structure: ${JSON.stringify(Object.keys(parsed))}`);
-    return normalized;
-  } catch (err: any) {
-    console.warn("Gemini content failed, falling back to GPT-4o:", err?.message);
-    return callOpenAIJSON(prompt, systemPrompt ?? "Du bist ein professioneller Social-Media-Texter für den deutschen Markt.");
-  }
+  const response = await gemini.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+    config: {
+      maxOutputTokens: 16384,
+      responseMimeType: "application/json",
+    },
+  });
+  const text = response.text;
+  if (!text) throw new Error("Gemini returned empty response");
+  const parsed = safeParseJSON(text);
+  const normalized = normalizeContentJSON(parsed);
+  return normalized;
 }
 
 router.get("/marketing-models", (_req, res) => {

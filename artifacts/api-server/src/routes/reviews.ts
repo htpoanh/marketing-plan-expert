@@ -4,7 +4,7 @@ import { reviewsTable, brandsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { getValidTokens } from "./google-auth";
+import { getValidTokens, ensureAccountId } from "./google-auth";
 
 const router: IRouter = Router();
 
@@ -471,9 +471,17 @@ router.post("/sync-gmb", async (req, res) => {
       });
     }
 
-    const accountId = tokens.account_id as string;
+    // account_id may be empty if the GMB accounts API call failed at OAuth time — recover now
+    let accountId = tokens.account_id as string;
     if (!accountId) {
-      return res.status(400).json({ error: "Chưa có Account ID. Vui lòng kết nối lại." });
+      console.log("[sync-gmb] account_id missing — attempting to fetch from GMB API...");
+      accountId = (await ensureAccountId(parseInt(brandId), tokens.access_token as string)) ?? "";
+      if (!accountId) {
+        return res.status(400).json({
+          error: "Không thể lấy Account ID từ Google. Vui lòng kiểm tra API 'My Business Account Management' đã được bật trong Google Cloud Console, rồi kết nối lại.",
+        });
+      }
+      console.log(`[sync-gmb] Recovered account_id: ${accountId}`);
     }
 
     // Determine location path: stored or auto-fetched first location

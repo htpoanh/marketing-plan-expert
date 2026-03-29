@@ -96,6 +96,36 @@ function getFrontendUrl(): string {
   return `https://${domain}/reviews`;
 }
 
+// ─── ACCOUNT ID HELPER ───────────────────────────────────────────────────────
+// Tries to fetch & persist the GMB account ID if it wasn't saved at OAuth time.
+export async function ensureAccountId(
+  brandId: number,
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const data = (await res.json()) as Record<string, any>;
+    const accounts: any[] = data.accounts ?? [];
+    if (accounts.length === 0) return null;
+
+    const accountId = (accounts[0].name as string) ?? "";
+    const accountName = (accounts[0].accountName as string) ?? accountId;
+
+    await db.execute(sql`
+      UPDATE google_oauth_tokens
+      SET account_id = ${accountId}, account_name = ${accountName}, updated_at = NOW()
+      WHERE brand_id = ${brandId}
+    `);
+    return accountId;
+  } catch (e) {
+    console.error("[google-auth] ensureAccountId failed:", e);
+    return null;
+  }
+}
+
 // ─── TOKEN HELPER ─────────────────────────────────────────────────────────────
 export async function getValidTokens(brandId: number): Promise<Record<string, any> | null> {
   await ensureTable();
@@ -354,7 +384,11 @@ router.get("/locations", async (req, res) => {
     const tokens = await getValidTokens(parseInt(brandId));
     if (!tokens) return res.status(401).json({ error: "Not connected to Google" });
 
-    const accountId = tokens.account_id as string;
+    let accountId = tokens.account_id as string;
+    if (!accountId) {
+      // account_id may have been missed at OAuth time — try to fetch now
+      accountId = (await ensureAccountId(parseInt(brandId), tokens.access_token as string)) ?? "";
+    }
     if (!accountId) return res.json({ locations: [] });
 
     const locRes = await fetch(

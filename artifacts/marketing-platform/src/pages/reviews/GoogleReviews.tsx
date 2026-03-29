@@ -334,7 +334,9 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
     }
 
     // Listen for postMessage from popup callback page
+    // Strict origin validation: only accept messages from the same origin
     const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
       if (e.data?.type === "GOOGLE_AUTH_SUCCESS") {
         window.removeEventListener("message", onMessage);
         clearInterval(pollId);

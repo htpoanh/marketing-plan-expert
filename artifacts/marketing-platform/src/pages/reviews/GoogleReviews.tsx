@@ -13,7 +13,7 @@ import {
   Star, Bot, Check, Search, Filter, RefreshCw, Link2,
   Sparkles, Save, ChevronRight, AlertCircle, CloudDownload,
   MessageSquare, Settings, Info, Loader2, ExternalLink, Edit3,
-  Globe, Unlink, MapPin, Send
+  Globe, Unlink, MapPin, Send, Copy, ClipboardCheck
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -1008,6 +1008,7 @@ function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | u
   const [filterRating, setFilterRating] = useState<string>("");
   const [filterReplied, setFilterReplied] = useState<string>("");
   const [postingToGoogleId, setPostingToGoogleId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -1036,6 +1037,29 @@ function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | u
     } finally {
       setPostingToGoogleId(null);
     }
+  };
+
+  const handleCopyReply = async (review: any) => {
+    if (!review.replyText) return;
+    try {
+      await navigator.clipboard.writeText(review.replyText);
+      setCopiedId(review.id);
+      toast({ title: "Đã copy nội dung reply!", description: "Paste vào trang Google Business Profile để hoàn tất." });
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      toast({ title: "Không copy được", description: "Hãy copy thủ công từ ô phản hồi.", variant: "destructive" });
+    }
+  };
+
+  const handleOpenGoogle = async (review: any) => {
+    if (review.replyText) {
+      try {
+        await navigator.clipboard.writeText(review.replyText);
+        setCopiedId(review.id);
+        setTimeout(() => setCopiedId(null), 3000);
+      } catch { /* ignore clipboard error, still open tab */ }
+    }
+    window.open("https://business.google.com/reviews", "_blank", "noopener,noreferrer");
   };
 
   const { data: reviews, isLoading } = useListReviews({ brandId, rating: filterRating ? Number(filterRating) : undefined, replied: filterReplied !== "" ? filterReplied === "true" : undefined } as any);
@@ -1215,6 +1239,29 @@ function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | u
                         <Check className="w-3.5 h-3.5" /> Đã phản hồi
                       </div>
                     )}
+                    {/* Copy reply + Open Google — shown whenever a reply exists */}
+                    {review.replyText && (
+                      <button
+                        onClick={() => handleCopyReply(review)}
+                        title="Copy nội dung reply vào clipboard"
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white hover:border-primary transition-all"
+                      >
+                        {copiedId === review.id ? (
+                          <><ClipboardCheck className="w-3.5 h-3.5" /> Đã copy!</>
+                        ) : (
+                          <><Copy className="w-3.5 h-3.5" /> Copy reply</>
+                        )}
+                      </button>
+                    )}
+                    {review.replyText && (
+                      <button
+                        onClick={() => handleOpenGoogle(review)}
+                        title="Mở trang quản lý đánh giá → paste nội dung đã copy"
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all"
+                      >
+                        <Globe className="w-3.5 h-3.5" /> Mở Google
+                      </button>
+                    )}
                     {/* Post to Google button — shown when GMB connected + review has Google ID + has reply text */}
                     {gmbConnected && review.googleReviewId && review.replied && review.replyText && (
                       <button
@@ -1225,7 +1272,7 @@ function ReviewsListTab({ brandId, brands, gmbConnected }: { brandId: number | u
                         {postingToGoogleId === review.id ? (
                           <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang đăng...</>
                         ) : (
-                          <><Globe className="w-3.5 h-3.5" /> Đăng lên Google</>
+                          <><Globe className="w-3.5 h-3.5" /> Tự động đăng</>
                         )}
                       </button>
                     )}

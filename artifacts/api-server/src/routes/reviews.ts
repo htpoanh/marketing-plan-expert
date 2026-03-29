@@ -172,34 +172,95 @@ Dùng [Tên khách] cho tên khách. 2-4 câu tự nhiên. Chỉ trả về nộ
   }
 });
 
+// ─── PLACES API (NEW) v1 HELPER ───────────────────────────────────────────────
+function placesApiErrorToVietnamese(status: string, message: string): { userMessage: string; hint: string } {
+  const msg = (message ?? "").toLowerCase();
+
+  // API key problems — check raw message first regardless of status
+  if (msg.includes("api key not valid") || msg.includes("invalid api key") || msg.includes("api_key_invalid")) {
+    return {
+      userMessage: "API key không hợp lệ. Vui lòng kiểm tra lại GOOGLE_API_KEY trong Replit Secrets.",
+      hint: "REQUEST_DENIED",
+    };
+  }
+
+  if (status === "PERMISSION_DENIED") {
+    if (msg.includes("billing") || msg.includes("payment")) {
+      return {
+        userMessage: "Chưa bật thanh toán (Billing) trong Google Cloud.",
+        hint: "BILLING_NOT_ENABLED",
+      };
+    }
+    if (msg.includes("places api") || msg.includes("service is not enabled") || msg.includes("not enabled")) {
+      return {
+        userMessage: "Chưa bật Places API (New) trong Google Cloud Console.",
+        hint: "REQUEST_DENIED",
+      };
+    }
+    return {
+      userMessage: "API key bị từ chối quyền truy cập. Kiểm tra lại API key và quyền Places API (New).",
+      hint: "PERMISSION_DENIED",
+    };
+  }
+  if (status === "NOT_FOUND") {
+    return {
+      userMessage: "Không tìm thấy địa điểm với Place ID này. Vui lòng kiểm tra lại.",
+      hint: "NOT_FOUND",
+    };
+  }
+  if (status === "INVALID_ARGUMENT") {
+    return {
+      userMessage: "Place ID không đúng định dạng. Vui lòng kiểm tra lại.",
+      hint: "INVALID_ARGUMENT",
+    };
+  }
+  if (status === "UNAUTHENTICATED") {
+    return {
+      userMessage: "API key không hợp lệ hoặc chưa bật Places API (New).",
+      hint: "REQUEST_DENIED",
+    };
+  }
+  return {
+    userMessage: `Google API lỗi: ${status}. ${message ?? ""}`.trim(),
+    hint: status,
+  };
+}
+
 // ─── CHECK GOOGLE API KEY ─────────────────────────────────────────────────────
 router.get("/check-api-key", async (req, res) => {
   const key = process.env.GOOGLE_API_KEY;
-  if (!key) return res.json({ ok: false, reason: "GOOGLE_API_KEY chưa được cài đặt trong Secrets." });
+  if (!key) return res.json({ ok: false, reason: "GOOGLE_API_KEY chưa được cài đặt trong Secrets.", hint: "NO_KEY" });
 
   try {
+    // Test with the new Places API (New) v1 — fetch a known public place with reviews field
+    // Use Google's Zurich office as a well-known test place
+    const testPlaceId = "ChIJGaK-SZcLkEcRA9wf5_GNbuY";
     const r = await fetch(
-      `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=test&inputtype=textquery&fields=name&key=${key}`
+      `https://places.googleapis.com/v1/places/${testPlaceId}?languageCode=vi`,
+      {
+        headers: {
+          "X-Goog-Api-Key": key,
+          "X-Goog-FieldMask": "displayName,rating,reviews",
+        },
+      }
     );
     const d = await r.json() as any;
-    if (d.status === "OK" || d.status === "ZERO_RESULTS") {
-      return res.json({ ok: true, message: "API key hợp lệ và Places API đã được bật." });
-    } else if (d.status === "REQUEST_DENIED") {
-      return res.json({
-        ok: false,
-        reason: "API key không hợp lệ hoặc chưa bật Places API.",
-        status: d.status,
-        rawMessage: d.error_message,
-      });
-    } else {
-      return res.json({ ok: false, reason: `Google trả về: ${d.status}`, status: d.status });
+
+    if (r.ok) {
+      return res.json({ ok: true, message: "API key hợp lệ — Places API (New) hoạt động và có thể tải reviews!" });
     }
+
+    const errStatus = d.error?.status ?? "UNKNOWN";
+    const errMsg = d.error?.message ?? "";
+    const { userMessage, hint } = placesApiErrorToVietnamese(errStatus, errMsg);
+
+    return res.json({ ok: false, reason: userMessage, status: errStatus, hint });
   } catch (e: any) {
-    return res.json({ ok: false, reason: `Không kết nối được Google API: ${e.message}` });
+    return res.json({ ok: false, reason: `Không kết nối được Google API: ${e.message}`, hint: "NETWORK_ERROR" });
   }
 });
 
-// ─── GOOGLE PLACES SYNC ───────────────────────────────────────────────────────
+// ─── GOOGLE PLACES SYNC (New Places API v1) ───────────────────────────────────
 router.post("/sync", async (req, res) => {
   try {
     const { brandId, placeId } = req.body;
@@ -208,43 +269,51 @@ router.post("/sync", async (req, res) => {
     const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
     if (!GOOGLE_API_KEY) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
 
-    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=name,rating,reviews&language=vi&reviews_sort=newest&key=${GOOGLE_API_KEY}`;
-    const response = await fetch(url);
+    const response = await fetch(
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=vi`,
+      {
+        headers: {
+          "X-Goog-Api-Key": GOOGLE_API_KEY,
+          "X-Goog-FieldMask": "displayName,rating,reviews",
+        },
+      }
+    );
     const data = await response.json() as any;
 
-    if (data.status !== "OK") {
-      let hint = "";
-      if (data.status === "REQUEST_DENIED") {
-        hint = " → Vui lòng kiểm tra GOOGLE_API_KEY: key cần bật 'Places API' tại Google Cloud Console (console.cloud.google.com) và không bị giới hạn server IP.";
-      } else if (data.status === "INVALID_REQUEST") {
-        hint = " → Place ID không đúng định dạng. Vui lòng kiểm tra lại Google Place ID của cửa hàng.";
-      } else if (data.status === "NOT_FOUND") {
-        hint = " → Không tìm thấy địa điểm với Place ID này. Vui lòng kiểm tra lại.";
-      }
+    if (!response.ok) {
+      const errStatus = data.error?.status ?? "UNKNOWN";
+      const errMsg = data.error?.message ?? "";
+      const { userMessage, hint } = placesApiErrorToVietnamese(errStatus, errMsg);
+      console.error(`[reviews/sync] Google Places API error: ${errStatus} — ${errMsg}`);
       return res.status(400).json({
-        error: `Google API lỗi: ${data.status}.${hint}`,
-        status: data.status,
-        rawMessage: data.error_message,
+        error: userMessage,
+        status: errStatus,
+        hint,
+        rawMessage: errMsg,
       });
     }
 
-    const gReviews = data.result?.reviews ?? [];
+    // New API response format: reviews[].authorAttribution.displayName, .rating, .text.text, .publishTime, .name
+    const gReviews: any[] = data.reviews ?? [];
     let imported = 0;
     let skipped = 0;
 
     for (const gr of gReviews) {
-      const googleReviewId = gr.time?.toString() ?? `${gr.author_name}_${gr.rating}`;
+      // Use the review's resource name as unique ID (e.g. "places/.../reviews/AbcDef123")
+      const googleReviewId = gr.name ?? `${gr.authorAttribution?.displayName}_${gr.rating}_${gr.publishTime}`;
       const existing = await db.execute(
         sql`SELECT id FROM reviews WHERE brand_id = ${brandId} AND google_review_id = ${googleReviewId} LIMIT 1`
       );
       if (existing.rows.length > 0) { skipped++; continue; }
 
+      const publishTime = gr.publishTime ? new Date(gr.publishTime) : new Date();
+
       await db.insert(reviewsTable).values({
         brandId: parseInt(brandId),
-        reviewerName: gr.author_name ?? "Ẩn danh",
+        reviewerName: gr.authorAttribution?.displayName ?? "Ẩn danh",
         rating: gr.rating ?? 5,
-        reviewText: gr.text ?? null,
-        reviewDate: gr.time ? new Date(gr.time * 1000) : new Date(),
+        reviewText: gr.text?.text ?? gr.originalText?.text ?? null,
+        reviewDate: publishTime,
         replied: false,
         googleReviewId,
       });
@@ -261,12 +330,12 @@ router.post("/sync", async (req, res) => {
       imported,
       skipped,
       total: gReviews.length,
-      placeName: data.result?.name,
-      placeRating: data.result?.rating,
+      placeName: data.displayName?.text ?? null,
+      placeRating: data.rating ?? null,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to sync Google reviews" });
+    console.error("[reviews/sync] Unexpected error:", error);
+    res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ Google Reviews. Vui lòng thử lại." });
   }
 });
 

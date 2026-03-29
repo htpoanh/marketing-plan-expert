@@ -280,7 +280,8 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
   const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
-  const [keyStatus, setKeyStatus] = useState<{ ok: boolean; message?: string; reason?: string } | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
+  const [keyStatus, setKeyStatus] = useState<{ ok: boolean; message?: string; reason?: string; hint?: string } | null>(null);
   const [checkingKey, setCheckingKey] = useState(false);
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -305,16 +306,19 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
     setResult(null);
     setError(null);
     setErrorStatus(null);
+    setErrorHint(null);
     try {
       const r = await fetch(`${BASE}/api/reviews/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ brandId, placeId: placeId.trim() }),
       });
       const data = await r.json();
       if (!r.ok) {
         setError(data.error ?? "Lỗi không xác định");
         setErrorStatus(data.status ?? null);
+        setErrorHint(data.hint ?? null);
         return;
       }
       setResult(data);
@@ -327,6 +331,7 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
     } catch (e) {
       setError("Không kết nối được máy chủ.");
       setErrorStatus(null);
+      setErrorHint(null);
     } finally {
       setSyncing(false);
     }
@@ -463,32 +468,54 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
             <div>
               <p className="text-sm font-bold text-red-400">Lỗi kết nối Google</p>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{error}</p>
+              {errorStatus && <p className="text-[10px] text-muted-foreground/50 mt-0.5 font-mono">Code: {errorStatus}</p>}
             </div>
           </div>
 
-          {/* Step-by-step fix for REQUEST_DENIED */}
-          {(errorStatus === "REQUEST_DENIED" || error.includes("invalid") || error.includes("REQUEST_DENIED")) && (
-            <div className="p-3 bg-background/50 rounded-lg space-y-3 border border-red-500/20">
-              <p className="text-xs font-bold text-foreground">Cách sửa — cần tạo Google API Key hợp lệ:</p>
-              <ol className="space-y-2">
+          {/* Billing not enabled */}
+          {(errorHint === "BILLING_NOT_ENABLED") && (
+            <div className="p-3 bg-background/50 rounded-lg space-y-2 border border-amber-500/30">
+              <p className="text-xs font-bold text-amber-400">⚡ Cần bật Billing trong Google Cloud:</p>
+              <ol className="space-y-1.5">
                 {[
-                  { step: "1", text: "Truy cập", link: "https://console.cloud.google.com/apis/credentials", linkText: "Google Cloud Console → APIs & Services → Credentials" },
-                  { step: "2", text: "Nhấn + CREATE CREDENTIALS → API key → copy key vừa tạo" },
-                  { step: "3", text: "Vào", link: "https://console.cloud.google.com/apis/library/places-backend.googleapis.com", linkText: "Places API", suffix: "→ nhấn ENABLE để bật" },
-                  { step: "4", text: "Trong Replit: vào phần Secrets → cập nhật GOOGLE_API_KEY bằng key mới vừa tạo" },
-                  { step: "5", text: "Restart ứng dụng và thử đồng bộ lại" },
+                  { step: "1", text: "Truy cập", link: "https://console.cloud.google.com/billing", linkText: "Google Cloud → Billing" },
+                  { step: "2", text: "Liên kết thẻ tín dụng/ngân hàng (Google miễn phí $200/tháng — đủ dùng, không trừ tiền)" },
+                  { step: "3", text: "Quay lại đây → thử Đồng bộ lại" },
                 ].map(item => (
                   <li key={item.step} className="flex gap-2 text-xs text-muted-foreground">
-                    <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 font-bold text-[10px]">{item.step}</span>
-                    <span>
-                      {item.text}{" "}
-                      {item.link && <a href={item.link} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5">{item.linkText} <ExternalLink className="w-2.5 h-2.5" /></a>}
-                      {item.suffix && " " + item.suffix}
-                    </span>
+                    <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 font-bold text-[10px]">{item.step}</span>
+                    <span>{item.text}{" "}{item.link && <a href={item.link} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5">{item.linkText} <ExternalLink className="w-2.5 h-2.5" /></a>}</span>
                   </li>
                 ))}
               </ol>
-              <p className="text-xs text-muted-foreground/60">* Google cấp miễn phí $200/tháng cho Places API — đủ dùng cho cửa hàng nhỏ.</p>
+            </div>
+          )}
+
+          {/* Permission denied / API key issue */}
+          {(errorHint === "PERMISSION_DENIED" || errorHint === "REQUEST_DENIED") && (
+            <div className="p-3 bg-background/50 rounded-lg space-y-2 border border-red-500/20">
+              <p className="text-xs font-bold text-foreground">Cách sửa — kiểm tra Google API Key:</p>
+              <ol className="space-y-1.5">
+                {[
+                  { step: "1", text: "Truy cập", link: "https://console.cloud.google.com/apis/credentials", linkText: "Google Cloud → Credentials" },
+                  { step: "2", text: "Kiểm tra API key: Application restrictions phải là None hoặc IP addresses (không dùng HTTP referrers)" },
+                  { step: "3", text: "Vào", link: "https://console.cloud.google.com/apis/library/places-backend.googleapis.com", linkText: "Places API (New)", suffix: "→ xác nhận đã ENABLED" },
+                  { step: "4", text: "Cập nhật GOOGLE_API_KEY trong Replit Secrets nếu đã tạo key mới" },
+                ].map(item => (
+                  <li key={item.step} className="flex gap-2 text-xs text-muted-foreground">
+                    <span className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 font-bold text-[10px]">{item.step}</span>
+                    <span>{item.text}{" "}{item.link && <a href={item.link} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5">{item.linkText} <ExternalLink className="w-2.5 h-2.5" /></a>}{item.suffix && " " + item.suffix}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-muted-foreground/60">* Google cấp miễn phí $200/tháng — đủ dùng cho cửa hàng nhỏ.</p>
+            </div>
+          )}
+
+          {/* Not found */}
+          {errorHint === "NOT_FOUND" && (
+            <div className="p-3 bg-background/50 rounded-lg border border-red-500/20">
+              <p className="text-xs text-muted-foreground">Kiểm tra lại Place ID — có thể nhập sai. Place ID đúng bắt đầu bằng <code className="text-foreground bg-secondary px-1 rounded">ChIJ</code> và dài khoảng 27 ký tự.</p>
             </div>
           )}
         </div>

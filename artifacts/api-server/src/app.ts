@@ -1,6 +1,8 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { pool } from "@workspace/db";
 import router from "./routes";
 
 const app: Express = express();
@@ -36,7 +38,14 @@ if (!sessionSecret && isProd) {
 }
 const effectiveSecret = sessionSecret ?? "dev-only-secret-not-for-production-use";
 
+const PgSession = connectPgSimple(session);
+
 app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: "session",
+    createTableIfMissing: true,
+  }),
   secret: effectiveSecret,
   resave: false,
   saveUninitialized: false,

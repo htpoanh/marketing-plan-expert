@@ -36,6 +36,16 @@ const DEFAULT_AGENT_TEMPLATES = [
     outputStyle: "",
     isActive: true,
   },
+  {
+    agentKey: "claude",
+    agentName: "Agent 5 — Biên tập & Trả lời Reviews",
+    aiModel: "Claude Sonnet (Anthropic)",
+    defaultRole: "Chuyên gia biên tập tiếng Đức cao cấp và chuyên gia viết phản hồi Google Reviews. Tinh chỉnh nội dung từ Gemini để đảm bảo ngữ pháp tự nhiên, cảm xúc chân thật, phù hợp văn hóa Đức. Viết phản hồi đánh giá Google Maps chuyên nghiệp, ấm áp và thuyết phục bằng tiếng Đức.",
+    expertiseArea: "",
+    customInstructions: "",
+    outputStyle: "",
+    isActive: true,
+  },
 ];
 
 async function ensureDefaultProfile() {

@@ -13,7 +13,7 @@ A Vietnamese AI-powered marketing platform for managing multiple store locations
 - **Frontend**: React + Vite (artifacts/marketing-platform)
 - **API framework**: Express 5 (artifacts/api-server)
 - **Database**: PostgreSQL + Drizzle ORM
-- **AI Engine**: Gemini AI (via Replit AI Integrations - no API key needed)
+- **AI Engine**: Multi-model pipeline — Grok (trend), GPT-4o (strategy+prompts), Gemini (content), Claude Sonnet (refinement+reviews)
 - **Validation**: Zod (zod/v4), drizzle-zod
 - **API codegen**: Orval (from OpenAPI spec)
 
@@ -35,7 +35,8 @@ artifacts-monorepo/
 │   │       ├── content_plans.ts # Content calendar
 │   │       ├── conversations.ts # Gemini AI conversations
 │   │       └── messages.ts     # Gemini AI messages
-│   └── integrations-gemini-ai/ # Gemini AI integration
+│   ├── integrations-gemini-ai/     # Gemini AI integration
+│   └── integrations-anthropic-ai/  # Claude AI integration (Replit AI Integrations)
 ```
 
 ## Features
@@ -47,7 +48,7 @@ artifacts-monorepo/
 ### 2. Đánh giá Google (Google Reviews)
 - Manual review entry (until Google API integration)
 - Filter by store, rating, replied/unreplied
-- AI auto-reply generation (Gemini) for any star rating
+- AI auto-reply generation (Claude Sonnet) for any star rating — professional German customer service responses
 - Auto-reply tone: 1-2 stars (apologetic), 3 stars (constructive), 4-5 stars (grateful)
 
 ### 3. Báo cáo đánh giá (Review Reports)

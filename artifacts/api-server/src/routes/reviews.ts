@@ -2,13 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { reviewsTable, brandsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { GoogleGenAI } from "@google/genai";
 import { sql } from "drizzle-orm";
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
-});
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 
 const router: IRouter = Router();
 
@@ -94,26 +89,28 @@ router.post("/templates/generate", async (req, res) => {
     const starLabel = ["", "1 sao — rất tệ", "2 sao — không hài lòng", "3 sao — bình thường", "4 sao — hài lòng", "5 sao — xuất sắc"][rating];
     const tone = rating >= 4 ? "vui mừng, trân trọng, mời quay lại" : rating === 3 ? "cảm ơn chân thành, ghi nhận, cam kết cải thiện" : "xin lỗi thành khẩn, cam kết khắc phục, mời liên hệ trực tiếp";
 
-    const prompt = `Bạn là chuyên gia viết phản hồi đánh giá Google Maps cho thương hiệu "${brand.brandName}" (ngành: ${brand.industry}).
+    const prompt = `Du bist ein professioneller Kundenservice-Experte für das Unternehmen "${brand.brandName}" (Branche: ${brand.industry}) in Deutschland.
 
-Viết MẪU phản hồi cho đánh giá ${starLabel}.
-Giọng điệu thương hiệu: ${brand.brandVoice}
-Hướng: ${tone}
+Schreibe eine VORLAGE für eine Google Maps Bewertungsantwort auf eine ${starLabel}-Bewertung.
+Markenstimme: ${brand.brandVoice}
+Ton: ${tone}
 
-Yêu cầu:
-- 2-4 câu, tự nhiên, không sáo rỗng
-- Dùng dấu [Tên khách] ở chỗ cần điền tên khách hàng (hệ thống sẽ tự điền)
-- Thể hiện đúng cảm xúc và hành động phù hợp với số sao
-- Tiếng Việt tự nhiên, thân thiện
-- Chỉ trả về nội dung mẫu, không giải thích thêm`;
+Anforderungen:
+- 2-4 Sätze, natürlich auf Deutsch, nicht robotisch
+- Verwende [Kundenname] als Platzhalter für den Kundennamen
+- Zeige die richtige Emotion passend zur Sternebewertung
+- Professionell, warm und authentisch
+- Gib NUR den Vorlagentext zurück, keine Erklärungen`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: 300 },
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
+      system: "Du bist ein Experte für professionelle deutschsprachige Kundenkommunikation. Du schreibst empathische, authentische Google-Bewertungsantworten.",
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const template = response.text?.trim() ?? "";
+    const block = message.content[0];
+    const template = block.type === "text" ? block.text.trim() : "";
 
     // Auto-save
     await db.execute(
@@ -141,20 +138,22 @@ router.post("/templates/generate-all", async (req, res) => {
     const results: Record<number, string> = {};
 
     for (const rating of [1, 2, 3, 4, 5]) {
-      const starLabel = ["", "1 sao — rất tệ", "2 sao — không hài lòng", "3 sao — bình thường", "4 sao — hài lòng", "5 sao — xuất sắc"][rating];
-      const tone = rating >= 4 ? "vui mừng, trân trọng, mời quay lại" : rating === 3 ? "cảm ơn, ghi nhận, cam kết cải thiện" : "xin lỗi thành khẩn, cam kết khắc phục";
+      const starLabel = ["", "1 Stern — sehr schlecht", "2 Sterne — unzufrieden", "3 Sterne — durchschnittlich", "4 Sterne — zufrieden", "5 Sterne — ausgezeichnet"][rating];
+      const tone = rating >= 4 ? "freudig dankbar, herzlich einladend" : rating === 3 ? "aufrichtig dankend, verbesserungsbereit" : "aufrichtig entschuldigend, lösungsorientiert";
 
-      const prompt = `Viết MẪU phản hồi đánh giá Google Maps ${starLabel} cho "${brand.brandName}" (${brand.industry}).
-Giọng điệu: ${brand.brandVoice}. Hướng: ${tone}.
-Dùng [Tên khách] cho tên khách. 2-4 câu tự nhiên. Chỉ trả về nội dung mẫu.`;
+      const prompt = `Schreibe eine VORLAGE für eine Google Maps Bewertungsantwort auf eine ${starLabel}-Bewertung für "${brand.brandName}" (${brand.industry}) in Deutschland.
+Markenstimme: ${brand.brandVoice}. Ton: ${tone}.
+Verwende [Kundenname] als Platzhalter. 2-4 Sätze auf Deutsch. Gib NUR den Vorlagentext zurück.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 200 },
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        system: "Du bist ein Experte für professionelle deutschsprachige Kundenkommunikation. Du schreibst empathische, authentische Google-Bewertungsantworten.",
+        messages: [{ role: "user", content: prompt }],
       });
 
-      const template = response.text?.trim() ?? "";
+      const block = message.content[0];
+      const template = block.type === "text" ? block.text.trim() : "";
       results[rating] = template;
 
       await db.execute(

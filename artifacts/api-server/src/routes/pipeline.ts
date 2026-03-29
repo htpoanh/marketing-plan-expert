@@ -4,6 +4,7 @@ import { pipelineRunsTable, contentPlansTable, brandsTable, aiAgentConfigsTable,
 import { eq, and } from "drizzle-orm";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { buildImagePromptGuidance } from "../lib/imagePromptBuilder";
 
 const router: IRouter = Router();
@@ -212,6 +213,58 @@ function normalizeHashtags(val: any): string[] {
   return [];
 }
 
+// Agent 5: Claude Sonnet — German content refinement & quality polish
+async function callClaudeRefine(contentData: any, platform: string, claudeSystemPrompt: string): Promise<any> {
+  try {
+    const hooks = Array.isArray(contentData.hooks) ? contentData.hooks.join(" | ") : "";
+    const refinePrompt = `Du bist ein professioneller Redakteur für deutschsprachigen Social-Media-Content in Deutschland.
+
+Überprüfe und verfeinere den folgenden ${platform}-Content auf Deutsch. Mache die Sprache lebendiger, authentischer und natürlicher — ohne den Kerninhalt oder die Marketingstrategie zu ändern. Entferne jede steife oder maschinelle Formulierung.
+
+ORIGINAL CONTENT:
+Hooks: ${hooks}
+Caption: ${contentData.mainCaption ?? ""}
+Short Caption: ${contentData.shortCaption ?? ""}
+CTA: ${contentData.cta ?? ""}
+
+Gib JSON zurück (kein Markdown):
+{
+  "hooks": ["verfeinert Hook 1", "verfeinert Hook 2", "verfeinert Hook 3"],
+  "mainCaption": "verfeinerte Caption",
+  "shortCaption": "verfeinerte Short Caption",
+  "cta": "verfeinerte CTA"
+}
+
+Anforderungen:
+- Authentisches, natürliches Deutsch — wie ein echter Mensch schreibt
+- Emotionaler und überzeugender als das Original
+- KEINE sichtbaren Labels oder Struktur-Annotationen im Text
+- Bewahre alle wichtigen Informationen (Angebote, Adressen, Öffnungszeiten)`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
+      system: claudeSystemPrompt,
+      messages: [{ role: "user", content: refinePrompt }],
+    });
+
+    const block = message.content[0];
+    const text = block.type === "text" ? block.text : "";
+    const parsed = JSON.parse(text.trim());
+
+    return {
+      ...contentData,
+      hooks: Array.isArray(parsed.hooks) && parsed.hooks.length > 0 ? parsed.hooks : contentData.hooks,
+      mainCaption: parsed.mainCaption || contentData.mainCaption,
+      shortCaption: parsed.shortCaption || contentData.shortCaption,
+      cta: parsed.cta || contentData.cta,
+    };
+  } catch (err: any) {
+    console.warn("Claude refinement failed, using Gemini output as-is:", err?.message);
+    return contentData;
+  }
+}
+
 async function callGeminiJSON(prompt: string, systemPrompt?: string): Promise<any> {
   const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
   try {
@@ -328,10 +381,12 @@ router.post("/run", async (req, res) => {
     const grokConfig = agentConfigs.find(a => a.agentKey === "grok");
     const openaiConfig = agentConfigs.find(a => a.agentKey === "openai");
     const geminiConfig = agentConfigs.find(a => a.agentKey === "gemini");
+    const claudeConfig = agentConfigs.find(a => a.agentKey === "claude");
 
     const grokSystem = buildSystemPrompt(grokConfig, "Du bist ein Experte für Echtzeit-Markttrends mit 10 Jahren Erfahrung im deutschen Markt.");
     const openaiSystem = buildSystemPrompt(openaiConfig, "Du bist ein führender Marketing-Stratege und Prompt-Engineering-Experte.");
     const geminiSystem = buildSystemPrompt(geminiConfig, "Du bist ein Top-Copywriter, Experte für viralen deutschen Content auf Social Media. Schreibe immer auf Deutsch, natürlich und überzeugend.");
+    const claudeSystem = buildSystemPrompt(claudeConfig, "Du bist ein erfahrener Redakteur für deutschen Social-Media-Content. Du verfeinerst Texte zu natürlichem, emotionalem und überzeugendem Deutsch.");
 
     // Brand contact info block
     const contactBlock = [
@@ -458,7 +513,13 @@ Anforderungen:
 - mainCaption: MUSS der Logik des ${strategyData.marketingModel}-Modells folgen, ABER KEINE sichtbaren Labels — kein "Hook:", "Value:", "CTA:", "Attention:", "Problem:", "Story:", "Step 1:" oder jegliche Struktur-Annotationen im Text. Der Text fließt natürlich ohne sichtbare Framework-Labels.${contentFormat ? `\n- Passe die Länge und Stil des Inhalts an "${contentFormat}" an` : ""}
 - GESAMTER CONTENT AUF DEUTSCH — natürlich, nicht steif, authentisch`;
 
-      const contentData = await callGeminiJSON(contentPrompt, geminiSystem);
+      const rawContentData = await callGeminiJSON(contentPrompt, geminiSystem);
+
+      // ─── AGENT 5: CLAUDE — tinh chỉnh tiếng Đức tự nhiên ─────────────────────
+      const claudeActive = claudeConfig?.isActive !== false;
+      const contentData = claudeActive
+        ? await callClaudeRefine(rawContentData, plat, claudeSystem)
+        : rawContentData;
       lastContentData = contentData;
 
       // Agent 4: OpenAI — tạo prompt ảnh/video cho từng nền tảng

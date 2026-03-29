@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Bot, Brain, Pen, TrendingUp, Save, RotateCcw,
   Plus, Copy, Trash2, X, ChevronRight, Star, Layers,
-  Sparkles, Check
+  Sparkles, Check, MessageSquareHeart
 } from "lucide-react";
 
 type AiProfile = {
@@ -47,6 +47,12 @@ const AGENT_META: Record<string, { icon: React.ReactNode; color: string; badge: 
     badge: "Agent 3",
     hint: "Agent 3 viết caption. Training giọng điệu & cách trình bày content của ngành.",
   },
+  claude: {
+    icon: <MessageSquareHeart className="w-5 h-5" />,
+    color: "from-amber-500 to-orange-500",
+    badge: "Agent 5",
+    hint: "Claude biên tập nội dung tiếng Đức tự nhiên hơn và viết phản hồi Google Reviews chuyên nghiệp.",
+  },
 };
 
 function AgentCard({ agent, profileId, onSaved }: { agent: AgentConfig; profileId: number; onSaved: () => void }) {
@@ -64,6 +70,7 @@ function AgentCard({ agent, profileId, onSaved }: { agent: AgentConfig; profileI
       const r = await fetch(`/api/ai-profiles/${profileId}/agents/${agent.agentKey}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ expertiseArea: expertise, customInstructions: instructions, outputStyle: style }),
       });
       if (!r.ok) throw new Error();
@@ -79,7 +86,7 @@ function AgentCard({ agent, profileId, onSaved }: { agent: AgentConfig; profileI
   const reset = async () => {
     setResetting(true);
     try {
-      const r = await fetch(`/api/ai-profiles/${profileId}/reset/${agent.agentKey}`, { method: "POST" });
+      const r = await fetch(`/api/ai-profiles/${profileId}/reset/${agent.agentKey}`, { method: "POST", credentials: "include" });
       if (!r.ok) throw new Error();
       setExpertise(""); setInstructions(""); setStyle("");
       toast({ title: "Đã reset về mặc định" });
@@ -276,7 +283,7 @@ export default function AIAgentsPage() {
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<AiProfile[]>({
     queryKey: ["/api/ai-profiles"],
     queryFn: async () => {
-      const r = await fetch("/api/ai-profiles");
+      const r = await fetch("/api/ai-profiles", { credentials: "include" });
       if (!r.ok) throw new Error();
       return r.json();
     },
@@ -294,7 +301,7 @@ export default function AIAgentsPage() {
     queryKey: ["/api/ai-profiles", selectedProfileId, "agents"],
     queryFn: async () => {
       if (!selectedProfileId) return [];
-      const r = await fetch(`/api/ai-profiles/${selectedProfileId}/agents`);
+      const r = await fetch(`/api/ai-profiles/${selectedProfileId}/agents`, { credentials: "include" });
       if (!r.ok) throw new Error();
       return r.json();
     },
@@ -307,6 +314,7 @@ export default function AIAgentsPage() {
       const r = await fetch("/api/ai-profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(data),
       });
       if (!r.ok) throw new Error();
@@ -326,7 +334,7 @@ export default function AIAgentsPage() {
     if (profile.isDefault) return;
     if (!confirm(`Xóa profile "${profile.profileName}"? Thao tác này không thể hoàn tác.`)) return;
     try {
-      const r = await fetch(`/api/ai-profiles/${profile.id}`, { method: "DELETE" });
+      const r = await fetch(`/api/ai-profiles/${profile.id}`, { method: "DELETE", credentials: "include" });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["/api/ai-profiles"] });
       if (selectedProfileId === profile.id) {

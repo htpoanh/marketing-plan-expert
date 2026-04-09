@@ -14,17 +14,21 @@ const allowedOrigins = (process.env["REPLIT_DOMAINS"] ?? "")
   .map(d => `https://${d.trim()}`)
   .filter(Boolean);
 
+const isDev = process.env["NODE_ENV"] !== "production";
+
 app.use(cors({
   credentials: true,
-  origin: allowedOrigins.length > 0
-    ? (origin, cb) => {
-        if (!origin || allowedOrigins.some(o => origin === o || origin === `${o}/`)) {
-          cb(null, true);
-        } else {
-          cb(new Error(`CORS blocked: ${origin}`));
+  origin: isDev
+    ? (origin, cb) => cb(null, true) // allow all in local dev
+    : allowedOrigins.length > 0
+      ? (origin, cb) => {
+          if (!origin || allowedOrigins.some(o => origin === o || origin === `${o}/`)) {
+            cb(null, true);
+          } else {
+            cb(new Error(`CORS blocked: ${origin}`));
+          }
         }
-      }
-    : false,
+      : false,
 }));
 
 app.use(express.json({ limit: "50mb" }));

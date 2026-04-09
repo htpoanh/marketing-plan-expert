@@ -7,13 +7,11 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send, Calendar, Store, ChevronsDown, ChevronsUp, FileText, Scissors } from "lucide-react";
+import { X, CheckSquare, Eye, MessageSquareWarning, Loader2, Send, Store, ChevronsDown, ChevronsUp, FileText, Scissors, CheckCircle2, Trash2, Archive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-// Strip ALL marketing model labels (AIDA, PAS, Hook-Value-CTA, Storytelling, BAB, 4P, FAB...)
-// Rule: only strip when word is followed by colon (label pattern), not when used naturally in sentences
 function cleanText(text: string | null | undefined): string {
   if (!text) return "";
   const MARKETING_LABELS =
@@ -25,29 +23,31 @@ function cleanText(text: string | null | undefined): string {
     .trim();
 }
 
-// Helper: default schedule = now + 24 hours (unconditional)
-function defaultScheduleValue(): string {
-  const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`;
-}
-
 export default function ApprovalDashboard() {
   const { data: brands = [] } = useListBrands();
   const [activeBrandId, setActiveBrandId] = useState<number | "all">("all");
+  const [activeView, setActiveView] = useState<"review" | "approved">("review");
 
-  const queryParams = activeBrandId === "all"
+  const reviewParams = activeBrandId === "all"
     ? { status: "review" as const }
     : { status: "review" as const, brandId: activeBrandId };
 
-  const { data: plans, isLoading } = useListContentPlans(queryParams as any);
+  const approvedParams = activeBrandId === "all"
+    ? { status: "approved" as const }
+    : { status: "approved" as const, brandId: activeBrandId };
+
+  const { data: reviewPlans, isLoading: reviewLoading } = useListContentPlans(reviewParams as any);
+  const { data: approvedPlans, isLoading: approvedLoading } = useListContentPlans(approvedParams as any);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [approvingId, setApprovingId] = useState<number | null>(null);
   const [publishingId, setPublishingId] = useState<number | null>(null);
-  const [schedules, setSchedules] = useState<Record<number, string>>({});
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [markingUsedId, setMarkingUsedId] = useState<number | null>(null);
   const [rewritingId, setRewritingId] = useState<{ id: number; direction: "shorter" | "longer" } | null>(null);
   const [localCaptions, setLocalCaptions] = useState<Record<number, string>>({});
   const [selections, setSelections] = useState<Record<number, { start: number; end: number; text: string } | null>>({});
@@ -70,40 +70,86 @@ export default function ApprovalDashboard() {
     if (rejectingId) rejectMutation.mutate({ id: rejectingId, data: { reason: rejectReason } });
   };
 
-  const getSchedule = (plan: { id: number }) =>
-    schedules[plan.id] ?? defaultScheduleValue();
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: getListContentPlansQueryKey({ status: "review" }) });
+    queryClient.invalidateQueries({ queryKey: getListContentPlansQueryKey({ status: "approved" }) });
+  };
 
-  const handleApproveAndPublish = async (planId: number, scheduledLocal: string) => {
-    setPublishingId(planId);
+  // Chỉ duyệt, không publish — bài chuyển sang tab "Đã duyệt"
+  const handleApprove = async (planId: number) => {
+    setApprovingId(planId);
     try {
-      const localDate = new Date(scheduledLocal);
-      if (isNaN(localDate.getTime())) throw new Error("Ngày giờ không hợp lệ");
-      if (localDate <= new Date()) throw new Error("Ngày giờ phải ở tương lai");
-
-      const approveRes = await fetch(`${BASE}/api/content-plans/${planId}/approve`, {
+      const res = await fetch(`${BASE}/api/content-plans/${planId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (!approveRes.ok) {
-        const err = await approveRes.json().catch(() => ({}));
-        throw new Error(err.error ?? `Duyệt thất bại HTTP ${approveRes.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `Duyệt thất bại HTTP ${res.status}`);
       }
+      invalidateAll();
+      toast({ title: "Đã duyệt", description: `Bài #${planId} đã duyệt. Xem trong tab "Đã duyệt" để gửi Metricool.` });
+    } catch (e: any) {
+      toast({ title: "Lỗi duyệt", description: e.message, variant: "destructive" });
+    } finally {
+      setApprovingId(null);
+    }
+  };
 
+  // Gửi Metricool thủ công từ tab "Đã duyệt"
+  const handlePublishMetricool = async (planId: number) => {
+    setPublishingId(planId);
+    try {
       const pubRes = await fetch(`${BASE}/api/content-plans/${planId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduledAt: localDate.toISOString() }),
+        body: JSON.stringify({}),
       });
       const pubData = await pubRes.json().catch(() => ({}));
-      if (!pubRes.ok) throw new Error(pubData.error ?? `Đăng thất bại HTTP ${pubRes.status}`);
-
-      queryClient.invalidateQueries({ queryKey: getListContentPlansQueryKey({ status: "review" }) });
-      const dateStr = localDate.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
-      toast({ title: "✅ Đã duyệt & Lên lịch Metricool", description: `Bài #${planId} lên lịch lúc ${dateStr}.` });
+      if (!pubRes.ok) throw new Error(pubData.error ?? `Gửi thất bại HTTP ${pubRes.status}`);
+      invalidateAll();
+      toast({ title: "Đã gửi Metricool", description: `Bài #${planId} đã được lên lịch trên Metricool.` });
     } catch (e: any) {
-      toast({ title: "❌ Thất bại", description: e.message, variant: "destructive" });
+      toast({ title: "Gửi Metricool thất bại", description: e.message, variant: "destructive" });
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  // Xóa bài đã duyệt
+  const handleDelete = async (planId: number) => {
+    if (!confirm("Xóa bài này khỏi danh sách?")) return;
+    setDeletingId(planId);
+    try {
+      const res = await fetch(`${BASE}/api/content-plans/${planId}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error(`Xóa thất bại HTTP ${res.status}`);
+      invalidateAll();
+      toast({ title: "Đã xóa", description: `Bài #${planId} đã xóa.` });
+    } catch (e: any) {
+      toast({ title: "Lỗi xóa", description: e.message, variant: "destructive" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Đánh dấu đã dùng — bài biến khỏi hàng đợi
+  const handleMarkUsed = async (planId: number) => {
+    setMarkingUsedId(planId);
+    try {
+      const res = await fetch(`${BASE}/api/content-plans/${planId}/mark-used`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `Thất bại HTTP ${res.status}`);
+      }
+      invalidateAll();
+      toast({ title: "Đã đánh dấu đã dùng", description: `Bài #${planId} đã được đưa ra khỏi hàng đợi.` });
+    } catch (e: any) {
+      toast({ title: "Lỗi", description: e.message, variant: "destructive" });
+    } finally {
+      setMarkingUsedId(null);
     }
   };
 
@@ -119,9 +165,9 @@ export default function ApprovalDashboard() {
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setLocalCaptions(prev => ({ ...prev, [planId]: cleanText(data.plan?.caption ?? "") }));
       const label = direction === "shorter" ? "ngắn hơn" : "dài hơn";
-      toast({ title: `✅ Đã viết lại ${label}`, description: `${data.wordCount ?? "?"} từ` });
+      toast({ title: `Đã viết lại ${label}`, description: `${data.wordCount ?? "?"} từ` });
     } catch (e: any) {
-      toast({ title: "❌ Lỗi viết lại", description: e.message, variant: "destructive" });
+      toast({ title: "Lỗi viết lại", description: e.message, variant: "destructive" });
     } finally {
       setRewritingId(null);
     }
@@ -152,27 +198,30 @@ export default function ApprovalDashboard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      // Replace only the selected portion in the caption
+      const plans = activeView === "review" ? reviewPlans : approvedPlans;
       const current = localCaptions[planId] ?? cleanText((plans as any[])?.find((p: any) => p.id === planId)?.caption);
       const newCaption = current.slice(0, sel.start) + data.result + current.slice(sel.end);
       setLocalCaptions(prev => ({ ...prev, [planId]: newCaption }));
       setSelections(prev => ({ ...prev, [planId]: null }));
       const label = direction === "shorter" ? "ngắn hơn" : "dài hơn";
-      toast({ title: `✅ Đoạn đã viết lại ${label}`, description: `${data.wordCount ?? "?"} từ → ${data.result.slice(0, 40)}…` });
+      toast({ title: `Đoạn đã viết lại ${label}`, description: `${data.wordCount ?? "?"} từ → ${data.result.slice(0, 40)}…` });
     } catch (e: any) {
-      toast({ title: "❌ Lỗi viết lại đoạn", description: e.message, variant: "destructive" });
+      toast({ title: "Lỗi viết lại đoạn", description: e.message, variant: "destructive" });
     } finally {
       setRewritingSelectionId(null);
     }
   };
 
-  // Count pending per brand
+  // Đếm số bài chờ duyệt theo brand để hiện badge
   const pendingByBrand: Record<number, number> = {};
-  if (activeBrandId === "all" && Array.isArray(plans)) {
-    plans.forEach((p: any) => {
+  if (activeBrandId === "all" && Array.isArray(reviewPlans)) {
+    reviewPlans.forEach((p: any) => {
       pendingByBrand[p.brandId] = (pendingByBrand[p.brandId] ?? 0) + 1;
     });
   }
+
+  const plans = activeView === "review" ? reviewPlans : approvedPlans;
+  const isLoading = activeView === "review" ? reviewLoading : approvedLoading;
 
   return (
     <AppLayout>
@@ -184,8 +233,36 @@ export default function ApprovalDashboard() {
             Phê duyệt Nội dung
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Xem lại nội dung AI tạo, chọn ngày giờ đăng, rồi duyệt để lên lịch Metricool.
+            Duyệt bài AI tạo → Chọn bài đã duyệt để gửi Metricool thủ công, xóa hoặc đánh dấu đã dùng.
           </p>
+        </div>
+
+        {/* View tabs: Chờ duyệt / Đã duyệt */}
+        <div className="flex gap-1 border-b border-border/50 pb-px">
+          <button
+            onClick={() => setActiveView("review")}
+            className={`pb-3 px-3 font-medium text-sm transition-all relative ${activeView === "review" ? "text-amber-400" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Chờ duyệt
+            {Array.isArray(reviewPlans) && reviewPlans.length > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full font-semibold">
+                {reviewPlans.length}
+              </span>
+            )}
+            {activeView === "review" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400 rounded-t-full" />}
+          </button>
+          <button
+            onClick={() => setActiveView("approved")}
+            className={`pb-3 px-3 font-medium text-sm transition-all relative ${activeView === "approved" ? "text-emerald-400" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Đã duyệt
+            {Array.isArray(approvedPlans) && approvedPlans.length > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-full font-semibold">
+                {approvedPlans.length}
+              </span>
+            )}
+            {activeView === "approved" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-t-full" />}
+          </button>
         </div>
 
         {/* Store tabs */}
@@ -219,7 +296,7 @@ export default function ApprovalDashboard() {
               >
                 <Store className="w-4 h-4" />
                 {b.brandName}
-                {count > 0 && (
+                {count > 0 && activeView === "review" && (
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? "bg-white/20" : "bg-amber-500/20 text-amber-400"}`}>
                     {count}
                   </span>
@@ -229,7 +306,7 @@ export default function ApprovalDashboard() {
           })}
         </div>
 
-        {/* Content */}
+        {/* Content list */}
         {isLoading ? (
           <div className="space-y-4 animate-pulse">
             {[1, 2].map(i => <div key={i} className="h-48 bg-card rounded-2xl border border-border/50"></div>)}
@@ -237,9 +314,13 @@ export default function ApprovalDashboard() {
         ) : !plans || plans.length === 0 ? (
           <div className="h-64 border-2 border-dashed border-border/50 rounded-2xl flex flex-col items-center justify-center text-center">
             <CheckSquare className="w-12 h-12 text-muted-foreground/30 mb-4" />
-            <h3 className="text-lg font-bold">Không có bài viết nào cần duyệt</h3>
-            <p className="text-muted-foreground">
-              {activeBrandId === "all" ? "Bạn đã xử lý hết tất cả!" : `Cửa hàng này chưa có bài nào chờ duyệt.`}
+            <h3 className="text-lg font-bold">
+              {activeView === "review" ? "Không có bài nào chờ duyệt" : "Không có bài nào đã duyệt"}
+            </h3>
+            <p className="text-muted-foreground text-sm mt-1">
+              {activeView === "review"
+                ? "Bạn đã xử lý hết. Gửi bài từ Pipeline để có bài mới."
+                : "Duyệt bài ở tab Chờ duyệt để bài xuất hiện ở đây."}
             </p>
           </div>
         ) : (
@@ -255,6 +336,7 @@ export default function ApprovalDashboard() {
               const isRewritingSelShorter = rewritingSelectionId?.id === plan.id && rewritingSelectionId.direction === "shorter";
               const isRewritingSelLonger = rewritingSelectionId?.id === plan.id && rewritingSelectionId.direction === "longer";
               const anyRewritingSel = isRewritingSelShorter || isRewritingSelLonger;
+              const isBusy = approvingId === plan.id || publishingId === plan.id || deletingId === plan.id || markingUsedId === plan.id;
 
               return (
                 <div key={plan.id} className="bg-card rounded-2xl border border-border/50 shadow-xl overflow-hidden flex flex-col lg:flex-row">
@@ -285,14 +367,14 @@ export default function ApprovalDashboard() {
                         onMouseUp={() => handleSelectionChange(plan.id)}
                         onKeyUp={() => handleSelectionChange(plan.id)}
                         rows={6}
-                        disabled={anyRewriting || anyRewritingSel || publishingId === plan.id}
+                        disabled={anyRewriting || anyRewritingSel || isBusy}
                         className={`w-full p-4 bg-secondary/30 rounded-xl border border-border/50 text-sm text-foreground/90 resize-y leading-relaxed transition-opacity focus:outline-none focus:ring-2 focus:ring-primary/30 ${anyRewriting || anyRewritingSel ? "opacity-40" : "opacity-100"}`}
                       />
                       {/* Floating selection rewrite toolbar */}
                       {sel && !anyRewriting && !anyRewritingSel && (
                         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-2 bg-card border border-border shadow-lg rounded-full z-10 animate-in fade-in slide-in-from-bottom-2 duration-150">
                           <Scissors className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground font-medium mr-1">Đoạn đã chọn:</span>
+                          <span className="text-xs text-muted-foreground font-medium mr-1">Đoạn chọn:</span>
                           <button
                             onClick={() => handleRewriteSelection(plan.id, "shorter", plan.brandId)}
                             disabled={anyRewritingSel}
@@ -333,22 +415,22 @@ export default function ApprovalDashboard() {
                       </span>
                       <button
                         onClick={() => handleRewrite(plan.id, "shorter")}
-                        disabled={anyRewriting || anyRewritingSel || publishingId === plan.id}
+                        disabled={anyRewriting || anyRewritingSel || isBusy}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isRewritingShorter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronsDown className="w-3.5 h-3.5" />}
-                        Viết ngắn hơn (toàn bài)
+                        Ngắn hơn
                       </button>
                       <button
                         onClick={() => handleRewrite(plan.id, "longer")}
-                        disabled={anyRewriting || anyRewritingSel || publishingId === plan.id}
+                        disabled={anyRewriting || anyRewritingSel || isBusy}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isRewritingLonger ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronsUp className="w-3.5 h-3.5" />}
-                        Viết dài hơn (toàn bài)
+                        Dài hơn
                       </button>
                       {!sel && (
-                        <span className="text-xs text-muted-foreground italic">· Bôi đen đoạn bất kỳ để viết lại ngắn/dài</span>
+                        <span className="text-xs text-muted-foreground italic">· Bôi đen đoạn để viết lại</span>
                       )}
                     </div>
 
@@ -361,59 +443,90 @@ export default function ApprovalDashboard() {
                   </div>
 
                   {/* Action panel */}
-                  <div className="p-6 lg:w-72 bg-secondary/10 flex flex-col justify-start gap-4">
-                    {rejectingId === plan.id ? (
-                      <form onSubmit={handleReject} className="space-y-3 animate-in fade-in zoom-in-95">
-                        <label className="text-sm font-medium flex items-center gap-2 text-rose-500">
-                          <MessageSquareWarning className="w-4 h-4" /> Lý do từ chối
-                        </label>
-                        <textarea
-                          autoFocus
-                          required
-                          value={rejectReason}
-                          onChange={e => setRejectReason(e.target.value)}
-                          className="w-full p-3 text-sm rounded-xl bg-background border border-border focus:ring-2 focus:ring-rose-500 outline-none"
-                          placeholder="Yêu cầu sửa lại nội dung..."
-                        />
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => setRejectingId(null)} className="flex-1 py-2 rounded-lg text-sm bg-secondary hover:bg-secondary/80 font-medium">Hủy</button>
-                          <button type="submit" disabled={rejectMutation.isPending} className="flex-1 py-2 rounded-lg text-sm bg-rose-500 hover:bg-rose-600 text-white font-bold">Xác nhận</button>
-                        </div>
-                      </form>
-                    ) : (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            <Calendar className="w-3.5 h-3.5" /> Thời gian đăng
+                  <div className="p-6 lg:w-64 bg-secondary/10 flex flex-col justify-start gap-3">
+                    {activeView === "review" ? (
+                      // ── CHỜ DUYỆT ──────────────────────────────────────────
+                      rejectingId === plan.id ? (
+                        <form onSubmit={handleReject} className="space-y-3 animate-in fade-in zoom-in-95">
+                          <label className="text-sm font-medium flex items-center gap-2 text-rose-500">
+                            <MessageSquareWarning className="w-4 h-4" /> Lý do từ chối
                           </label>
-                          <input
-                            type="datetime-local"
-                            value={getSchedule(plan)}
-                            onChange={e => setSchedules(s => ({ ...s, [plan.id]: e.target.value }))}
-                            min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
-                            className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm text-foreground focus:ring-2 focus:ring-primary outline-none"
+                          <textarea
+                            autoFocus
+                            required
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            className="w-full p-3 text-sm rounded-xl bg-background border border-border focus:ring-2 focus:ring-rose-500 outline-none"
+                            placeholder="Yêu cầu sửa lại nội dung..."
                           />
-                          <p className="text-xs text-muted-foreground">Giờ địa phương (Berlin/Kempten)</p>
-                        </div>
-
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setRejectingId(null)} className="flex-1 py-2 rounded-lg text-sm bg-secondary hover:bg-secondary/80 font-medium">Hủy</button>
+                            <button type="submit" disabled={rejectMutation.isPending} className="flex-1 py-2 rounded-lg text-sm bg-rose-500 hover:bg-rose-600 text-white font-bold">Xác nhận</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Bài sẽ chuyển sang tab <span className="text-emerald-400 font-semibold">Đã duyệt</span> — bạn chọn gửi Metricool hoặc đánh dấu đã dùng tại đó.
+                          </p>
+                          <button
+                            onClick={() => handleApprove(plan.id)}
+                            disabled={isBusy}
+                            className="w-full py-4 rounded-xl font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
+                          >
+                            {approvingId === plan.id ? (
+                              <><Loader2 className="w-5 h-5 animate-spin" /> Đang duyệt...</>
+                            ) : (
+                              <><CheckCircle2 className="w-5 h-5" /> Duyệt bài</>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setRejectingId(plan.id)}
+                            disabled={isBusy}
+                            className="w-full py-3 rounded-xl font-bold bg-card border border-border hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                          >
+                            <X className="w-4 h-4" /> Từ chối
+                          </button>
+                        </>
+                      )
+                    ) : (
+                      // ── ĐÃ DUYỆT ──────────────────────────────────────────
+                      <>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Gửi lên Metricool, đánh dấu đã dùng hoặc xóa bài để dọn hàng đợi.
+                        </p>
                         <button
-                          onClick={() => handleApproveAndPublish(plan.id, getSchedule(plan))}
-                          disabled={publishingId === plan.id}
-                          className="w-full py-4 rounded-xl font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
+                          onClick={() => handlePublishMetricool(plan.id)}
+                          disabled={isBusy}
+                          className="w-full py-4 rounded-xl font-bold bg-blue-500 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0"
                         >
                           {publishingId === plan.id ? (
-                            <><Loader2 className="w-5 h-5 animate-spin" /> Đang lên lịch...</>
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Đang gửi...</>
                           ) : (
-                            <><Send className="w-5 h-5" /> Duyệt & Lên lịch</>
+                            <><Send className="w-5 h-5" /> Gửi Metricool</>
                           )}
                         </button>
-
                         <button
-                          onClick={() => setRejectingId(plan.id)}
-                          disabled={publishingId === plan.id}
-                          className="w-full py-3 rounded-xl font-bold bg-card border border-border hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                          onClick={() => handleMarkUsed(plan.id)}
+                          disabled={isBusy}
+                          className="w-full py-3 rounded-xl font-semibold bg-card border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
                         >
-                          <X className="w-5 h-5" /> Từ chối
+                          {markingUsedId === plan.id ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Đang xử lý...</>
+                          ) : (
+                            <><Archive className="w-4 h-4" /> Đánh dấu đã dùng</>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(plan.id)}
+                          disabled={isBusy}
+                          className="w-full py-3 rounded-xl font-semibold bg-card border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                        >
+                          {deletingId === plan.id ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Đang xóa...</>
+                          ) : (
+                            <><Trash2 className="w-4 h-4" /> Xóa bài</>
+                          )}
                         </button>
                       </>
                     )}

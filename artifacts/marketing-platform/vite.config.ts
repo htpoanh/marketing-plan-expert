@@ -62,6 +62,17 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // Proxy /api to backend when running locally (VITE_API_PORT set in .claude/launch.json)
+    ...(process.env.VITE_API_PORT
+      ? {
+          proxy: {
+            "/api": {
+              target: `http://localhost:${process.env.VITE_API_PORT}`,
+              changeOrigin: true,
+            },
+          },
+        }
+      : {}),
     fs: {
       strict: true,
       deny: ["**/.*"],

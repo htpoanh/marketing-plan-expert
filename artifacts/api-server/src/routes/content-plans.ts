@@ -465,6 +465,20 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+router.post("/:id/mark-used", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [plan] = await db.update(contentPlansTable)
+      .set({ status: "used", updatedAt: new Date() })
+      .where(eq(contentPlansTable.id, id))
+      .returning();
+    if (!plan) return res.status(404).json({ error: "Content plan not found" });
+    res.json(plan);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to mark content plan as used" });
+  }
+});
+
 router.post("/:id/approve", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

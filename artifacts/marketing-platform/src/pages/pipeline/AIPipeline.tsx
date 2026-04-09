@@ -230,11 +230,20 @@ function RunPipelineTab() {
         setResult(data);
         const totalPlans = data.savedPlanIds?.length ?? 0;
         const platList = formData.platforms.join(", ");
-        toast({ title: "Thành công", description: `Đã tạo ${totalPlans} bài viết cho ${platList}` });
+        if (totalPlans === 0) {
+          toast({
+            title: "Pipeline hoàn tất nhưng không có bài nào được lưu",
+            description: "AI có thể đã gặp lỗi khi sinh nội dung. Kiểm tra lại tab Lịch sử.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Thành công", description: `Đã tạo ${totalPlans} bài viết cho ${platList}` });
+        }
       },
-      onError: (err) => {
+      onError: (err: any) => {
         setIsRunning(false);
-        toast({ title: "Lỗi", description: "Có lỗi xảy ra khi chạy pipeline", variant: "destructive" });
+        const msg = err?.message ?? err?.error ?? "Có lỗi xảy ra khi chạy pipeline";
+        toast({ title: "Pipeline thất bại", description: msg, variant: "destructive" });
       }
     });
   };

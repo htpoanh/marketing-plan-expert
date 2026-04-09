@@ -373,19 +373,12 @@ function RunPipelineTab() {
               })()}
             </div>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Số lượng bài viết</label>
-              <input 
-                type="number"
-                min={1}
-                max={5}
-                required
-                value={formData.contentCount}
-                onChange={e => setFormData({...formData, contentCount: Number(e.target.value)})}
-                disabled={isRunning}
-                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:ring-2 focus:ring-primary/50 outline-none disabled:opacity-50"
-              />
-            </div>
+            <Link
+              href="/automation"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-border/50 bg-secondary/30 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-all"
+            >
+              <ExternalLink className="w-4 h-4" /> Kết nối Metricool
+            </Link>
 
             <div className="flex gap-2">
               <button 

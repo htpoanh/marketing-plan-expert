@@ -62,6 +62,10 @@ async function processMessage(
   const history = (session.conversationHistory as any[]) || [];
   const collected = (session.collectedData as any) || {};
 
+  const collectedSummary = Object.keys(collected).length > 0
+    ? Object.entries(collected).map(([k, v]) => `  - ${k}: ${v}`).join("\n")
+    : "  Noch keine";
+
   const system = `Du bist ein freundlicher KI-Terminassistent für ${brandName}, ein Nagelstudio in Deutschland.
 
 WICHTIGE REGELN:
@@ -69,16 +73,17 @@ WICHTIGE REGELN:
 - Du hilfst beim Terminbuchen und beantwortest Fragen zum Studio
 - Wenn der Kunde einen Termin möchte, sammle ALLE nötigen Infos schrittweise:
   1. Welchen Service möchte der Kunde? (Angeboten: ${services})
-  2. Welches Datum? (versuche ein konkretes Datum zu bekommen z.B. "Mittwoch 19. März")  
+  2. Welches Datum? (versuche ein konkretes Datum z.B. "Mittwoch 19. März")
   3. Welche Uhrzeit?
   4. Name des Kunden?
   5. Telefonnummer?
-- Wenn du ALLE 5 Informationen hast, rufe die Funktion "complete_booking" auf
+- Sobald du eine neue Information erhältst, rufe "save_progress" auf um sie zu speichern
+- Wenn du ALLE 5 Informationen hast, rufe "complete_booking" auf
 - Antworte KURZ und FREUNDLICH (max 2-3 Sätze)
 - Öffnungszeiten: ${hours}
 
 Bereits gesammelte Informationen:
-${Object.keys(collected).length > 0 ? JSON.stringify(collected, null, 2) : "Keine"}`;
+${collectedSummary}`;
 
   const messages: any[] = [
     { role: "system", content: system },
@@ -86,24 +91,44 @@ ${Object.keys(collected).length > 0 ? JSON.stringify(collected, null, 2) : "Kein
     { role: "user", content: userMessage },
   ];
 
-  const tools: any[] = [{
-    type: "function",
-    function: {
-      name: "complete_booking",
-      description: "Rufe diese Funktion auf, wenn alle Buchungsinformationen vollständig gesammelt wurden",
-      parameters: {
-        type: "object",
-        properties: {
-          customerName: { type: "string", description: "Name des Kunden" },
-          service: { type: "string", description: "Gewünschter Service" },
-          preferredDate: { type: "string", description: "Gewünschtes Datum (z.B. '19.03.2026' oder 'Mittwoch')" },
-          preferredTime: { type: "string", description: "Gewünschte Uhrzeit (z.B. '14:00')" },
-          phone: { type: "string", description: "Telefonnummer des Kunden" },
+  const tools: any[] = [
+    {
+      type: "function",
+      function: {
+        name: "save_progress",
+        description: "Speichere eine neu erhaltene Information zwischen — rufe dies auf sobald du einen neuen Wert kennst",
+        parameters: {
+          type: "object",
+          properties: {
+            customerName: { type: "string", description: "Name des Kunden (falls bekannt)" },
+            service: { type: "string", description: "Gewünschter Service (falls bekannt)" },
+            preferredDate: { type: "string", description: "Gewünschtes Datum (falls bekannt)" },
+            preferredTime: { type: "string", description: "Gewünschte Uhrzeit (falls bekannt)" },
+            phone: { type: "string", description: "Telefonnummer (falls bekannt)" },
+          },
+          required: [],
         },
-        required: ["customerName", "service", "preferredDate", "preferredTime", "phone"],
       },
     },
-  }];
+    {
+      type: "function",
+      function: {
+        name: "complete_booking",
+        description: "Rufe diese Funktion auf, wenn ALLE 5 Buchungsinformationen vollständig gesammelt wurden",
+        parameters: {
+          type: "object",
+          properties: {
+            customerName: { type: "string" },
+            service: { type: "string" },
+            preferredDate: { type: "string" },
+            preferredTime: { type: "string" },
+            phone: { type: "string" },
+          },
+          required: ["customerName", "service", "preferredDate", "preferredTime", "phone"],
+        },
+      },
+    },
+  ];
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -115,30 +140,55 @@ ${Object.keys(collected).length > 0 ? JSON.stringify(collected, null, 2) : "Kein
 
   const choice = completion.choices[0];
 
+  // AI calls complete_booking → all 5 fields collected
   if (choice.finish_reason === "tool_calls" && choice.message.tool_calls?.[0]) {
-    const args = JSON.parse(choice.message.tool_calls[0].function.arguments);
-    return {
-      reply: `Vielen Dank, ${args.customerName}! 🙏 Ich habe Ihren Terminwunsch aufgenommen:\n\n📌 Service: ${args.service}\n📅 Datum: ${args.preferredDate}\n⏰ Uhrzeit: ${args.preferredTime}\n📞 Telefon: ${args.phone}\n\nBitte warten Sie kurz — das Team von ${brandName} bestätigt Ihren Termin in Kürze! ✨`,
-      newState: "waiting_manager",
-      collectedData: { ...collected, ...args },
-      shouldBookNow: true,
-    };
+    const toolCall = choice.message.tool_calls[0];
+
+    if (toolCall.function.name === "complete_booking") {
+      const args = JSON.parse(toolCall.function.arguments);
+      return {
+        reply: `Vielen Dank, ${args.customerName}! 🙏 Ich habe Ihren Terminwunsch aufgenommen:\n\n📌 Service: ${args.service}\n📅 Datum: ${args.preferredDate}\n⏰ Uhrzeit: ${args.preferredTime}\n📞 Telefon: ${args.phone}\n\nBitte warten Sie kurz — das Team von ${brandName} bestätigt Ihren Termin in Kürze! ✨`,
+        newState: "waiting_manager",
+        collectedData: { ...collected, ...args },
+        shouldBookNow: true,
+      };
+    }
+
+    // AI calls save_progress → merge partial data, then ask follow-up
+    if (toolCall.function.name === "save_progress") {
+      const partial = JSON.parse(toolCall.function.arguments);
+      const newCollected = { ...collected };
+      for (const [k, v] of Object.entries(partial)) {
+        if (v) newCollected[k as keyof typeof newCollected] = v as string;
+      }
+
+      // Get follow-up question from AI after saving
+      const followUp = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          ...messages,
+          choice.message,
+          { role: "tool", tool_call_id: toolCall.id, content: "Gespeichert." },
+        ],
+        temperature: 0.7,
+      });
+      const followUpText = followUp.choices[0]?.message?.content || "Was kann ich noch für Sie tun?";
+
+      return {
+        reply: followUpText,
+        newState: "collecting",
+        collectedData: newCollected,
+        shouldBookNow: false,
+      };
+    }
   }
 
   const textReply = choice.message.content || "Ich helfe Ihnen gerne weiter!";
 
-  const newCollected = { ...collected };
-
-  const updatedHistory = [
-    ...history.slice(-8),
-    { role: "user", content: userMessage },
-    { role: "assistant", content: textReply },
-  ];
-
   return {
     reply: textReply,
     newState: "collecting",
-    collectedData: newCollected,
+    collectedData: { ...collected },
     shouldBookNow: false,
   };
 }
@@ -198,38 +248,59 @@ router.post("/webhook", async (req: Request, res: Response) => {
         const senderPsid = event.sender?.id;
         if (!senderPsid || senderPsid === pageId) continue;
 
-        // ── MANAGER replies "ja" or "nein" ──
-        if (senderPsid === config.managerPsid && event.message?.text) {
-          const reply = event.message.text.trim().toLowerCase();
-          const isJa = reply === "ja" || reply === "yes" || reply === "✅" || reply.startsWith("ja");
-          const isNein = reply === "nein" || reply === "no" || reply === "❌" || reply.startsWith("nein");
+        // ── MANAGER replies via quick reply payload or text ──
+        if (senderPsid === config.managerPsid && event.message) {
+          // Support quick reply payload: CONFIRM_123 / REJECT_123
+          const payload = event.message.quick_reply?.payload as string | undefined;
+          const text = (event.message.text ?? "").trim().toLowerCase();
+
+          let apptId: number | null = null;
+          let isJa = false;
+          let isNein = false;
+
+          if (payload?.startsWith("CONFIRM_")) {
+            apptId = parseInt(payload.replace("CONFIRM_", ""));
+            isJa = true;
+          } else if (payload?.startsWith("REJECT_")) {
+            apptId = parseInt(payload.replace("REJECT_", ""));
+            isNein = true;
+          } else {
+            isJa = text === "ja" || text === "yes" || text === "✅" || text.startsWith("ja ");
+            isNein = text === "nein" || text === "no" || text === "❌" || text.startsWith("nein ");
+          }
 
           if (isJa || isNein) {
-            const [pendingAppt] = await db
-              .select().from(appointmentsTable)
-              .where(eq(appointmentsTable.brandId, brand.id))
-              .orderBy(desc(appointmentsTable.createdAt))
-              .limit(1);
+            // Find appointment: by ID (from quick reply) or latest pending
+            let pendingAppt: any;
+            if (apptId) {
+              [pendingAppt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, apptId));
+            } else {
+              [pendingAppt] = await db
+                .select().from(appointmentsTable)
+                .where(eq(appointmentsTable.brandId, brand.id))
+                .orderBy(desc(appointmentsTable.createdAt))
+                .limit(1);
+            }
 
             if (pendingAppt && pendingAppt.status === "pending") {
               if (isJa) {
                 await db.update(appointmentsTable)
                   .set({ status: "confirmed", confirmedAt: new Date(), updatedAt: new Date() })
                   .where(eq(appointmentsTable.id, pendingAppt.id));
-
                 await sendMessage(pendingAppt.customerPsid, config.pageAccessToken,
-                  `✅ Ihr Termin wurde bestätigt!\n\n📌 ${pendingAppt.service}\n📅 ${pendingAppt.preferredDate} um ${pendingAppt.preferredTime}\n\nWir freuen uns auf Sie bei ${brand.brandName}! Bei Fragen antworten Sie einfach hier. 💅`
+                  `✅ Ihr Termin wurde bestätigt!\n\n📌 ${pendingAppt.service}\n📅 ${pendingAppt.preferredDate} um ${pendingAppt.preferredTime}\n\nWir freuen uns auf Sie bei ${brand.brandName}! Bei Fragen einfach hier schreiben. 💅`
                 );
-                await sendMessage(senderPsid, config.pageAccessToken, `✅ Termin bestätigt für ${pendingAppt.customerName} — ${pendingAppt.service} am ${pendingAppt.preferredDate} ${pendingAppt.preferredTime}`);
+                await sendMessage(senderPsid, config.pageAccessToken,
+                  `✅ Bestätigt: ${pendingAppt.customerName} — ${pendingAppt.service} am ${pendingAppt.preferredDate} ${pendingAppt.preferredTime}`
+                );
               } else {
                 await db.update(appointmentsTable)
                   .set({ status: "rejected", updatedAt: new Date() })
                   .where(eq(appointmentsTable.id, pendingAppt.id));
-
                 await sendMessage(pendingAppt.customerPsid, config.pageAccessToken,
-                  `Leider ist der gewünschte Termin (${pendingAppt.preferredDate} um ${pendingAppt.preferredTime}) nicht verfügbar. 😔\n\nMöchten Sie einen anderen Termin vereinbaren? Schreiben Sie einfach Ihre gewünschte Zeit!`
+                  `Leider ist der gewünschte Termin (${pendingAppt.preferredDate} um ${pendingAppt.preferredTime}) nicht verfügbar. 😔\n\nMöchten Sie einen anderen Termin? Schreiben Sie einfach Ihre gewünschte Zeit!`
                 );
-                await sendMessage(senderPsid, config.pageAccessToken, `❌ Termin abgelehnt — Kunde wurde informiert.`);
+                await sendMessage(senderPsid, config.pageAccessToken, `❌ Abgelehnt — Kunde wurde informiert.`);
               }
 
               // Reset customer session
@@ -248,6 +319,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
         // Get or create session
         let [session] = await db.select().from(messengerSessionsTable).where(eq(messengerSessionsTable.psid, senderPsid));
 
+        const isNewSession = !session;
         if (!session) {
           [session] = await db.insert(messengerSessionsTable).values({
             psid: senderPsid,
@@ -256,6 +328,18 @@ router.post("/webhook", async (req: Request, res: Response) => {
             collectedData: {},
             conversationHistory: [],
           }).returning();
+
+          // Send welcome message on first contact
+          const welcome = config.welcomeMessage || `Hallo! 👋 Willkommen bei ${brand.brandName}! Wie kann ich Ihnen helfen? Möchten Sie einen Termin buchen?`;
+          await sendMessage(senderPsid, config.pageAccessToken, welcome);
+        }
+
+        // Block customer messages while waiting for manager confirmation
+        if (session.state === "waiting_manager") {
+          await sendMessage(senderPsid, config.pageAccessToken,
+            `⏳ Ihre Buchungsanfrage wird gerade vom Team geprüft. Bitte warten Sie auf die Bestätigung!`
+          );
+          continue;
         }
 
         // Update history
@@ -263,9 +347,19 @@ router.post("/webhook", async (req: Request, res: Response) => {
         const updatedHistory = [...history.slice(-8), { role: "user", content: userText }];
 
         // AI processes message
-        const { reply, newState, collectedData, shouldBookNow } = await processMessage(
-          userText, { ...session, conversationHistory: updatedHistory }, brand, config
-        );
+        let aiResult: Awaited<ReturnType<typeof processMessage>>;
+        try {
+          aiResult = await processMessage(
+            userText, { ...session, conversationHistory: updatedHistory }, brand, config
+          );
+        } catch (aiErr: any) {
+          console.error("AI error in processMessage:", aiErr?.message);
+          await sendMessage(senderPsid, config.pageAccessToken,
+            `Entschuldigung, es gab einen technischen Fehler. Bitte versuchen Sie es gleich nochmal! 🙏`
+          );
+          continue;
+        }
+        const { reply, newState, collectedData, shouldBookNow } = aiResult;
 
         if (shouldBookNow) {
           // Save appointment
@@ -295,10 +389,13 @@ router.post("/webhook", async (req: Request, res: Response) => {
           // Send "wait" reply to customer
           await sendMessage(senderPsid, config.pageAccessToken, reply);
 
-          // Notify manager
+          // Notify manager with quick reply buttons (includes appointment ID to avoid wrong confirmation)
           if (config.managerPsid) {
-            const managerMsg = `📅 NEUE BUCHUNGSANFRAGE\n\n👤 Name: ${collectedData.customerName}\n💅 Service: ${collectedData.service}\n📆 Datum: ${collectedData.preferredDate}\n⏰ Uhrzeit: ${collectedData.preferredTime}\n📞 Tel: ${collectedData.phone}\n\nAntworten Sie mit JA um zu bestätigen oder NEIN um abzulehnen.`;
-            await sendMessage(config.managerPsid, config.pageAccessToken, managerMsg);
+            const managerMsg = `📅 NEUE BUCHUNGSANFRAGE #${appt.id}\n\n👤 ${collectedData.customerName}\n💅 ${collectedData.service}\n📆 ${collectedData.preferredDate} um ${collectedData.preferredTime}\n📞 ${collectedData.phone}`;
+            await sendQuickReplies(config.managerPsid, config.pageAccessToken, managerMsg, [
+              { title: "✅ Bestätigen", payload: `CONFIRM_${appt.id}` },
+              { title: "❌ Ablehnen", payload: `REJECT_${appt.id}` },
+            ]);
           }
         } else {
           // Normal conversation

@@ -150,13 +150,12 @@ function safeParseJSON(text: string): any {
 
 // Generic Gemini JSON fallback (for strategy/trend data — no content normalization)
 async function callGeminiJSONGeneric(prompt: string, systemPrompt: string): Promise<any> {
-  const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+  const fullPrompt = `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON only, no markdown, no explanation.\n\n${prompt}`;
   const response = await gemini.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
     config: {
       maxOutputTokens: 16384,
-      responseMimeType: "application/json",
     },
   });
   const text = response.text;
@@ -164,23 +163,9 @@ async function callGeminiJSONGeneric(prompt: string, systemPrompt: string): Prom
   return safeParseJSON(text);
 }
 
-// Agent 1: Grok — real-time trends & market research (fallback: OpenAI → Gemini)
+// Agent 1: Trend research — goes directly to OpenAI (Grok disabled, no credits)
 async function callGrokJSON(prompt: string, systemPrompt: string): Promise<any> {
-  try {
-    const response = await grok.chat.completions.create({
-      model: "grok-3",
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
-    });
-    return JSON.parse(response.choices[0]?.message?.content ?? "{}");
-  } catch (err: any) {
-    console.warn("Grok unavailable, falling back to OpenAI for Trend Research:", err?.message);
-    return callOpenAIJSON(prompt, systemPrompt);
-  }
+  return callOpenAIJSON(prompt, systemPrompt);
 }
 
 // Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering (fallback: Gemini)
@@ -205,7 +190,7 @@ async function callOpenAIJSON(prompt: string, systemPrompt: string): Promise<any
 // Agent 3: Gemini — creative German content writing
 const gemini = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
+  httpOptions: { apiVersion: "v1" },
 });
 
 // Normalize content JSON — handle Gemini returning array, wrong field names, nested structures
@@ -305,13 +290,14 @@ Anforderungen:
 }
 
 async function callGeminiJSON(prompt: string, systemPrompt?: string): Promise<any> {
-  const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+  const fullPrompt = systemPrompt
+    ? `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON only, no markdown, no explanation.\n\n${prompt}`
+    : `IMPORTANT: Respond with valid JSON only, no markdown, no explanation.\n\n${prompt}`;
   const response = await gemini.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
     config: {
       maxOutputTokens: 16384,
-      responseMimeType: "application/json",
     },
   });
   const text = response.text;

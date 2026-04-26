@@ -80,20 +80,24 @@ function verifyState(state: string): { brandId: string } | null {
 }
 
 // ─── URL HELPERS ─────────────────────────────────────────────────────────────
-function getCallbackUrl(): string {
+// PUBLIC_URL takes precedence (full URL with scheme, e.g. "https://app.example.com").
+// Falls back to PUBLIC_DOMAIN, then Replit env vars, then localhost.
+function getPublicBaseUrl(): string {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, "");
   const domain =
+    process.env.PUBLIC_DOMAIN ??
     process.env.REPLIT_DOMAINS?.split(",")[0] ??
-    process.env.REPLIT_DEV_DOMAIN ??
-    "localhost:3000";
-  return `https://${domain}/api/reviews/google-auth/callback`;
+    process.env.REPLIT_DEV_DOMAIN;
+  if (domain) return `https://${domain}`;
+  return "http://localhost:3000";
+}
+
+function getCallbackUrl(): string {
+  return `${getPublicBaseUrl()}/api/reviews/google-auth/callback`;
 }
 
 function getFrontendUrl(): string {
-  const domain =
-    process.env.REPLIT_DOMAINS?.split(",")[0] ??
-    process.env.REPLIT_DEV_DOMAIN ??
-    "localhost:3000";
-  return `https://${domain}/reviews`;
+  return `${getPublicBaseUrl()}/reviews`;
 }
 
 // ─── ACCOUNT ID HELPER ───────────────────────────────────────────────────────

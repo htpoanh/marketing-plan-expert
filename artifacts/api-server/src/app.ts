@@ -9,17 +9,28 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
-const allowedOrigins = (process.env["REPLIT_DOMAINS"] ?? "")
+// Accept full origins from ALLOWED_ORIGINS (comma-separated, e.g. "https://app.example.com,https://www.example.com")
+// or fall back to Replit-style bare hostnames in REPLIT_DOMAINS.
+const explicitOrigins = (process.env["ALLOWED_ORIGINS"] ?? "")
   .split(",")
-  .map(d => `https://${d.trim()}`)
+  .map(o => o.trim())
   .filter(Boolean);
 
+const replitOrigins = (process.env["REPLIT_DOMAINS"] ?? "")
+  .split(",")
+  .map(d => d.trim())
+  .filter(Boolean)
+  .map(d => `https://${d}`);
+
+const allowedOrigins = [...explicitOrigins, ...replitOrigins];
+
 const isDev = process.env["NODE_ENV"] !== "production";
+const allowAllOrigins = process.env["ALLOWED_ORIGINS"]?.trim() === "*";
 
 app.use(cors({
   credentials: true,
-  origin: isDev
-    ? (origin, cb) => cb(null, true) // allow all in local dev
+  origin: isDev || allowAllOrigins
+    ? (origin, cb) => cb(null, true) // allow all in local dev or when explicitly opted-in
     : allowedOrigins.length > 0
       ? (origin, cb) => {
           if (!origin || allowedOrigins.some(o => origin === o || origin === `${o}/`)) {
@@ -28,7 +39,11 @@ app.use(cors({
             cb(new Error(`CORS blocked: ${origin}`));
           }
         }
-      : false,
+      : (origin, cb) => {
+          // No allowlist configured: allow same-origin / no-origin requests (e.g. nginx reverse proxy on same domain).
+          if (!origin) cb(null, true);
+          else cb(new Error(`CORS blocked: ${origin}. Set ALLOWED_ORIGINS env var.`));
+        },
 }));
 
 app.use(express.json({ limit: "50mb" }));

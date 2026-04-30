@@ -7,7 +7,9 @@ import {
   jsonb,
   decimal,
   index,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { brandsTable } from "./brands";
 
 /**
@@ -60,6 +62,14 @@ export const adsReportsTable = pgTable(
       table.module,
     ),
     createdAtIdx: index("idx_ads_reports_created_at").on(table.createdAt),
+    moduleCheck: check(
+      "ads_reports_module_check",
+      sql`${table.module} IN ('audience', 'keyword', 'performance', 'trend')`,
+    ),
+    providerCheck: check(
+      "ads_reports_provider_check",
+      sql`${table.aiProvider} IN ('anthropic', 'google', 'openai', 'xai')`,
+    ),
   }),
 );
 

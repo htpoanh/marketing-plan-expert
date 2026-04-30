@@ -1,0 +1,13 @@
+{
+  "name": "@workspace/integrations-xai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "openai": "^6.27.0",
+    "p-retry": "^7.1.1"
+  }
+}

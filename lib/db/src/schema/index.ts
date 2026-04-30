@@ -12,3 +12,4 @@ export * from "./messenger_configs";
 export * from "./messenger_sessions";
 export * from "./appointments";
 export * from "./strategies";
+export * from "./ads_reports";

@@ -18,6 +18,12 @@
     },
     {
       "path": "../../lib/integrations-gemini-ai"
+    },
+    {
+      "path": "../../lib/integrations-openai"
+    },
+    {
+      "path": "../../lib/integrations-xai"
     }
   ]
 }

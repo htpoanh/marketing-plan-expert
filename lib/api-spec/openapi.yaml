@@ -23,6 +23,8 @@ tags:
     description: Content approval workflow
   - name: strategy
     description: AI marketing strategy generation
+  - name: adsStrategy
+    description: Ads Strategy Agent (M1 Audience, M2 Keywords, M3 Performance, M4 Trend)
 paths:
   /healthz:
     get:
@@ -635,6 +637,256 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ContentPlan"
+
+  # ── Ads Strategy Agent ──────────────────────────────────────────────────────
+  /ads-strategy/audience:
+    post:
+      operationId: generateAdsAudience
+      tags: [adsStrategy]
+      summary: M1 — Generate audience targeting (personas + Meta/Google JSON)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateAdsAudienceBody"
+      responses:
+        "200":
+          description: Audience report generated and saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsReport"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Module not yet implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ads-strategy/keywords:
+    post:
+      operationId: generateAdsKeywords
+      tags: [adsStrategy]
+      summary: M2 — Generate weighted keyword groups
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateAdsKeywordsBody"
+      responses:
+        "200":
+          description: Keyword report generated and saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsReport"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Module not yet implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ads-strategy/performance:
+    post:
+      operationId: analyzeAdsPerformance
+      tags: [adsStrategy]
+      summary: M3 — Analyze ads CSV (Meta/Google) and recommend budget reallocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeAdsPerformanceBody"
+      responses:
+        "200":
+          description: Performance report generated and saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsReport"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Module not yet implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ads-strategy/trend:
+    post:
+      operationId: getAdsTrendPulse
+      tags: [adsStrategy]
+      summary: M4 — Real-time trend pulse (Grok with web search)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetAdsTrendBody"
+      responses:
+        "200":
+          description: Trend report generated and saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsReport"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Module not yet implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ads-strategy/reports:
+    get:
+      operationId: listAdsReports
+      tags: [adsStrategy]
+      summary: List saved ads reports (filterable)
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: module
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [audience, keyword, performance, trend]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: List of reports (most recent first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdsReport"
+
+  /ads-strategy/reports/{id}:
+    get:
+      operationId: getAdsReport
+      tags: [adsStrategy]
+      summary: Get a single ads report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Report detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateAdsReport
+      tags: [adsStrategy]
+      summary: Update user notes on a report (only field that's user-mutable)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdsReportBody"
+      responses:
+        "200":
+          description: Updated report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAdsReport
+      tags: [adsStrategy]
+      summary: Delete a saved report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ads-strategy/cost-summary:
+    get:
+      operationId: getAdsCostSummary
+      tags: [adsStrategy]
+      summary: Aggregate AI cost grouped by provider + model for a time window
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: since
+          in: query
+          required: false
+          description: ISO date — start of window. Defaults to start of current month.
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Cost summary buckets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdsCostBucket"
 
 components:
   schemas:
@@ -1311,3 +1563,161 @@ components:
         - whenToUse
         - steps
         - example
+
+    # ── Ads Strategy Agent ──────────────────────────────────────────────────
+    AdsModule:
+      type: string
+      enum: [audience, keyword, performance, trend]
+      description: Which Ads Strategy module produced the report
+
+    AdsAiProvider:
+      type: string
+      enum: [anthropic, google, openai, xai]
+
+    AdsReport:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: integer }
+        module: { $ref: "#/components/schemas/AdsModule" }
+        input:
+          type: object
+          additionalProperties: true
+          description: Raw input the user submitted (form values + brand snapshot)
+        output:
+          type: object
+          additionalProperties: true
+          description: AI-generated, schema-validated output. Shape depends on `module`.
+        aiProvider: { $ref: "#/components/schemas/AdsAiProvider" }
+        aiModel: { type: string }
+        tokensInput: { type: ["integer", "null"] }
+        tokensOutput: { type: ["integer", "null"] }
+        costEur: { type: ["string", "null"], description: "Decimal(10,4) as string for precision" }
+        latencyMs: { type: ["integer", "null"] }
+        userNotes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - brandId
+        - module
+        - input
+        - output
+        - aiProvider
+        - aiModel
+        - tokensInput
+        - tokensOutput
+        - costEur
+        - latencyMs
+        - userNotes
+        - createdAt
+        - updatedAt
+
+    GenerateAdsAudienceBody:
+      type: object
+      properties:
+        brandId: { type: integer }
+        service:
+          type: string
+          description: Specific service / product to target (e.g. "Gel-Nägel Sommer 2026")
+        campaignGoal:
+          type: string
+          enum: [awareness, traffic, leads, conversions, retention]
+        budgetEur:
+          type: ["number", "null"]
+          description: Optional monthly ads budget in EUR for budget split suggestions
+        outputLanguage:
+          type: string
+          enum: [de, vi, en]
+          default: de
+      required:
+        - brandId
+        - service
+        - campaignGoal
+
+    GenerateAdsKeywordsBody:
+      type: object
+      properties:
+        brandId: { type: integer }
+        service: { type: string }
+        competitors:
+          type: array
+          items: { type: string }
+          description: Optional competitor names to exclude / negative-target
+        outputLanguage:
+          type: string
+          enum: [de, vi, en]
+          default: de
+      required:
+        - brandId
+        - service
+
+    AnalyzeAdsPerformanceBody:
+      type: object
+      properties:
+        brandId: { type: integer }
+        platform:
+          type: string
+          enum: [meta, google, mixed]
+        csvData:
+          type: string
+          description: Raw CSV exported from Meta Ads Manager / Google Ads Editor (max 10MB)
+        goal:
+          type: object
+          properties:
+            cplTargetEur: { type: ["number", "null"] }
+            avgTicketEur: { type: ["number", "null"] }
+            roasTarget: { type: ["number", "null"] }
+        outputLanguage:
+          type: string
+          enum: [de, vi, en]
+          default: de
+      required:
+        - brandId
+        - platform
+        - csvData
+
+    GetAdsTrendBody:
+      type: object
+      properties:
+        brandId: { type: integer }
+        regionFocus:
+          type: string
+          description: Region to scope trend search (e.g. "Bayern", "Allgäu")
+        topic:
+          type: ["string", "null"]
+          description: Optional topic seed (e.g. "Nail Trends 2026")
+        outputLanguage:
+          type: string
+          enum: [de, vi, en]
+          default: de
+      required:
+        - brandId
+        - regionFocus
+
+    UpdateAdsReportBody:
+      type: object
+      properties:
+        userNotes:
+          type: ["string", "null"]
+      required:
+        - userNotes
+
+    AdsCostBucket:
+      type: object
+      properties:
+        aiProvider: { $ref: "#/components/schemas/AdsAiProvider" }
+        aiModel: { type: string }
+        module: { $ref: "#/components/schemas/AdsModule" }
+        callCount: { type: integer }
+        totalTokensInput: { type: integer }
+        totalTokensOutput: { type: integer }
+        totalCostEur: { type: string, description: "Decimal(10,4) as string" }
+      required:
+        - aiProvider
+        - aiModel
+        - module
+        - callCount
+        - totalTokensInput
+        - totalTokensOutput
+        - totalCostEur

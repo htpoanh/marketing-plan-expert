@@ -49,7 +49,7 @@ const navigation = [
   { name: "Lịch nội dung", href: "/calendar", icon: CalendarDays },
   { name: "Phê duyệt", href: "/approvals", icon: CheckSquare },
   { name: "Automation", href: "/automation", icon: Zap },
-  { name: "Phân tích quảng cáo", href: "/analysis", icon: BarChart2 },
+  { name: "Ads Strategy AI", href: "/strategy/ads", icon: BarChart2 },
   { name: "AI Đặt lịch Messenger", href: "/messenger", icon: MessagesSquare },
 ];
 

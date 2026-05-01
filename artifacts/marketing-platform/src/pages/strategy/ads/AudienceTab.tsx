@@ -33,10 +33,19 @@ export default function AudienceTab({ brands, brandsLoading }: Props) {
   );
   const [budget, setBudget] = useState<string>("");
   const [language, setLanguage] = useState<"de" | "vi" | "en">("de");
+  const [bypassCache, setBypassCache] = useState(false);
   const [result, setResult] = useState<AdsReport | null>(null);
 
   const { toast } = useToast();
   const mutation = useGenerateAdsAudience();
+
+  // A report whose createdAt is older than ~60s is definitely a cache hit.
+  // The backend signals it via the X-Cache header, but our generated
+  // customFetch returns the JSON body only — checking createdAt is just as
+  // reliable for our purposes (a fresh AI call cannot return a multi-minute-old
+  // record).
+  const isCacheHit =
+    result && Date.now() - new Date(result.createdAt).getTime() > 60_000;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,20 +67,34 @@ export default function AudienceTab({ brands, brandsLoading }: Props) {
     }
 
     try {
-      const data = await mutation.mutateAsync({
+      const data = (await mutation.mutateAsync({
         data: {
           brandId: Number(brandId),
           service: service.trim(),
           campaignGoal: goal,
           budgetEur: budget ? Number(budget) : null,
           outputLanguage: language,
+          bypassCache,
         },
-      });
-      setResult(data as AdsReport);
-      toast({
-        title: "Đã tạo personas",
-        description: `${(data as AdsReport).aiModel} • ${(data as AdsReport).latencyMs}ms • €${(data as AdsReport).costEur ?? "0.0000"}`,
-      });
+      })) as AdsReport;
+      setResult(data);
+
+      const wasCached =
+        Date.now() - new Date(data.createdAt).getTime() > 60_000;
+      if (wasCached) {
+        const ageHours = Math.round(
+          (Date.now() - new Date(data.createdAt).getTime()) / (60 * 60 * 1000),
+        );
+        toast({
+          title: "💰 Đã dùng cache (tiết kiệm 100%)",
+          description: `Report cũ ${ageHours}h trước, không gọi AI. Tick "Bỏ qua cache" để tạo mới.`,
+        });
+      } else {
+        toast({
+          title: "Đã tạo personas",
+          description: `${data.aiModel} • ${data.latencyMs}ms • €${data.costEur ?? "0.0000"}`,
+        });
+      }
     } catch (err) {
       const message = (err as Error)?.message ?? "Generate failed";
       toast({
@@ -171,6 +194,23 @@ export default function AudienceTab({ brands, brandsLoading }: Props) {
             </p>
           </div>
 
+          <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={bypassCache}
+              onChange={(e) => setBypassCache(e.target.checked)}
+              className="mt-0.5"
+              data-testid="audience-bypass-cache"
+            />
+            <span>
+              Bỏ qua cache (tạo mới — tốn token).{" "}
+              <span className="text-[10px] opacity-70">
+                Mặc định cùng input + cùng brand trong 7 ngày sẽ trả lại
+                report cũ, miễn phí.
+              </span>
+            </span>
+          </label>
+
           <Button
             type="submit"
             disabled={mutation.isPending}
@@ -216,7 +256,27 @@ export default function AudienceTab({ brands, brandsLoading }: Props) {
               </p>
             </div>
           )}
-          {result && <AudienceResult report={result} />}
+          {result && (
+            <>
+              {isCacheHit && (
+                <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-lg px-3 py-2 text-xs flex items-center gap-2">
+                  <span className="text-base">💰</span>
+                  <span>
+                    <strong className="text-emerald-400">
+                      Cache hit — không gọi AI
+                    </strong>{" "}
+                    <span className="text-muted-foreground">
+                      (report cũ ngày{" "}
+                      {new Date(result.createdAt).toLocaleString("de-DE")} —
+                      tiết kiệm €{result.costEur ?? "0.0000"}). Tick "Bỏ qua
+                      cache" trong form nếu muốn tạo mới.
+                    </span>
+                  </span>
+                </div>
+              )}
+              <AudienceResult report={result} />
+            </>
+          )}
         </div>
       </div>
     </div>

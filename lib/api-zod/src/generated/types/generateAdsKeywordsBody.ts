@@ -13,4 +13,6 @@ export interface GenerateAdsKeywordsBody {
   /** Optional competitor names to exclude / negative-target */
   competitors?: string[];
   outputLanguage?: GenerateAdsKeywordsBodyOutputLanguage;
+  /** Skip the 7-day cache lookup and force a fresh AI call */
+  bypassCache?: boolean;
 }

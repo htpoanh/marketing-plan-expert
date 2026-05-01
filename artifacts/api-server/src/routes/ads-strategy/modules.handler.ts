@@ -34,6 +34,9 @@ import { z, ZodError } from "zod";
 
 import { generateAudience } from "../../services/ads-strategy/audience.service";
 import { generateKeywords } from "../../services/ads-strategy/keywords.service";
+import { AUDIENCE_PROMPT_VERSION } from "../../services/ads-strategy/prompts/audience.prompt";
+import { KEYWORDS_PROMPT_VERSION } from "../../services/ads-strategy/prompts/keywords.prompt";
+import { buildCacheKey, findCachedReport, CACHE_TTL_DAYS } from "../../services/ads-strategy/cache";
 
 const router: IRouter = Router();
 
@@ -51,6 +54,8 @@ const audienceInputSchema = z.object({
   ]),
   budgetEur: z.number().positive().nullable().optional(),
   outputLanguage: z.enum(["de", "vi", "en"]).default("de"),
+  /** Pass true to skip the 7-day cache lookup and force a fresh AI call. */
+  bypassCache: z.boolean().optional().default(false),
 });
 
 const keywordsInputSchema = z.object({
@@ -58,6 +63,7 @@ const keywordsInputSchema = z.object({
   service: z.string().min(3).max(500),
   competitors: z.array(z.string()).max(20).optional().default([]),
   outputLanguage: z.enum(["de", "vi", "en"]).default("de"),
+  bypassCache: z.boolean().optional().default(false),
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -116,6 +122,26 @@ router.post("/audience", async (req, res) => {
       return res.status(404).json({ error: `Brand ${input.brandId} not found` });
     }
 
+    // Cache key: anything that affects the prompt or output goes in here.
+    // bypassCache itself is excluded so toggling it doesn't change the key.
+    const { bypassCache, ...formInput } = input;
+    const cacheKey = buildCacheKey({
+      brandId: brand.id,
+      brand,
+      module: "audience",
+      promptVersion: AUDIENCE_PROMPT_VERSION,
+      formInput,
+    });
+
+    if (!bypassCache) {
+      const cached = await findCachedReport(brand.id, "audience", cacheKey);
+      if (cached) {
+        res.setHeader("X-Cache", "HIT");
+        res.setHeader("X-Cache-Age-Days", String(CACHE_TTL_DAYS));
+        return res.json(cached);
+      }
+    }
+
     const result = await generateAudience(
       {
         service: input.service,
@@ -132,8 +158,8 @@ router.post("/audience", async (req, res) => {
         brandId: input.brandId,
         module: "audience",
         input: {
-          ...input,
-          meta: { promptVersion: result.promptVersion },
+          ...formInput,
+          meta: { promptVersion: result.promptVersion, cacheKey },
         },
         output: result.output,
         aiProvider: result.aiProvider,
@@ -145,6 +171,7 @@ router.post("/audience", async (req, res) => {
       })
       .returning();
 
+    res.setHeader("X-Cache", "MISS");
     return res.json(saved);
   } catch (err) {
     return handleError(res, err, "audience");
@@ -158,6 +185,24 @@ router.post("/keywords", async (req, res) => {
     const brand = await loadBrand(input.brandId);
     if (!brand) {
       return res.status(404).json({ error: `Brand ${input.brandId} not found` });
+    }
+
+    const { bypassCache, ...formInput } = input;
+    const cacheKey = buildCacheKey({
+      brandId: brand.id,
+      brand,
+      module: "keyword",
+      promptVersion: KEYWORDS_PROMPT_VERSION,
+      formInput,
+    });
+
+    if (!bypassCache) {
+      const cached = await findCachedReport(brand.id, "keyword", cacheKey);
+      if (cached) {
+        res.setHeader("X-Cache", "HIT");
+        res.setHeader("X-Cache-Age-Days", String(CACHE_TTL_DAYS));
+        return res.json(cached);
+      }
     }
 
     const result = await generateKeywords(
@@ -175,8 +220,8 @@ router.post("/keywords", async (req, res) => {
         brandId: input.brandId,
         module: "keyword",
         input: {
-          ...input,
-          meta: { promptVersion: result.promptVersion },
+          ...formInput,
+          meta: { promptVersion: result.promptVersion, cacheKey },
         },
         output: result.output,
         aiProvider: result.aiProvider,
@@ -188,6 +233,7 @@ router.post("/keywords", async (req, res) => {
       })
       .returning();
 
+    res.setHeader("X-Cache", "MISS");
     return res.json(saved);
   } catch (err) {
     return handleError(res, err, "keywords");

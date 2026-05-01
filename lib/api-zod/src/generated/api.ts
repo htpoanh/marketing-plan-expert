@@ -785,6 +785,7 @@ export const PublishContentPlanResponse = zod.object({
  * @summary M1 — Generate audience targeting (personas + Meta/Google JSON)
  */
 export const generateAdsAudienceBodyOutputLanguageDefault = `de`;
+export const generateAdsAudienceBodyBypassCacheDefault = false;
 
 export const GenerateAdsAudienceBody = zod.object({
   brandId: zod.number(),
@@ -809,6 +810,10 @@ export const GenerateAdsAudienceBody = zod.object({
   outputLanguage: zod
     .enum(["de", "vi", "en"])
     .default(generateAdsAudienceBodyOutputLanguageDefault),
+  bypassCache: zod
+    .boolean()
+    .default(generateAdsAudienceBodyBypassCacheDefault)
+    .describe("Skip the 7-day cache lookup and force a fresh AI call"),
 });
 
 export const GenerateAdsAudienceResponse = zod.object({
@@ -843,6 +848,7 @@ export const GenerateAdsAudienceResponse = zod.object({
  * @summary M2 — Generate weighted keyword groups
  */
 export const generateAdsKeywordsBodyOutputLanguageDefault = `de`;
+export const generateAdsKeywordsBodyBypassCacheDefault = false;
 
 export const GenerateAdsKeywordsBody = zod.object({
   brandId: zod.number(),
@@ -854,6 +860,10 @@ export const GenerateAdsKeywordsBody = zod.object({
   outputLanguage: zod
     .enum(["de", "vi", "en"])
     .default(generateAdsKeywordsBodyOutputLanguageDefault),
+  bypassCache: zod
+    .boolean()
+    .default(generateAdsKeywordsBodyBypassCacheDefault)
+    .describe("Skip the 7-day cache lookup and force a fresh AI call"),
 });
 
 export const GenerateAdsKeywordsResponse = zod.object({

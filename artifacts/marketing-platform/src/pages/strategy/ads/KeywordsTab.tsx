@@ -19,10 +19,14 @@ export default function KeywordsTab({ brands, brandsLoading }: Props) {
   const [service, setService] = useState("");
   const [competitorsText, setCompetitorsText] = useState("");
   const [language, setLanguage] = useState<"de" | "vi" | "en">("de");
+  const [bypassCache, setBypassCache] = useState(false);
   const [result, setResult] = useState<AdsReport | null>(null);
 
   const { toast } = useToast();
   const mutation = useGenerateAdsKeywords();
+
+  const isCacheHit =
+    result && Date.now() - new Date(result.createdAt).getTime() > 60_000;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,19 +51,33 @@ export default function KeywordsTab({ brands, brandsLoading }: Props) {
       .filter(Boolean);
 
     try {
-      const data = await mutation.mutateAsync({
+      const data = (await mutation.mutateAsync({
         data: {
           brandId: Number(brandId),
           service: service.trim(),
           competitors,
           outputLanguage: language,
+          bypassCache,
         },
-      });
-      setResult(data as AdsReport);
-      toast({
-        title: "Đã sinh keywords",
-        description: `${(data as AdsReport).aiModel} • ${(data as AdsReport).latencyMs}ms • €${(data as AdsReport).costEur ?? "0.0000"}`,
-      });
+      })) as AdsReport;
+      setResult(data);
+
+      const wasCached =
+        Date.now() - new Date(data.createdAt).getTime() > 60_000;
+      if (wasCached) {
+        const ageHours = Math.round(
+          (Date.now() - new Date(data.createdAt).getTime()) / (60 * 60 * 1000),
+        );
+        toast({
+          title: "💰 Đã dùng cache (tiết kiệm 100%)",
+          description: `Report cũ ${ageHours}h trước, không gọi AI. Tick "Bỏ qua cache" để tạo mới.`,
+        });
+      } else {
+        toast({
+          title: "Đã sinh keywords",
+          description: `${data.aiModel} • ${data.latencyMs}ms • €${data.costEur ?? "0.0000"}`,
+        });
+      }
     } catch (err) {
       const message = (err as Error)?.message ?? "Generate failed";
       toast({
@@ -148,6 +166,23 @@ export default function KeywordsTab({ brands, brandsLoading }: Props) {
             </p>
           </div>
 
+          <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={bypassCache}
+              onChange={(e) => setBypassCache(e.target.checked)}
+              className="mt-0.5"
+              data-testid="keywords-bypass-cache"
+            />
+            <span>
+              Bỏ qua cache (tạo mới — tốn token).{" "}
+              <span className="text-[10px] opacity-70">
+                Mặc định cùng input + cùng brand trong 7 ngày sẽ trả lại
+                report cũ, miễn phí.
+              </span>
+            </span>
+          </label>
+
           <Button
             type="submit"
             disabled={mutation.isPending}
@@ -189,7 +224,27 @@ export default function KeywordsTab({ brands, brandsLoading }: Props) {
               </p>
             </div>
           )}
-          {result && <KeywordsResult report={result} />}
+          {result && (
+            <>
+              {isCacheHit && (
+                <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-lg px-3 py-2 text-xs flex items-center gap-2">
+                  <span className="text-base">💰</span>
+                  <span>
+                    <strong className="text-emerald-400">
+                      Cache hit — không gọi AI
+                    </strong>{" "}
+                    <span className="text-muted-foreground">
+                      (report cũ ngày{" "}
+                      {new Date(result.createdAt).toLocaleString("de-DE")} —
+                      tiết kiệm €{result.costEur ?? "0.0000"}). Tick "Bỏ qua
+                      cache" trong form nếu muốn tạo mới.
+                    </span>
+                  </span>
+                </div>
+              )}
+              <KeywordsResult report={result} />
+            </>
+          )}
         </div>
       </div>
     </div>

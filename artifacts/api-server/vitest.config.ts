@@ -12,9 +12,32 @@ export default defineConfig({
     pool: "forks",
   },
   resolve: {
-    alias: {
-      "@workspace/db": path.resolve(__dirname, "../../lib/db/src/index.ts"),
-      "@workspace/db/schema": path.resolve(__dirname, "../../lib/db/src/schema/index.ts"),
-    },
+    // Use array form so we can control match order — most specific first.
+    // `@workspace/db/schema` must match BEFORE `@workspace/db` or it gets
+    // shadowed (Vite alias does plain prefix matching).
+    alias: [
+      {
+        find: /^@workspace\/db\/schema$/,
+        replacement: path.resolve(__dirname, "../../lib/db/src/schema/index.ts"),
+      },
+      {
+        find: /^@workspace\/db$/,
+        replacement: path.resolve(__dirname, "../../lib/db/src/index.ts"),
+      },
+      {
+        find: /^@workspace\/integrations-anthropic-ai$/,
+        replacement: path.resolve(
+          __dirname,
+          "../../lib/integrations-anthropic-ai/src/index.ts",
+        ),
+      },
+      {
+        find: /^@workspace\/integrations-gemini-ai$/,
+        replacement: path.resolve(
+          __dirname,
+          "../../lib/integrations-gemini-ai/src/index.ts",
+        ),
+      },
+    ],
   },
 });

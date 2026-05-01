@@ -21,7 +21,7 @@ import MarketingModels from "@/pages/pipeline/MarketingModels";
 import AIAgentsPage from "@/pages/agents/AIAgentsPage";
 import AutomationPage from "@/pages/automation/AutomationPage";
 import MessengerBot from "@/pages/messenger/MessengerBot";
-import AdsStrategyComingSoon from "@/pages/strategy/ads/AdsStrategyComingSoon";
+import AdsStrategyPage from "@/pages/strategy/ads/AdsStrategyPage";
 import { Loader2, Sparkles } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -60,8 +60,8 @@ function ProtectedRoutes() {
       <Route path="/calendar" component={ContentCalendar} />
       <Route path="/approvals" component={ApprovalDashboard} />
       <Route path="/automation" component={AutomationPage} />
-      <Route path="/strategy/ads" component={AdsStrategyComingSoon} />
-      <Route path="/strategy/ads/:tab" component={AdsStrategyComingSoon} />
+      <Route path="/strategy/ads" component={AdsStrategyPage} />
+      <Route path="/strategy/ads/:tab" component={AdsStrategyPage} />
       <Route path="/messenger" component={MessengerBot} />
       <Route component={NotFound} />
     </Switch>

@@ -499,6 +499,65 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
     }
   };
 
+  // ── Sync ALL Google Business reviews across all connected brands ──────────
+  // Uses the Business Profile API (paginated) — gets ALL reviews, not just 5.
+  const [syncingAllGmb, setSyncingAllGmb] = useState(false);
+  const [syncAllGmbResult, setSyncAllGmbResult] = useState<{
+    totalImported: number;
+    totalSkipped: number;
+    totalOnGoogle: number;
+    brands: Array<{
+      brandId: number;
+      brandName: string;
+      imported: number;
+      skipped: number;
+      total: number;
+      totalOnGoogle: number | null;
+      partial: boolean;
+      error?: string;
+    }>;
+    message?: string;
+  } | null>(null);
+
+  const handleSyncAllGmb = async () => {
+    setSyncingAllGmb(true);
+    setSyncAllGmbResult(null);
+    try {
+      const r = await fetch(`${BASE}/api/reviews/sync-gmb-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({
+          title: "Lỗi đồng bộ Google Business",
+          description: data.error ?? "Lỗi không xác định",
+          variant: "destructive",
+        });
+        return;
+      }
+      setSyncAllGmbResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
+      if (data.totalImported > 0) {
+        toast({
+          title: `Đã nhập ${data.totalImported} đánh giá mới từ ${data.brands.length} cửa hàng (Google: ${data.totalOnGoogle} tổng)`,
+        });
+      } else if (data.brands.length === 0) {
+        toast({
+          title: "Chưa có brand nào kết nối Google Business",
+          description: data.message ?? "",
+        });
+      } else {
+        toast({ title: "Đã đồng bộ — không có đánh giá mới" });
+      }
+    } catch {
+      toast({ title: "Không kết nối được máy chủ", variant: "destructive" });
+    } finally {
+      setSyncingAllGmb(false);
+    }
+  };
+
   const handleCheckKey = async () => {
     setCheckingKey(true);
     setKeyStatus(null);
@@ -759,17 +818,28 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
                 onClick={handleGmbSync}
                 disabled={gmbSyncing}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/25"
+                title="Đồng bộ TẤT CẢ đánh giá của brand này từ Google Business Profile (paginated, không giới hạn)"
               >
                 {gmbSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
-                {gmbSyncing ? "Đang đồng bộ tất cả..." : "Đồng bộ tất cả Reviews"}
+                {gmbSyncing ? "Đang đồng bộ..." : "Đồng bộ brand này (tất cả reviews)"}
+              </button>
+              <button
+                onClick={handleSyncAllGmb}
+                disabled={syncingAllGmb}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-violet-500/25"
+                title="Đồng bộ TẤT CẢ brand đã kết nối Google Business — load full reviews với pagination"
+              >
+                {syncingAllGmb ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+                {syncingAllGmb ? "Đang đồng bộ tất cả..." : "Đồng bộ TẤT CẢ brand"}
               </button>
               <button
                 onClick={handleSyncAllPlaces}
                 disabled={syncingAllPlaces}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/25"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-emerald-500/30 text-emerald-400 text-sm hover:bg-emerald-500/10 disabled:opacity-50 transition-all"
+                title="⚠ Places API chỉ load 5 đánh giá mới nhất / brand. Dùng GMB sync ở trên để có TẤT CẢ."
               >
                 {syncingAllPlaces ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                {syncingAllPlaces ? "Đang tải tất cả..." : "Đồng bộ qua Places API"}
+                {syncingAllPlaces ? "Đang tải..." : "Places API (tối đa 5/brand)"}
               </button>
               <button
                 onClick={handleGmbDisconnect}
@@ -780,6 +850,52 @@ function SyncTab({ brandId, brands }: { brandId: number; brands: any[] }) {
                 {disconnecting ? "Đang ngắt..." : "Ngắt kết nối"}
               </button>
             </div>
+
+            {/* Sync ALL GMB result (the GOOD one — full pagination across all brands) */}
+            {syncAllGmbResult && (
+              <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                <p className="text-sm font-semibold text-violet-300 mb-2 flex items-center gap-2">
+                  <Check className="w-4 h-4" /> Đồng bộ TẤT CẢ Google Business thành công!
+                </p>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-violet-300">{syncAllGmbResult.totalImported}</p>
+                    <p className="text-xs text-muted-foreground">Đánh giá mới</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-foreground/60">{syncAllGmbResult.totalSkipped}</p>
+                    <p className="text-xs text-muted-foreground">Đã có sẵn</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-card/50 text-center">
+                    <p className="text-xl font-bold text-foreground">{syncAllGmbResult.totalOnGoogle}</p>
+                    <p className="text-xs text-muted-foreground">Tổng trên Google</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {syncAllGmbResult.brands.map((b) => (
+                    <div key={b.brandId} className="flex items-center justify-between text-xs">
+                      <span className="truncate text-muted-foreground">{b.brandName}</span>
+                      {b.error ? (
+                        <span className="text-red-400 shrink-0 ml-2 truncate" title={b.error}>
+                          ❌ {b.error.slice(0, 40)}
+                        </span>
+                      ) : (
+                        <span className="shrink-0 ml-2 flex items-center gap-2">
+                          <span className="text-violet-300">+{b.imported} mới</span>
+                          <span className="text-muted-foreground/60">
+                            ({b.total}/{b.totalOnGoogle ?? "?"} fetched)
+                          </span>
+                          {b.partial && <span className="text-amber-400" title="Partial sync — một số page lỗi">⚠</span>}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {syncAllGmbResult.message && (
+                  <p className="text-xs text-muted-foreground mt-2 italic">{syncAllGmbResult.message}</p>
+                )}
+              </div>
+            )}
 
             {/* Sync All Places result */}
             {syncAllResult && (

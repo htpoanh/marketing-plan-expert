@@ -527,136 +527,325 @@ router.post("/:id/reply", async (req, res) => {
 });
 
 // ─── GOOGLE BUSINESS PROFILE SYNC (full reviews, no 5-review limit) ──────────
+// ── Internal: sync all GMB reviews for ONE brand ────────────────────────────
+// Extracted from POST /sync-gmb so it can be reused by /sync-gmb-all.
+// Returns null if the brand has no valid OAuth tokens (caller decides what to do).
+type SyncGmbResult = {
+  imported: number;
+  skipped: number;
+  total: number;
+  totalOnGoogle: number | null;
+  pagesFetched: number;
+  partial: boolean;       // true if pagination broke before completing
+  warning?: string;
+};
+
+async function syncGmbForBrand(brandId: number): Promise<
+  | { ok: true; data: SyncGmbResult }
+  | { ok: false; status: number; error: string; apiEnableUrl?: string; rateLimited?: boolean; showManual?: boolean }
+> {
+  const tokens = await getValidTokens(brandId);
+  if (!tokens) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Chưa kết nối Google Business Profile.",
+    };
+  }
+
+  // account_id may be empty if the GMB accounts API call failed at OAuth time
+  let accountId = tokens.account_id as string;
+  if (!accountId) {
+    const result = await ensureAccountId(brandId, tokens.access_token as string);
+    accountId = result.accountId ?? "";
+    if (!accountId) {
+      return {
+        ok: false,
+        status: 400,
+        error: result.rateLimited
+          ? "Quota Google Business đầy. Thử lại sau."
+          : result.apiEnableUrl
+          ? "Chưa bật API 'My Business Account Management'."
+          : "Không lấy được Account ID.",
+        apiEnableUrl: result.apiEnableUrl,
+        rateLimited: result.rateLimited ?? false,
+        showManual: true,
+      };
+    }
+  }
+
+  // Resolve location path (stored or auto-fetched first location)
+  let locationPath = tokens.location_id as string | null;
+  if (!locationPath) {
+    const locRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${accountId}/locations?readMask=name,title`,
+      { headers: { Authorization: `Bearer ${tokens.access_token as string}` } },
+    );
+    const locData = (await locRes.json()) as Record<string, any>;
+    const locations: any[] = locData.locations ?? [];
+    if (locations.length > 0) {
+      locationPath = locations[0].name as string;
+      await db.execute(sql`
+        UPDATE google_oauth_tokens
+        SET location_id = ${locationPath}, updated_at = NOW()
+        WHERE brand_id = ${brandId}
+      `);
+    }
+  }
+  if (!locationPath) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Không tìm thấy địa điểm nào trong Google Business Profile.",
+    };
+  }
+
+  // ─── Paginate through ALL reviews with retry on transient errors ─────────
+  // Capture access_token in a const so the closure has a non-null reference
+  // even if tokens get refreshed elsewhere.
+  const accessToken = tokens.access_token as string;
+  let pageToken = "";
+  let allReviews: any[] = [];
+  let pagesFetched = 0;
+  let totalOnGoogle: number | null = null;
+  let partial = false;
+  let warning: string | undefined;
+
+  // Retry helper for one page (handles 429 + 5xx)
+  async function fetchOnePage(token: string): Promise<{
+    ok: true;
+    reviews: any[];
+    nextPageToken?: string;
+    totalReviewCount?: number;
+  } | { ok: false; status: number; message: string }> {
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const url = new URL(
+        `https://mybusiness.googleapis.com/v4/${locationPath}/reviews`,
+      );
+      url.searchParams.set("pageSize", "50");
+      if (token) url.searchParams.set("pageToken", token);
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = (await res.json()) as Record<string, any>;
+
+      if (res.ok) {
+        return {
+          ok: true,
+          reviews: data.reviews ?? [],
+          nextPageToken: data.nextPageToken,
+          totalReviewCount: data.totalReviewCount,
+        };
+      }
+
+      // Retry on 429 / 5xx
+      if (res.status === 429 || res.status >= 500) {
+        const backoffMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+        console.warn(
+          `[sync-gmb] page fetch ${res.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${backoffMs}ms`,
+        );
+        await new Promise((r) => setTimeout(r, backoffMs));
+        continue;
+      }
+
+      // Non-retryable
+      return {
+        ok: false,
+        status: res.status,
+        message: data.error?.message ?? `HTTP ${res.status}`,
+      };
+    }
+    return { ok: false, status: 429, message: "Hết lượt retry (rate-limited)" };
+  }
+
+  do {
+    const pageResult = await fetchOnePage(pageToken);
+    if (!pageResult.ok) {
+      // Already got some pages — return partial success with warning
+      if (allReviews.length > 0) {
+        partial = true;
+        warning = `Page fetch failed: ${pageResult.message}. Sync partial — ${allReviews.length} reviews captured before stopping.`;
+        console.warn(`[sync-gmb] ${warning}`);
+        break;
+      }
+      // First page failed — fail hard
+      return { ok: false, status: pageResult.status, error: pageResult.message };
+    }
+    pagesFetched++;
+    allReviews = allReviews.concat(pageResult.reviews);
+    if (pageResult.totalReviewCount != null) totalOnGoogle = pageResult.totalReviewCount;
+    pageToken = pageResult.nextPageToken ?? "";
+    if (pageResult.reviews.length === 0) break;
+  } while (pageToken);
+
+  // ─── Persist to DB ───────────────────────────────────────────────────────
+  const ratingMap: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+  let imported = 0;
+  let skipped = 0;
+
+  for (const gr of allReviews) {
+    const googleReviewId = (gr.reviewId as string) ?? (gr.name as string);
+    const existing = await db.execute(sql`
+      SELECT id FROM reviews
+      WHERE brand_id = ${brandId} AND google_review_id = ${googleReviewId}
+      LIMIT 1
+    `);
+    if (existing.rows.length > 0) {
+      skipped++;
+      continue;
+    }
+    await db.insert(reviewsTable).values({
+      brandId,
+      reviewerName: (gr.reviewer?.displayName as string) ?? "Anonym",
+      rating: ratingMap[gr.starRating as string] ?? 5,
+      reviewText: (gr.comment as string) ?? null,
+      reviewDate: gr.createTime ? new Date(gr.createTime as string) : new Date(),
+      replied: !!gr.reviewReply,
+      replyText: (gr.reviewReply?.comment as string) ?? null,
+      googleReviewId,
+    });
+    imported++;
+  }
+
+  // Verify completeness if Google reported a total
+  if (
+    totalOnGoogle != null &&
+    allReviews.length < totalOnGoogle &&
+    !partial
+  ) {
+    partial = true;
+    warning = `Got ${allReviews.length} reviews but Google reports ${totalOnGoogle} total — nextPageToken pipeline ended early.`;
+    console.warn(`[sync-gmb] brand ${brandId}: ${warning}`);
+  }
+
+  return {
+    ok: true,
+    data: {
+      imported,
+      skipped,
+      total: allReviews.length,
+      totalOnGoogle,
+      pagesFetched,
+      partial,
+      warning,
+    },
+  };
+}
+
 router.post("/sync-gmb", async (req, res) => {
   try {
     const { brandId } = req.body;
     if (!brandId) return res.status(400).json({ error: "brandId required" });
 
-    const tokens = await getValidTokens(parseInt(brandId));
-    if (!tokens) {
-      return res.status(401).json({
-        error: "Chưa kết nối Google Business Profile. Vui lòng kết nối trước.",
+    const result = await syncGmbForBrand(parseInt(brandId));
+    if (!result.ok) {
+      return res.status(result.status).json({
+        error: result.error,
+        apiEnableUrl: result.apiEnableUrl,
+        rateLimited: result.rateLimited,
+        showManual: result.showManual,
       });
     }
-
-    // account_id may be empty if the GMB accounts API call failed at OAuth time — recover now
-    let accountId = tokens.account_id as string;
-    if (!accountId) {
-      console.log("[sync-gmb] account_id missing — attempting to fetch from GMB API...");
-      const result = await ensureAccountId(parseInt(brandId), tokens.access_token as string);
-      accountId = result.accountId ?? "";
-      if (!accountId) {
-        return res.status(400).json({
-          error: result.rateLimited
-            ? "API Google đang trong thời gian chờ (quota). Dùng 'Nhập thủ công' bên dưới để thiết lập ngay."
-            : result.apiEnableUrl
-              ? "Chưa bật API 'My Business Account Management'. Nhấn nút bên dưới để bật rồi thử lại."
-              : "Không thể lấy Account ID. Dùng 'Nhập thủ công' bên dưới.",
-          apiEnableUrl: result.apiEnableUrl,
-          rateLimited: result.rateLimited ?? false,
-          showManual: true,
-        });
-      }
-      console.log(`[sync-gmb] Recovered account_id: ${accountId}`);
-    }
-
-    // Determine location path: stored or auto-fetched first location
-    let locationPath = tokens.location_id as string | null;
-    if (!locationPath) {
-      const locRes = await fetch(
-        `https://mybusinessbusinessinformation.googleapis.com/v1/${accountId}/locations?readMask=name,title`,
-        { headers: { Authorization: `Bearer ${tokens.access_token as string}` } }
-      );
-      const locData = (await locRes.json()) as Record<string, any>;
-      const locations: any[] = locData.locations ?? [];
-      if (locations.length > 0) {
-        locationPath = locations[0].name as string;
-        // Persist the auto-selected location
-        await db.execute(sql`
-          UPDATE google_oauth_tokens
-          SET location_id = ${locationPath}, updated_at = NOW()
-          WHERE brand_id = ${parseInt(brandId)}
-        `);
-      }
-    }
-
-    if (!locationPath) {
-      return res.status(400).json({
-        error: "Không tìm thấy địa điểm nào trong Google Business Profile.",
-      });
-    }
-
-    // Paginate through ALL reviews — no artificial cap
-    let pageToken = "";
-    let allReviews: any[] = [];
-
-    do {
-      const url = new URL(`https://mybusiness.googleapis.com/v4/${locationPath}/reviews`);
-      url.searchParams.set("pageSize", "50");
-      if (pageToken) url.searchParams.set("pageToken", pageToken);
-
-      const reviewsRes = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${tokens.access_token as string}` },
-      });
-      const reviewsData = (await reviewsRes.json()) as Record<string, any>;
-
-      if (!reviewsRes.ok) {
-        console.error("[sync-gmb] Business Profile API error:", reviewsData);
-        // If we already have some reviews, return partial success rather than failing entirely
-        if (allReviews.length > 0) {
-          console.warn(`[sync-gmb] Partial sync: ${allReviews.length} reviews fetched before error`);
-          break;
-        }
-        return res.status(400).json({
-          error: reviewsData.error?.message ?? "Lỗi từ Google Business Profile API",
-        });
-      }
-
-      const page: any[] = reviewsData.reviews ?? [];
-      allReviews = allReviews.concat(page);
-      pageToken = reviewsData.nextPageToken ?? "";
-
-      // Safety: stop if a page returns 0 reviews to prevent infinite loop
-      if (page.length === 0) break;
-    } while (pageToken);
-
-    // GMB API rating map
-    const ratingMap: Record<string, number> = {
-      ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5,
-    };
-
-    let imported = 0;
-    let skipped = 0;
-
-    for (const gr of allReviews) {
-      const googleReviewId = (gr.reviewId as string) ?? (gr.name as string);
-      const existing = await db.execute(sql`
-        SELECT id FROM reviews
-        WHERE brand_id = ${parseInt(brandId)} AND google_review_id = ${googleReviewId}
-        LIMIT 1
-      `);
-      if (existing.rows.length > 0) {
-        skipped++;
-        continue;
-      }
-
-      await db.insert(reviewsTable).values({
-        brandId: parseInt(brandId),
-        reviewerName: (gr.reviewer?.displayName as string) ?? "Anonym",
-        rating: ratingMap[gr.starRating as string] ?? 5,
-        reviewText: (gr.comment as string) ?? null,
-        reviewDate: gr.createTime ? new Date(gr.createTime as string) : new Date(),
-        replied: !!(gr.reviewReply),
-        replyText: (gr.reviewReply?.comment as string) ?? null,
-        googleReviewId,
-      });
-      imported++;
-    }
-
-    res.json({ success: true, imported, skipped, total: allReviews.length });
+    return res.json({ success: true, ...result.data });
   } catch (error) {
     console.error("[sync-gmb] Unexpected error:", error);
-    res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ Google Business Profile." });
+    return res
+      .status(500)
+      .json({ error: "Lỗi máy chủ khi đồng bộ Google Business Profile." });
+  }
+});
+
+// ─── SYNC ALL BRANDS via Business Profile API (the GOOD one) ─────────────────
+// Iterates over every brand that has a valid GMB OAuth token and syncs all
+// of its reviews via the paginated v4 Business Profile API. Use this instead
+// of /sync-all-places when you want ALL reviews (Places API caps at 5).
+router.post("/sync-gmb-all", async (_req, res) => {
+  try {
+    // Find every brand_id with stored OAuth tokens
+    const tokenRows = await db.execute(sql`
+      SELECT g.brand_id, b.brand_name
+      FROM google_oauth_tokens g
+      JOIN brands b ON b.id = g.brand_id
+      WHERE g.access_token IS NOT NULL
+      ORDER BY g.brand_id
+    `);
+
+    if (tokenRows.rows.length === 0) {
+      return res.json({
+        success: true,
+        totalImported: 0,
+        totalSkipped: 0,
+        brands: [],
+        message:
+          "Chưa có brand nào kết nối Google Business Profile. Vào trang Reviews → chọn brand → 'Kết nối Google Business' để bắt đầu.",
+      });
+    }
+
+    let totalImported = 0;
+    let totalSkipped = 0;
+    let totalOnGoogle = 0;
+    const results: Array<{
+      brandId: number;
+      brandName: string;
+      imported: number;
+      skipped: number;
+      total: number;
+      totalOnGoogle: number | null;
+      partial: boolean;
+      error?: string;
+    }> = [];
+
+    for (const row of tokenRows.rows as any[]) {
+      const brandId = row.brand_id as number;
+      const brandName = row.brand_name as string;
+      const result = await syncGmbForBrand(brandId);
+      if (!result.ok) {
+        results.push({
+          brandId,
+          brandName,
+          imported: 0,
+          skipped: 0,
+          total: 0,
+          totalOnGoogle: null,
+          partial: false,
+          error: result.error,
+        });
+        continue;
+      }
+      totalImported += result.data.imported;
+      totalSkipped += result.data.skipped;
+      if (result.data.totalOnGoogle != null) {
+        totalOnGoogle += result.data.totalOnGoogle;
+      }
+      results.push({
+        brandId,
+        brandName,
+        imported: result.data.imported,
+        skipped: result.data.skipped,
+        total: result.data.total,
+        totalOnGoogle: result.data.totalOnGoogle,
+        partial: result.data.partial,
+      });
+    }
+
+    console.log(
+      `[sync-gmb-all] Done: ${totalImported} imported, ${totalSkipped} skipped across ${tokenRows.rows.length} brands (Google reports ${totalOnGoogle} total)`,
+    );
+
+    return res.json({
+      success: true,
+      totalImported,
+      totalSkipped,
+      totalOnGoogle,
+      brands: results,
+    });
+  } catch (error) {
+    console.error("[sync-gmb-all] Error:", error);
+    return res
+      .status(500)
+      .json({ error: "Lỗi máy chủ khi đồng bộ tất cả Google Business Profile." });
   }
 });
 

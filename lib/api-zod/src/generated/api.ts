@@ -898,6 +898,7 @@ export const GenerateAdsKeywordsResponse = zod.object({
  * @summary M3 — Analyze ads CSV (Meta/Google) and recommend budget reallocation
  */
 export const analyzeAdsPerformanceBodyOutputLanguageDefault = `de`;
+export const analyzeAdsPerformanceBodyBypassCacheDefault = false;
 
 export const AnalyzeAdsPerformanceBody = zod.object({
   brandId: zod.number(),
@@ -917,6 +918,10 @@ export const AnalyzeAdsPerformanceBody = zod.object({
   outputLanguage: zod
     .enum(["de", "vi", "en"])
     .default(analyzeAdsPerformanceBodyOutputLanguageDefault),
+  bypassCache: zod
+    .boolean()
+    .default(analyzeAdsPerformanceBodyBypassCacheDefault)
+    .describe("Skip the 7-day cache lookup and force a fresh AI call"),
 });
 
 export const AnalyzeAdsPerformanceResponse = zod.object({

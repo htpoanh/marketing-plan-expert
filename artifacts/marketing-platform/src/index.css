@@ -128,3 +128,31 @@
 .glass-panel {
   @apply bg-white/70 backdrop-blur-xl border border-black/8 shadow-xl;
 }
+
+/* Print styles — used by the M3 Performance report (Cmd+P → PDF). Hides
+ * the app shell and form chrome so the printed output is just the analysis. */
+@media print {
+  aside, nav, header, footer { display: none !important; }
+  .print\:hidden { display: none !important; }
+
+  body, html {
+    background: white !important;
+    color: black !important;
+  }
+
+  main, .max-w-7xl, .max-w-6xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Don't break a card / table across pages if avoidable */
+  .border, .rounded-xl, .rounded-lg, table {
+    page-break-inside: avoid;
+  }
+
+  /* Reveal all tab panels so a printed PDF includes Hypotheses + Reallocation
+   * even if the user only had one tab open */
+  [role="tabpanel"][hidden] { display: block !important; }
+  [role="tab"] { display: none !important; }
+}

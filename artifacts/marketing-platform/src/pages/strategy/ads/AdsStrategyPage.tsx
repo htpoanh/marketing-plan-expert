@@ -6,6 +6,7 @@ import { useListBrands } from "@workspace/api-client-react";
 
 import AudienceTab from "./AudienceTab";
 import KeywordsTab from "./KeywordsTab";
+import PerformanceTab from "./PerformanceTab";
 import { CostSummaryWidget } from "./components/CostSummaryWidget";
 import { ReportsLibrary } from "./components/ReportsLibrary";
 
@@ -75,14 +76,14 @@ export default function AdsStrategyPage() {
             </TabsTrigger>
             <TabsTrigger
               value="performance"
-              className="data-[state=active]:bg-amber-500/15 data-[state=active]:border-amber-500/40 border border-border/50 px-4 py-3 h-auto flex flex-col items-start gap-1 opacity-60"
+              className="data-[state=active]:bg-amber-500/15 data-[state=active]:border-amber-500/40 border border-border/50 px-4 py-3 h-auto flex flex-col items-start gap-1"
               data-testid="tab-performance"
             >
               <div className="flex items-center gap-2 text-xs font-medium">
                 <BarChart3 className="w-3.5 h-3.5" /> M3 — Performance
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
-                Phase 3
+                Claude Sonnet
               </div>
             </TabsTrigger>
             <TabsTrigger
@@ -106,10 +107,7 @@ export default function AdsStrategyPage() {
             <KeywordsTab brands={brands} brandsLoading={brandsLoading} />
           </TabsContent>
           <TabsContent value="performance">
-            <ComingSoonNotice
-              moduleName="M3 — Performance Reality"
-              description="Upload CSV ads (Meta/Google) → Claude Sonnet phân tích lãng phí + đề xuất chia lại budget cụ thể €. Phase 3."
-            />
+            <PerformanceTab brands={brands} brandsLoading={brandsLoading} />
           </TabsContent>
           <TabsContent value="trend">
             <ComingSoonNotice

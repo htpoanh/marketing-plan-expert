@@ -97,6 +97,47 @@ export type AudienceOutput = {
   nextSteps: string[];
 };
 
+// ── M3 performance output shape ──────────────────────────────────────────────
+export type WhatWorking = {
+  pattern: string;
+  evidence: string[];
+  confidence: "high" | "medium" | "low";
+};
+
+export type WhatWasting = {
+  campaignName: string;
+  adSetName?: string | null;
+  spendEur: number;
+  reason: string;
+  recommendedAction: string;
+};
+
+export type Hypothesis = {
+  name: string;
+  hypothesis: string;
+  variantA: string;
+  variantB: string;
+  sampleSizeNeeded: string;
+  decisionCriteria: string;
+  expectedImpact: string;
+};
+
+export type BudgetMove = {
+  from: string;
+  to: string;
+  amountEur: number;
+  reason: string;
+};
+
+export type PerformanceOutput = {
+  executiveSummary: string;
+  whatWorking: WhatWorking[];
+  whatWasting: WhatWasting[];
+  hypotheses: Hypothesis[];
+  budgetReallocation: BudgetMove[];
+  risks: string[];
+};
+
 // ── M2 keywords output shape ─────────────────────────────────────────────────
 export type Keyword = {
   text: string;

@@ -450,6 +450,8 @@ export interface AnalyzeAdsPerformanceBody {
   csvData: string;
   goal?: AnalyzeAdsPerformanceBodyGoal;
   outputLanguage?: AnalyzeAdsPerformanceBodyOutputLanguage;
+  /** Skip the 7-day cache lookup and force a fresh AI call */
+  bypassCache?: boolean;
 }
 
 export type GetAdsTrendBodyOutputLanguage =

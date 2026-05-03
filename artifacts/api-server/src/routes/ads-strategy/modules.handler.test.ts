@@ -28,10 +28,22 @@ vi.mock("../../services/ads-strategy/keywords.service", () => ({
   KEYWORDS_MODEL: "gemini-2.5-flash",
 }));
 
+vi.mock("../../services/ads-strategy/performance.service", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../services/ads-strategy/performance.service")
+  >("../../services/ads-strategy/performance.service");
+  return {
+    ...actual,
+    analyzePerformance: vi.fn(),
+    PERFORMANCE_MODEL: "claude-sonnet-4-5-20250929",
+  };
+});
+
 import modulesRouter from "./modules.handler";
 import { db } from "@workspace/db";
 import { generateAudience } from "../../services/ads-strategy/audience.service";
 import { generateKeywords } from "../../services/ads-strategy/keywords.service";
+import { analyzePerformance } from "../../services/ads-strategy/performance.service";
 
 function makeApp() {
   const app = express();
@@ -257,16 +269,122 @@ describe("ads-strategy module endpoints", () => {
     });
   });
 
-  describe("M3 + M4 still stubs", () => {
-    it.each([["performance"], ["trend"]])(
-      "POST /%s returns 501",
-      async (path) => {
-        const res = await request(makeApp())
-          .post(`/ads-strategy/${path}`)
-          .send({});
-        expect(res.status).toBe(501);
-        expect(res.body.error).toMatch(/Phase [34]/);
-      },
-    );
+  describe("M3 performance", () => {
+    const validBody = {
+      brandId: 1,
+      csvData: "Campaign,Ad set name,Amount spent,Impressions\n" +
+               "Test,AS1,100.00,5000\nTest,AS2,200.00,10000\n",
+      goal: { cplTargetEur: 8 },
+    };
+
+    it("rejects bad payload with 400", async () => {
+      const res = await request(makeApp())
+        .post("/ads-strategy/performance")
+        .send({ brandId: 1 }); // missing csvData
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects oversized CSV (Zod limit 10MB OR express limit, both signal failure)", async () => {
+      // The real app uses express.json({ limit: "50mb" }) so payloads up to
+      // 50MB reach our Zod validator, which rejects >10MB with 400. The test
+      // app uses default express.json() (100KB limit) so a 12MB CSV is
+      // already rejected at the body parser with 413. Either response
+      // satisfies the requirement: oversized CSVs do not reach the AI.
+      const huge = "Campaign,Cost\n" + "X,1\n".repeat(3_000_000); // ~12MB
+      const res = await request(makeApp())
+        .post("/ads-strategy/performance")
+        .send({ brandId: 1, csvData: huge });
+      expect([400, 413]).toContain(res.status);
+    });
+
+    it("404 when brand not found", async () => {
+      mockSelectChains(null);
+      const res = await request(makeApp())
+        .post("/ads-strategy/performance")
+        .send(validBody);
+      expect(res.status).toBe(404);
+    });
+
+    it("happy path (cache MISS) calls Sonnet and persists", async () => {
+      mockSelectChains(fakeBrand, null);
+      (analyzePerformance as ReturnType<typeof vi.fn>).mockResolvedValue({
+        output: {
+          executiveSummary: "Spending €300, biggest leverage is shifting from AS1 to AS2.",
+          whatWorking: [],
+          whatWasting: [],
+          hypotheses: [
+            {
+              name: "h1",
+              hypothesis: "x",
+              variantA: "a",
+              variantB: "b",
+              sampleSizeNeeded: "5000 impressions",
+              decisionCriteria: "CTR uplift >0.5%",
+              expectedImpact: "10% CTR lift",
+            },
+          ],
+          budgetReallocation: [],
+          risks: ["Small sample"],
+        },
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5-20250929",
+        tokensInput: 7800,
+        tokensOutput: 2900,
+        costEur: "0.0623",
+        latencyMs: 8200,
+        promptVersion: "1.0.0",
+        detectedPlatform: "meta",
+        parsedStats: { rowCount: 2, totalSpendEur: 300, totalConversions: 0 },
+      });
+      mockReportInsert({
+        id: 50,
+        brandId: 1,
+        module: "performance",
+        aiModel: "claude-sonnet-4-5-20250929",
+      });
+
+      const res = await request(makeApp())
+        .post("/ads-strategy/performance")
+        .send(validBody);
+
+      expect(res.status).toBe(200);
+      expect(res.headers["x-cache"]).toBe("MISS");
+      expect(res.body).toMatchObject({ id: 50, module: "performance" });
+      expect(analyzePerformance).toHaveBeenCalledOnce();
+    });
+
+    it("returns 400 with hint when CSV is malformed", async () => {
+      mockSelectChains(fakeBrand, null);
+      (analyzePerformance as ReturnType<typeof vi.fn>).mockImplementation(
+        async () => {
+          // Re-import inline so we use the real CsvParseError class
+          const { CsvParseError } = await import(
+            "../../services/ads-strategy/performance.service"
+          );
+          throw new CsvParseError(
+            "Could not detect platform",
+            "Expected Meta or Google headers.",
+          );
+        },
+      );
+
+      const res = await request(makeApp())
+        .post("/ads-strategy/performance")
+        .send(validBody);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/CSV không hợp lệ/);
+      expect(res.body.hint).toMatch(/Expected Meta or Google/);
+    });
+  });
+
+  describe("M4 still stub", () => {
+    it("POST /trend returns 501", async () => {
+      const res = await request(makeApp())
+        .post("/ads-strategy/trend")
+        .send({});
+      expect(res.status).toBe(501);
+      expect(res.body.error).toMatch(/Phase 4/);
+    });
   });
 });

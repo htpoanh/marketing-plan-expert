@@ -55,7 +55,7 @@ export type ParsedCsv = {
   headers: string[];
   /** Format-detection details: which header tokens matched. */
   detection: {
-    matched: AdsPlatform | null;
+    platform: AdsPlatform | null;
     metaSignals: string[];
     googleSignals: string[];
   };

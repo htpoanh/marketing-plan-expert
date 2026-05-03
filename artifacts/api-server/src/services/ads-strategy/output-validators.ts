@@ -135,3 +135,61 @@ export const keywordsOutputSchema = z
   .passthrough();
 
 export type KeywordsOutput = z.infer<typeof keywordsOutputSchema>;
+
+// ── M3 performance ───────────────────────────────────────────────────────────
+
+const whatWorkingSchema = z
+  .object({
+    pattern: z.string(),
+    evidence: z.array(z.string()).min(1),
+    confidence: z.enum(["high", "medium", "low"]),
+  })
+  .passthrough();
+
+const whatWastingSchema = z
+  .object({
+    campaignName: z.string(),
+    adSetName: z.string().nullable().optional(),
+    spendEur: z.number(),
+    reason: z.string(),
+    recommendedAction: z.string(),
+  })
+  .passthrough();
+
+const hypothesisSchema = z
+  .object({
+    name: z.string(),
+    hypothesis: z.string(),
+    variantA: z.string(),
+    variantB: z.string(),
+    sampleSizeNeeded: z.string(),
+    decisionCriteria: z.string(),
+    expectedImpact: z.string(),
+  })
+  .passthrough();
+
+const budgetReallocationSchema = z
+  .object({
+    from: z.string(),
+    to: z.string(),
+    amountEur: z.number(),
+    reason: z.string(),
+  })
+  .passthrough();
+
+export const performanceOutputSchema = z
+  .object({
+    executiveSummary: z.string().min(20),
+    whatWorking: z.array(whatWorkingSchema),
+    whatWasting: z.array(whatWastingSchema),
+    /**
+     * Sonnet is asked for EXACTLY 3 hypotheses but we accept 1-5 to absorb
+     * minor model deviation without rejecting the whole report.
+     */
+    hypotheses: z.array(hypothesisSchema).min(1).max(5),
+    budgetReallocation: z.array(budgetReallocationSchema),
+    risks: z.array(z.string()),
+  })
+  .passthrough();
+
+export type PerformanceOutput = z.infer<typeof performanceOutputSchema>;

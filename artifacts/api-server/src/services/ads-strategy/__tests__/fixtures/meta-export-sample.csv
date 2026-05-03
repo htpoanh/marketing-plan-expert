@@ -1,0 +1,16 @@
+Reporting starts,Reporting ends,Campaign name,Ad set name,Ad name,Amount spent (EUR),Impressions,Link clicks,CTR (link click-through rate),CPC (cost per link click) (EUR),Reach,Frequency,Results,Cost per results (EUR)
+2026-04-01,2026-04-30,PNK_Sommer_Awareness,AS_Studentin_Kempten,Reel_BeforeAfter_v1,142.30,18430,612,3.32%,0.23,12100,1.52,28,5.08
+2026-04-01,2026-04-30,PNK_Sommer_Awareness,AS_Studentin_Kempten,Reel_TrendDesigns_v2,89.75,9210,310,3.36%,0.29,7400,1.24,15,5.98
+2026-04-01,2026-04-30,PNK_Sommer_Awareness,AS_Berufstaetige_30km,Static_Promo20Off,234.50,15600,180,1.15%,1.30,11200,1.39,4,58.62
+2026-04-01,2026-04-30,PNK_Sommer_Awareness,AS_Berufstaetige_30km,Carousel_Booking,67.10,4820,98,2.03%,0.68,3900,1.24,8,8.39
+2026-04-01,2026-04-30,PNK_Booking_Conversion,AS_Lookalike_Past,Static_BeforeAfter,512.40,28100,1240,4.41%,0.41,18500,1.52,87,5.89
+2026-04-01,2026-04-30,PNK_Booking_Conversion,AS_Lookalike_Past,Reel_NailArt_Trend,178.90,11200,489,4.37%,0.37,8900,1.26,42,4.26
+2026-04-01,2026-04-30,PNK_Booking_Conversion,AS_Interest_Beauty_Wide,Static_GenericPromo,389.20,42100,520,1.23%,0.75,32400,1.30,9,43.24
+2026-04-01,2026-04-30,PNK_Retargeting_Apr,AS_WebsiteVisitors_30d,Carousel_Reminder,124.80,8900,510,5.73%,0.24,6800,1.31,68,1.84
+2026-04-01,2026-04-30,PNK_Retargeting_Apr,AS_WebsiteVisitors_30d,Reel_Discount15,98.50,7100,389,5.48%,0.25,5400,1.31,52,1.89
+2026-04-01,2026-04-30,PNK_Retargeting_Apr,AS_WebsiteVisitors_7d,Static_BookNow,76.30,4200,289,6.88%,0.26,3100,1.35,41,1.86
+2026-04-01,2026-04-30,PNK_Awareness_Easter,AS_Broad_Allgaeu,Reel_EasterSpecial,201.40,22300,712,3.19%,0.28,16800,1.33,38,5.30
+2026-04-01,2026-04-30,PNK_Awareness_Easter,AS_Broad_Allgaeu,Static_EasterPromo,143.70,18900,210,1.11%,0.68,14200,1.33,5,28.74
+2026-04-01,2026-04-30,PNK_Awareness_Easter,AS_Tourists_Bodensee,Carousel_TouristOffer,89.40,9400,87,0.93%,1.03,7800,1.21,2,44.70
+2026-04-01,2026-04-30,PNK_Brand_Defense,AS_KW_ParadiseNails,Search_BrandDefense,42.80,2100,189,9.00%,0.23,1800,1.17,38,1.13
+2026-04-01,2026-04-30,PNK_Brand_Defense,AS_KW_NagelstudioKE,Search_LocationKW,67.30,3400,234,6.88%,0.29,2900,1.17,42,1.60

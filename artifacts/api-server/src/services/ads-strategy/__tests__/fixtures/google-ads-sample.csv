@@ -1,0 +1,14 @@
+Campaign,Ad group,Status,Cost,Impressions,Clicks,CTR,Avg. CPC,Conversions,Cost / conv.,Conv. value,All conv. value / cost
+PNK_Search_Brand,Brand_Defense,Enabled,28.40,1820,156,8.57%,0.18,18,1.58,720.00,25.35
+PNK_Search_Brand,Location_Kempten,Enabled,42.10,2900,201,6.93%,0.21,22,1.91,990.00,23.52
+PNK_Search_Service,Gel_Naegel_KE,Enabled,189.30,8400,420,5.00%,0.45,38,4.98,1710.00,9.03
+PNK_Search_Service,Naildesign_KE,Enabled,234.50,11200,389,3.47%,0.60,29,8.09,1305.00,5.56
+PNK_Search_Service,Maniküre_KE,Enabled,98.40,5100,178,3.49%,0.55,12,8.20,540.00,5.49
+PNK_Display_Awareness,Beauty_Interests,Enabled,312.80,148000,520,0.35%,0.60,8,39.10,360.00,1.15
+PNK_Display_Awareness,Female_18_45_Bayern,Enabled,267.40,98000,389,0.40%,0.69,6,44.57,270.00,1.01
+PNK_PMax_Conversions,All_Assets,Enabled,489.20,67000,1240,1.85%,0.39,72,6.79,3240.00,6.62
+PNK_PMax_Conversions,Booking_Focus,Enabled,234.50,32000,612,1.91%,0.38,38,6.17,1710.00,7.29
+PNK_DemandGen_Reel,Reel_BeforeAfter,Enabled,178.90,42000,489,1.16%,0.37,21,8.52,945.00,5.28
+PNK_DemandGen_Reel,Reel_TrendVideos,Enabled,142.30,38000,398,1.05%,0.36,18,7.91,810.00,5.69
+PNK_Retargeting,Website_Visitors,Enabled,89.40,12400,510,4.11%,0.18,42,2.13,1890.00,21.14
+PNK_Retargeting,Cart_Abandoners,Enabled,67.10,8200,289,3.52%,0.23,28,2.40,1260.00,18.78

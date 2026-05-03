@@ -7,6 +7,9 @@ const router: IRouter = Router();
 
 // ─── DB SETUP ────────────────────────────────────────────────────────────────
 let dbSetupDone = false;
+export async function ensureGoogleOauthTable() {
+  return ensureTable();
+}
 async function ensureTable() {
   if (dbSetupDone) return;
   await db.execute(sql`

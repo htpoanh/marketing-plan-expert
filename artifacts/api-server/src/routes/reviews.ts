@@ -4,7 +4,7 @@ import { reviewsTable, brandsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { getValidTokens, ensureAccountId } from "./google-auth";
+import { getValidTokens, ensureAccountId, ensureGoogleOauthTable } from "./google-auth";
 
 const router: IRouter = Router();
 
@@ -763,6 +763,11 @@ router.post("/sync-gmb", async (req, res) => {
 // of /sync-all-places when you want ALL reviews (Places API caps at 5).
 router.post("/sync-gmb-all", async (_req, res) => {
   try {
+    // The google_oauth_tokens table is created lazily by google-auth.ts on
+    // the first OAuth flow. If no brand has ever connected, the table won't
+    // exist yet — make sure it does before we query it.
+    await ensureGoogleOauthTable();
+
     // Find every brand_id with stored OAuth tokens
     const tokenRows = await db.execute(sql`
       SELECT g.brand_id, b.brand_name

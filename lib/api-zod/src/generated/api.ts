@@ -782,6 +782,163 @@ export const PublishContentPlanResponse = zod.object({
 });
 
 /**
+ * @summary Get the ads_context JSONB blob (+ service_radius_km + avg_ticket_size_eur) for one brand
+ */
+export const GetBrandAdsContextParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetBrandAdsContextResponse = zod
+  .object({
+    brandId: zod.number(),
+    adsContext: zod.union([
+      zod
+        .object({
+          uniqueSellingPoints: zod.array(zod.string()).optional(),
+          competitors: zod
+            .array(
+              zod.object({
+                name: zod.string(),
+                url: zod.string().nullish(),
+                notes: zod.string().nullish(),
+              }),
+            )
+            .optional(),
+          pricePositioning: zod
+            .union([
+              zod.literal("budget"),
+              zod.literal("mid"),
+              zod.literal("premium"),
+              zod.literal("luxury"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          bookingUrl: zod.string().nullish(),
+          metaPixelId: zod.string().nullish(),
+          googleAdsCustomerId: zod.string().nullish(),
+          primaryRegions: zod.array(zod.string()).optional(),
+          excludedRegions: zod.array(zod.string()).optional(),
+          primaryLanguages: zod.array(zod.string()).optional(),
+          notes: zod.string().nullish(),
+        })
+        .describe(
+          "Free-form brand metadata used to ground Ads Strategy Agent prompts.",
+        ),
+      zod.null(),
+    ]),
+    serviceRadiusKm: zod.number().nullable(),
+    avgTicketSizeEur: zod
+      .string()
+      .nullable()
+      .describe("Decimal(10,2) returned as string for precision"),
+    updatedAt: zod.date(),
+  })
+  .describe(
+    "Wraps ads_context with the two scalar columns we put on brands at the same time.",
+  );
+
+/**
+ * @summary Update the ads_context JSONB + radius + ticket fields for one brand
+ */
+export const UpdateBrandAdsContextParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateBrandAdsContextBody = zod.object({
+  adsContext: zod
+    .union([
+      zod
+        .object({
+          uniqueSellingPoints: zod.array(zod.string()).optional(),
+          competitors: zod
+            .array(
+              zod.object({
+                name: zod.string(),
+                url: zod.string().nullish(),
+                notes: zod.string().nullish(),
+              }),
+            )
+            .optional(),
+          pricePositioning: zod
+            .union([
+              zod.literal("budget"),
+              zod.literal("mid"),
+              zod.literal("premium"),
+              zod.literal("luxury"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          bookingUrl: zod.string().nullish(),
+          metaPixelId: zod.string().nullish(),
+          googleAdsCustomerId: zod.string().nullish(),
+          primaryRegions: zod.array(zod.string()).optional(),
+          excludedRegions: zod.array(zod.string()).optional(),
+          primaryLanguages: zod.array(zod.string()).optional(),
+          notes: zod.string().nullish(),
+        })
+        .describe(
+          "Free-form brand metadata used to ground Ads Strategy Agent prompts.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
+  serviceRadiusKm: zod.number().nullish(),
+  avgTicketSizeEur: zod
+    .string()
+    .nullish()
+    .describe('Decimal(10,2) as string (e.g. \"45.00\")'),
+});
+
+export const UpdateBrandAdsContextResponse = zod
+  .object({
+    brandId: zod.number(),
+    adsContext: zod.union([
+      zod
+        .object({
+          uniqueSellingPoints: zod.array(zod.string()).optional(),
+          competitors: zod
+            .array(
+              zod.object({
+                name: zod.string(),
+                url: zod.string().nullish(),
+                notes: zod.string().nullish(),
+              }),
+            )
+            .optional(),
+          pricePositioning: zod
+            .union([
+              zod.literal("budget"),
+              zod.literal("mid"),
+              zod.literal("premium"),
+              zod.literal("luxury"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          bookingUrl: zod.string().nullish(),
+          metaPixelId: zod.string().nullish(),
+          googleAdsCustomerId: zod.string().nullish(),
+          primaryRegions: zod.array(zod.string()).optional(),
+          excludedRegions: zod.array(zod.string()).optional(),
+          primaryLanguages: zod.array(zod.string()).optional(),
+          notes: zod.string().nullish(),
+        })
+        .describe(
+          "Free-form brand metadata used to ground Ads Strategy Agent prompts.",
+        ),
+      zod.null(),
+    ]),
+    serviceRadiusKm: zod.number().nullable(),
+    avgTicketSizeEur: zod
+      .string()
+      .nullable()
+      .describe("Decimal(10,2) returned as string for precision"),
+    updatedAt: zod.date(),
+  })
+  .describe(
+    "Wraps ads_context with the two scalar columns we put on brands at the same time.",
+  );
+
+/**
  * @summary M1 — Generate audience targeting (personas + Meta/Google JSON)
  */
 export const generateAdsAudienceBodyOutputLanguageDefault = `de`;

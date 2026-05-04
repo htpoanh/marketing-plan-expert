@@ -8,7 +8,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Store, Plus, MapPin, Target, Megaphone, Trash2, Edit3, X, Bot, Copy, Loader2 } from "lucide-react";
+import { Store, Plus, MapPin, Target, Megaphone, Trash2, Edit3, X, Bot, Copy, Loader2, Sparkles } from "lucide-react";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
 type AiProfile = { id: number; profileName: string; industry: string | null; isDefault: boolean };
@@ -19,6 +20,7 @@ export default function BrandManager() {
   const { data: brands, isLoading } = useListBrands();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [cloningId, setCloningId] = useState<number | null>(null);
 
   const handleClone = async (brandId: number, brandName: string) => {
@@ -163,6 +165,14 @@ export default function BrandManager() {
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => navigate(`/brands/${brand.id}/ads-context`)}
+                      title="Brand Context cho AI (M1/M2/M3/M4)"
+                      className="p-2 hover:bg-violet-500/20 rounded-lg text-muted-foreground hover:text-violet-400"
+                      data-testid={`brand-${brand.id}-ai-context`}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                    </button>
                     <button onClick={() => handleEdit(brand)} title="Chỉnh sửa" className="p-2 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground">
                       <Edit3 className="w-4 h-4" />
                     </button>

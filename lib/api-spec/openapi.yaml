@@ -639,6 +639,58 @@ paths:
                 $ref: "#/components/schemas/ContentPlan"
 
   # ── Ads Strategy Agent ──────────────────────────────────────────────────────
+  /brands/{id}/ads-context:
+    get:
+      operationId: getBrandAdsContext
+      tags: [brands]
+      summary: Get the ads_context JSONB blob (+ service_radius_km + avg_ticket_size_eur) for one brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Brand ads context (may be empty if not yet edited)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandAdsContextEnvelope"
+        "404":
+          description: Brand not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateBrandAdsContext
+      tags: [brands]
+      summary: Update the ads_context JSONB + radius + ticket fields for one brand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBrandAdsContextBody"
+      responses:
+        "200":
+          description: Updated context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandAdsContextEnvelope"
+        "404":
+          description: Brand not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /ads-strategy/audience:
     post:
       operationId: generateAdsAudience
@@ -1563,6 +1615,73 @@ components:
         - whenToUse
         - steps
         - example
+
+    # ── Brand ads context ───────────────────────────────────────────────────
+    BrandAdsContext:
+      type: object
+      description: Free-form brand metadata used to ground Ads Strategy Agent prompts.
+      properties:
+        uniqueSellingPoints:
+          type: array
+          items: { type: string }
+        competitors:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              url: { type: ["string", "null"] }
+              notes: { type: ["string", "null"] }
+            required: [name]
+        pricePositioning:
+          type: ["string", "null"]
+          enum: [budget, mid, premium, luxury, null]
+        bookingUrl: { type: ["string", "null"] }
+        metaPixelId: { type: ["string", "null"] }
+        googleAdsCustomerId: { type: ["string", "null"] }
+        primaryRegions:
+          type: array
+          items: { type: string }
+        excludedRegions:
+          type: array
+          items: { type: string }
+        primaryLanguages:
+          type: array
+          items: { type: string }
+        notes: { type: ["string", "null"] }
+
+    BrandAdsContextEnvelope:
+      type: object
+      description: Wraps ads_context with the two scalar columns we put on brands at the same time.
+      properties:
+        brandId: { type: integer }
+        adsContext:
+          oneOf:
+            - $ref: "#/components/schemas/BrandAdsContext"
+            - type: "null"
+        serviceRadiusKm: { type: ["integer", "null"] }
+        avgTicketSizeEur:
+          type: ["string", "null"]
+          description: Decimal(10,2) returned as string for precision
+        updatedAt: { type: string, format: date-time }
+      required:
+        - brandId
+        - adsContext
+        - serviceRadiusKm
+        - avgTicketSizeEur
+        - updatedAt
+
+    UpdateBrandAdsContextBody:
+      type: object
+      properties:
+        adsContext:
+          oneOf:
+            - $ref: "#/components/schemas/BrandAdsContext"
+            - type: "null"
+        serviceRadiusKm: { type: ["integer", "null"] }
+        avgTicketSizeEur:
+          type: ["string", "null"]
+          description: Decimal(10,2) as string (e.g. "45.00")
 
     # ── Ads Strategy Agent ──────────────────────────────────────────────────
     AdsModule:

@@ -304,6 +304,76 @@ export interface MarketingModel {
   example: string;
 }
 
+export type BrandAdsContextCompetitorsItem = {
+  name: string;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  notes?: string | null;
+};
+
+/**
+ * @nullable
+ */
+export type BrandAdsContextPricePositioning =
+  | (typeof BrandAdsContextPricePositioning)[keyof typeof BrandAdsContextPricePositioning]
+  | null;
+
+export const BrandAdsContextPricePositioning = {
+  budget: "budget",
+  mid: "mid",
+  premium: "premium",
+  luxury: "luxury",
+} as const;
+
+/**
+ * Free-form brand metadata used to ground Ads Strategy Agent prompts.
+ */
+export interface BrandAdsContext {
+  uniqueSellingPoints?: string[];
+  competitors?: BrandAdsContextCompetitorsItem[];
+  /** @nullable */
+  pricePositioning?: BrandAdsContextPricePositioning;
+  /** @nullable */
+  bookingUrl?: string | null;
+  /** @nullable */
+  metaPixelId?: string | null;
+  /** @nullable */
+  googleAdsCustomerId?: string | null;
+  primaryRegions?: string[];
+  excludedRegions?: string[];
+  primaryLanguages?: string[];
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * Wraps ads_context with the two scalar columns we put on brands at the same time.
+ */
+export interface BrandAdsContextEnvelope {
+  brandId: number;
+  adsContext: BrandAdsContext | null;
+  /** @nullable */
+  serviceRadiusKm: number | null;
+  /**
+   * Decimal(10,2) returned as string for precision
+   * @nullable
+   */
+  avgTicketSizeEur: string | null;
+  updatedAt: string;
+}
+
+export interface UpdateBrandAdsContextBody {
+  adsContext?: BrandAdsContext | null;
+  /** @nullable */
+  serviceRadiusKm?: number | null;
+  /**
+   * Decimal(10,2) as string (e.g. "45.00")
+   * @nullable
+   */
+  avgTicketSizeEur?: string | null;
+}
+
 /**
  * Which Ads Strategy module produced the report
  */

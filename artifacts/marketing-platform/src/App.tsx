@@ -10,6 +10,7 @@ import { useEffect } from "react";
 // Pages
 import Dashboard from "@/pages/Dashboard";
 import BrandManager from "@/pages/brands/BrandManager";
+import BrandAdsContextEditor from "@/pages/brands/BrandAdsContextEditor";
 import GoogleReviews from "@/pages/reviews/GoogleReviews";
 import ReviewReports from "@/pages/reviews/ReviewReports";
 import ContentGenerator from "@/pages/content/ContentGenerator";
@@ -50,6 +51,7 @@ function ProtectedRoutes() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/brands" component={BrandManager} />
+      <Route path="/brands/:id/ads-context" component={BrandAdsContextEditor} />
       <Route path="/reviews" component={GoogleReviews} />
       <Route path="/reviews/reports" component={ReviewReports} />
       <Route path="/content/generator" component={ContentGenerator} />

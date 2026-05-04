@@ -1703,6 +1703,10 @@ components:
           type: string
           enum: [de, vi, en]
           default: de
+        bypassCache:
+          type: boolean
+          default: false
+          description: Skip the 7-day cache lookup and force a fresh AI call
       required:
         - brandId
         - regionFocus

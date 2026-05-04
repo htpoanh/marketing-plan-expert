@@ -138,6 +138,27 @@ export type PerformanceOutput = {
   risks: string[];
 };
 
+// ── M4 trend pulse output shape ──────────────────────────────────────────────
+export type TrendItem = {
+  topic: string;
+  description: string;
+  relevanceScore: number;
+  momentum: "rising" | "peak" | "declining";
+  estimatedWindowDays: number;
+  suggestedAngle: string;
+  suggestedKeywords: string[];
+  sources: string[];
+};
+
+export type TrendOutput = {
+  trends: TrendItem[];
+  regionalSignals: {
+    bayernSpecific: string[];
+    germanyWide: string[];
+  };
+  risksToAvoid: string[];
+};
+
 // ── M2 keywords output shape ─────────────────────────────────────────────────
 export type Keyword = {
   text: string;

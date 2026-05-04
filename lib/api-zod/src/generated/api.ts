@@ -956,6 +956,7 @@ export const AnalyzeAdsPerformanceResponse = zod.object({
  * @summary M4 — Real-time trend pulse (Grok with web search)
  */
 export const getAdsTrendPulseBodyOutputLanguageDefault = `de`;
+export const getAdsTrendPulseBodyBypassCacheDefault = false;
 
 export const GetAdsTrendPulseBody = zod.object({
   brandId: zod.number(),
@@ -969,6 +970,10 @@ export const GetAdsTrendPulseBody = zod.object({
   outputLanguage: zod
     .enum(["de", "vi", "en"])
     .default(getAdsTrendPulseBodyOutputLanguageDefault),
+  bypassCache: zod
+    .boolean()
+    .default(getAdsTrendPulseBodyBypassCacheDefault)
+    .describe("Skip the 7-day cache lookup and force a fresh AI call"),
 });
 
 export const GetAdsTrendPulseResponse = zod.object({

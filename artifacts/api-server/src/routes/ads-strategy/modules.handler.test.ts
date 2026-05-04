@@ -39,11 +39,17 @@ vi.mock("../../services/ads-strategy/performance.service", async () => {
   };
 });
 
+vi.mock("../../services/ads-strategy/trend.service", () => ({
+  getTrendPulse: vi.fn(),
+  TREND_MODEL: "grok-3-latest",
+}));
+
 import modulesRouter from "./modules.handler";
 import { db } from "@workspace/db";
 import { generateAudience } from "../../services/ads-strategy/audience.service";
 import { generateKeywords } from "../../services/ads-strategy/keywords.service";
 import { analyzePerformance } from "../../services/ads-strategy/performance.service";
+import { getTrendPulse } from "../../services/ads-strategy/trend.service";
 
 function makeApp() {
   const app = express();
@@ -378,13 +384,85 @@ describe("ads-strategy module endpoints", () => {
     });
   });
 
-  describe("M4 still stub", () => {
-    it("POST /trend returns 501", async () => {
+  describe("M4 trend pulse", () => {
+    const validBody = { brandId: 1, regionFocus: "Bayern" };
+
+    it("rejects missing regionFocus with 400", async () => {
       const res = await request(makeApp())
         .post("/ads-strategy/trend")
-        .send({});
-      expect(res.status).toBe(501);
-      expect(res.body.error).toMatch(/Phase 4/);
+        .send({ brandId: 1 });
+      expect(res.status).toBe(400);
+    });
+
+    it("404 when brand not found", async () => {
+      mockSelectChains(null);
+      const res = await request(makeApp())
+        .post("/ads-strategy/trend")
+        .send(validBody);
+      expect(res.status).toBe(404);
+    });
+
+    it("happy path (cache MISS) calls Grok and persists", async () => {
+      mockSelectChains(fakeBrand, null);
+      (getTrendPulse as ReturnType<typeof vi.fn>).mockResolvedValue({
+        output: {
+          trends: [
+            {
+              topic: "Glazed Donut Nails 2026",
+              description: "Trending nail aesthetic from Hailey Bieber...",
+              relevanceScore: 9,
+              momentum: "rising",
+              estimatedWindowDays: 21,
+              suggestedAngle: "Reel Before/After mit Glazed Finish",
+              suggestedKeywords: ["glazed nails", "donut nails 2026"],
+              sources: ["https://x.com/example/status/123"],
+            },
+          ],
+          regionalSignals: { bayernSpecific: ["Frühlingsfest München"], germanyWide: [] },
+          risksToAvoid: [],
+        },
+        aiProvider: "xai",
+        aiModel: "grok-3-latest",
+        tokensInput: 2100,
+        tokensOutput: 1850,
+        costEur: "0.0218",
+        latencyMs: 4500,
+        promptVersion: "1.0.0",
+        citations: ["https://x.com/example/status/123"],
+      });
+      mockReportInsert({
+        id: 99,
+        brandId: 1,
+        module: "trend",
+        aiModel: "grok-3-latest",
+      });
+
+      const res = await request(makeApp())
+        .post("/ads-strategy/trend")
+        .send(validBody);
+
+      expect(res.status).toBe(200);
+      expect(res.headers["x-cache"]).toBe("MISS");
+      expect(res.body).toMatchObject({ id: 99, module: "trend" });
+      expect(getTrendPulse).toHaveBeenCalledOnce();
+    });
+
+    it("cache HIT skips Grok call", async () => {
+      mockSelectChains(fakeBrand, {
+        id: 100,
+        brandId: 1,
+        module: "trend",
+        aiModel: "grok-3-latest",
+        createdAt: new Date(),
+      });
+
+      const res = await request(makeApp())
+        .post("/ads-strategy/trend")
+        .send(validBody);
+
+      expect(res.status).toBe(200);
+      expect(res.headers["x-cache"]).toBe("HIT");
+      expect(getTrendPulse).not.toHaveBeenCalled();
     });
   });
 });

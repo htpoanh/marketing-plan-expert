@@ -193,3 +193,33 @@ export const performanceOutputSchema = z
   .passthrough();
 
 export type PerformanceOutput = z.infer<typeof performanceOutputSchema>;
+
+// ── M4 trend pulse ───────────────────────────────────────────────────────────
+
+const trendItemSchema = z
+  .object({
+    topic: z.string().min(1),
+    description: z.string().min(10),
+    relevanceScore: z.number().min(1).max(10),
+    momentum: z.enum(["rising", "peak", "declining"]),
+    estimatedWindowDays: z.number().int().min(1).max(180),
+    suggestedAngle: z.string(),
+    suggestedKeywords: z.array(z.string()),
+    sources: z.array(z.string()).min(1),
+  })
+  .passthrough();
+
+export const trendOutputSchema = z
+  .object({
+    trends: z.array(trendItemSchema).min(1).max(15),
+    regionalSignals: z
+      .object({
+        bayernSpecific: z.array(z.string()),
+        germanyWide: z.array(z.string()),
+      })
+      .passthrough(),
+    risksToAvoid: z.array(z.string()),
+  })
+  .passthrough();
+
+export type TrendOutput = z.infer<typeof trendOutputSchema>;

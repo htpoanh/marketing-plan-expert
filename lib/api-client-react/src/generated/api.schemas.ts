@@ -473,6 +473,8 @@ export interface GetAdsTrendBody {
    */
   topic?: string | null;
   outputLanguage?: GetAdsTrendBodyOutputLanguage;
+  /** Skip the 7-day cache lookup and force a fresh AI call */
+  bypassCache?: boolean;
 }
 
 export interface UpdateAdsReportBody {

@@ -38,9 +38,11 @@ import {
   analyzePerformance,
   CsvParseError,
 } from "../../services/ads-strategy/performance.service";
+import { getTrendPulse } from "../../services/ads-strategy/trend.service";
 import { AUDIENCE_PROMPT_VERSION } from "../../services/ads-strategy/prompts/audience.prompt";
 import { KEYWORDS_PROMPT_VERSION } from "../../services/ads-strategy/prompts/keywords.prompt";
 import { PERFORMANCE_PROMPT_VERSION } from "../../services/ads-strategy/prompts/performance.prompt";
+import { TREND_PROMPT_VERSION } from "../../services/ads-strategy/prompts/trend.prompt";
 import { buildCacheKey, findCachedReport, CACHE_TTL_DAYS } from "../../services/ads-strategy/cache";
 import { createHash } from "node:crypto";
 
@@ -368,7 +370,78 @@ router.post("/performance", async (req, res) => {
   }
 });
 
-// ── M4 still stub ────────────────────────────────────────────────────────────
-router.post("/trend", notImplemented("trend"));
+// ── M4 — Trend Pulse (Grok 3 with Live Search) ───────────────────────────────
+const trendInputSchema = z.object({
+  brandId: z.number().int().positive(),
+  regionFocus: z.string().min(1).max(200),
+  topic: z.string().nullable().optional(),
+  outputLanguage: z.enum(["de", "vi", "en"]).default("de"),
+  bypassCache: z.boolean().optional().default(false),
+});
+
+router.post("/trend", async (req, res) => {
+  try {
+    const input = trendInputSchema.parse(req.body);
+    const brand = await loadBrand(input.brandId);
+    if (!brand) {
+      return res.status(404).json({ error: `Brand ${input.brandId} not found` });
+    }
+
+    const { bypassCache, ...formInput } = input;
+    const cacheKey = buildCacheKey({
+      brandId: brand.id,
+      brand,
+      module: "trend",
+      promptVersion: TREND_PROMPT_VERSION,
+      formInput,
+    });
+
+    if (!bypassCache) {
+      const cached = await findCachedReport(brand.id, "trend", cacheKey);
+      if (cached) {
+        res.setHeader("X-Cache", "HIT");
+        res.setHeader("X-Cache-Age-Days", String(CACHE_TTL_DAYS));
+        return res.json(cached);
+      }
+    }
+
+    const result = await getTrendPulse(
+      {
+        regionFocus: input.regionFocus,
+        topic: input.topic ?? null,
+        outputLanguage: input.outputLanguage,
+      },
+      brand,
+    );
+
+    const [saved] = await db
+      .insert(adsReportsTable)
+      .values({
+        brandId: input.brandId,
+        module: "trend",
+        input: {
+          ...formInput,
+          meta: {
+            promptVersion: result.promptVersion,
+            cacheKey,
+            citations: result.citations,
+          },
+        },
+        output: result.output,
+        aiProvider: result.aiProvider,
+        aiModel: result.aiModel,
+        tokensInput: result.tokensInput,
+        tokensOutput: result.tokensOutput,
+        costEur: result.costEur,
+        latencyMs: result.latencyMs,
+      })
+      .returning();
+
+    res.setHeader("X-Cache", "MISS");
+    return res.json(saved);
+  } catch (err) {
+    return handleError(res, err, "trend");
+  }
+});
 
 export default router;

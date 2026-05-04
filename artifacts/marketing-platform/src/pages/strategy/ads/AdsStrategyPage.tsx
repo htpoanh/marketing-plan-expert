@@ -7,6 +7,7 @@ import { useListBrands } from "@workspace/api-client-react";
 import AudienceTab from "./AudienceTab";
 import KeywordsTab from "./KeywordsTab";
 import PerformanceTab from "./PerformanceTab";
+import TrendTab from "./TrendTab";
 import { CostSummaryWidget } from "./components/CostSummaryWidget";
 import { ReportsLibrary } from "./components/ReportsLibrary";
 
@@ -88,14 +89,14 @@ export default function AdsStrategyPage() {
             </TabsTrigger>
             <TabsTrigger
               value="trend"
-              className="data-[state=active]:bg-rose-500/15 data-[state=active]:border-rose-500/40 border border-border/50 px-4 py-3 h-auto flex flex-col items-start gap-1 opacity-60"
+              className="data-[state=active]:bg-rose-500/15 data-[state=active]:border-rose-500/40 border border-border/50 px-4 py-3 h-auto flex flex-col items-start gap-1"
               data-testid="tab-trend"
             >
               <div className="flex items-center gap-2 text-xs font-medium">
                 <Radar className="w-3.5 h-3.5" /> M4 — Trend
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
-                Phase 4
+                Grok 3 + Search
               </div>
             </TabsTrigger>
           </TabsList>
@@ -110,10 +111,7 @@ export default function AdsStrategyPage() {
             <PerformanceTab brands={brands} brandsLoading={brandsLoading} />
           </TabsContent>
           <TabsContent value="trend">
-            <ComingSoonNotice
-              moduleName="M4 — Trend Pulse"
-              description="Trend real-time từ Đức + Bayern qua Grok 3 với web search. Phase 4."
-            />
+            <TrendTab brands={brands} brandsLoading={brandsLoading} />
           </TabsContent>
         </Tabs>
 

@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sparkles, Target, Hash, BarChart3, Radar } from "lucide-react";
 import { useListBrands } from "@workspace/api-client-react";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 import AudienceTab from "./AudienceTab";
 import KeywordsTab from "./KeywordsTab";
@@ -22,6 +23,7 @@ export default function AdsStrategyPage() {
   const [activeTab, setActiveTab] = useState<
     "audience" | "keywords" | "performance" | "trend"
   >("audience");
+  const { t } = useTranslation();
 
   return (
     <AppLayout>
@@ -32,11 +34,11 @@ export default function AdsStrategyPage() {
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold tracking-tight">Ads Strategy Agent</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t("ads.page.title")}
+            </h1>
             <p className="text-muted-foreground mt-1 max-w-3xl">
-              4 module AI giúp tối ưu quảng cáo: phân tích đối tượng (M1),
-              keyword có sức nặng (M2), audit performance (M3), bắt trend (M4).
-              Vietnamese UI, German output cho ads/copy.
+              {t("ads.page.subtitle")}
             </p>
           </div>
         </div>
@@ -57,7 +59,7 @@ export default function AdsStrategyPage() {
               data-testid="tab-audience"
             >
               <div className="flex items-center gap-2 text-xs font-medium">
-                <Target className="w-3.5 h-3.5" /> M1 — Đối tượng
+                <Target className="w-3.5 h-3.5" /> {t("ads.tab.audience")}
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
                 Claude Haiku
@@ -69,7 +71,7 @@ export default function AdsStrategyPage() {
               data-testid="tab-keywords"
             >
               <div className="flex items-center gap-2 text-xs font-medium">
-                <Hash className="w-3.5 h-3.5" /> M2 — Keyword
+                <Hash className="w-3.5 h-3.5" /> {t("ads.tab.keywords")}
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
                 Gemini Flash
@@ -81,7 +83,7 @@ export default function AdsStrategyPage() {
               data-testid="tab-performance"
             >
               <div className="flex items-center gap-2 text-xs font-medium">
-                <BarChart3 className="w-3.5 h-3.5" /> M3 — Performance
+                <BarChart3 className="w-3.5 h-3.5" /> {t("ads.tab.performance")}
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
                 Claude Sonnet
@@ -93,7 +95,7 @@ export default function AdsStrategyPage() {
               data-testid="tab-trend"
             >
               <div className="flex items-center gap-2 text-xs font-medium">
-                <Radar className="w-3.5 h-3.5" /> M4 — Trend
+                <Radar className="w-3.5 h-3.5" /> {t("ads.tab.trend")}
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
                 Grok 3 + Search

@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const navigation = [
   { name: "Tổng quan", href: "/", icon: LayoutDashboard },
@@ -153,6 +154,7 @@ export function Sidebar() {
             <p className="text-xs font-semibold text-foreground truncate">{username ?? "Admin"}</p>
             <p className="text-xs text-muted-foreground">Quản trị viên</p>
           </div>
+          <LanguageSwitcher compact />
         </div>
 
         <button

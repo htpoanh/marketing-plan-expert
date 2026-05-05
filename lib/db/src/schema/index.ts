@@ -13,3 +13,4 @@ export * from "./messenger_sessions";
 export * from "./appointments";
 export * from "./strategies";
 export * from "./ads_reports";
+export * from "./scheduled_jobs";

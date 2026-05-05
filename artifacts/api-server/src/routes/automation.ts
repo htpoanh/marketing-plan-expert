@@ -8,8 +8,11 @@ import {
   pipelineRunsTable,
   aiAgentConfigsTable,
   aiProfilesTable,
+  scheduledJobsTable,
+  scheduledRunsTable,
 } from "@workspace/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
+import { triggerJobNow } from "../jobs/scheduler";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import { buildImagePromptGuidance } from "../lib/imagePromptBuilder";
@@ -962,6 +965,99 @@ router.get("/blueprint", (_req, res) => {
     'attachment; filename="ai-marketing-make-blueprint.json"'
   );
   res.json(blueprint);
+});
+
+// ── Phase 5a — Scheduled jobs catalog + audit log ──────────────────────────
+// These endpoints power the /automation page panel for the cron-driven jobs
+// (currently just the weekly trend digest, but extensible).
+
+router.get("/scheduled-jobs", async (_req, res) => {
+  try {
+    const jobs = await db
+      .select()
+      .from(scheduledJobsTable)
+      .orderBy(scheduledJobsTable.jobKey);
+    return res.json(jobs);
+  } catch (e) {
+    console.error("[scheduled-jobs list]", e);
+    return res
+      .status(500)
+      .json({ error: "Lỗi máy chủ khi load scheduled jobs" });
+  }
+});
+
+router.patch("/scheduled-jobs/:jobKey", async (req, res) => {
+  try {
+    const { jobKey } = req.params;
+    const body = req.body as {
+      enabled?: boolean;
+      cronExpression?: string;
+      config?: Record<string, unknown>;
+    };
+
+    const patch: Partial<typeof scheduledJobsTable.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+    if (typeof body.cronExpression === "string") {
+      patch.cronExpression = body.cronExpression;
+    }
+    if (body.config !== undefined) patch.config = body.config;
+
+    const [updated] = await db
+      .update(scheduledJobsTable)
+      .set(patch)
+      .where(eq(scheduledJobsTable.jobKey, jobKey))
+      .returning();
+
+    if (!updated) return res.status(404).json({ error: "Job not found" });
+    return res.json(updated);
+  } catch (e) {
+    console.error("[scheduled-jobs patch]", e);
+    return res
+      .status(500)
+      .json({ error: "Lỗi máy chủ khi update scheduled job" });
+  }
+});
+
+router.post("/scheduled-jobs/:jobKey/trigger", async (req, res) => {
+  try {
+    const { jobKey } = req.params;
+    // Fire-and-forget — return immediately so the UI doesn't hang while
+    // Grok runs for ~10-20s × N brands. The audit row appears in
+    // /scheduled-runs as soon as the runner starts.
+    triggerJobNow(jobKey).catch((e) => {
+      console.error(`[scheduled-jobs trigger] ${jobKey} threw:`, e);
+    });
+    return res.json({ ok: true, message: "Triggered. Watch /scheduled-runs for status." });
+  } catch (e) {
+    console.error("[scheduled-jobs trigger]", e);
+    return res
+      .status(500)
+      .json({ error: "Lỗi máy chủ khi trigger job" });
+  }
+});
+
+router.get("/scheduled-runs", async (req, res) => {
+  try {
+    const jobKey = req.query.jobKey as string | undefined;
+    const limit = Math.min(
+      Math.max(Number(req.query.limit) || 20, 1),
+      200,
+    );
+    const rows = await db
+      .select()
+      .from(scheduledRunsTable)
+      .where(jobKey ? eq(scheduledRunsTable.jobKey, jobKey) : undefined)
+      .orderBy(desc(scheduledRunsTable.startedAt))
+      .limit(limit);
+    return res.json(rows);
+  } catch (e) {
+    console.error("[scheduled-runs list]", e);
+    return res
+      .status(500)
+      .json({ error: "Lỗi máy chủ khi load scheduled runs" });
+  }
 });
 
 export default router;

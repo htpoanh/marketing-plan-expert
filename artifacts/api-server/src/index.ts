@@ -1,4 +1,5 @@
 import app from "./app";
+import { startScheduler } from "./jobs/scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -16,4 +17,10 @@ if (Number.isNaN(port) || port <= 0) {
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
+  // Cron jobs boot AFTER the HTTP server is listening so health checks
+  // succeed even if the scheduler later fails (e.g. table missing). The
+  // scheduler swallows its own errors so this never crashes the app.
+  startScheduler().catch((e) => {
+    console.error("[index] scheduler bootstrap failed:", e);
+  });
 });

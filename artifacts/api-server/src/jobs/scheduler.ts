@@ -21,11 +21,11 @@ import {
   runWeeklyTrendDigest,
 } from "./scheduled/weekly-trend-digest";
 
-type JobRunner = () => Promise<void>;
+type JobRunner = (trigger: "cron" | "manual") => Promise<void>;
 
 const JOB_RUNNERS: Record<string, JobRunner> = {
-  [WEEKLY_TREND_DIGEST_KEY]: async () => {
-    await runWeeklyTrendDigest({ trigger: "cron" });
+  [WEEKLY_TREND_DIGEST_KEY]: async (trigger) => {
+    await runWeeklyTrendDigest({ trigger });
   },
 };
 
@@ -89,7 +89,7 @@ export async function startScheduler(): Promise<void> {
         }
         console.log(`[scheduler] Firing ${job.jobKey}`);
         try {
-          await runner();
+          await runner("cron");
           console.log(`[scheduler] ${job.jobKey} done`);
         } catch (e) {
           // Job runner already persists errors to scheduled_runs; just log
@@ -131,5 +131,5 @@ export async function triggerJobNow(jobKey: string): Promise<void> {
   if (!runner) {
     throw new Error(`Unknown job key: ${jobKey}`);
   }
-  await runner();
+  await runner("manual");
 }

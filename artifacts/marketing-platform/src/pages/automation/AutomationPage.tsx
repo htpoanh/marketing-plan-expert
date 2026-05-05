@@ -4,10 +4,12 @@ import {
   Zap, Play, CheckCircle, XCircle, Clock, Webhook,
   ChevronRight, Info, Loader2, RefreshCw, Copy,
   ExternalLink, Check, Download, Settings, Link2, FileText,
+  CalendarClock,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { TrendDigestPanel } from "./TrendDigestPanel";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -666,7 +668,7 @@ function ConnectionsPanel() {
 }
 
 /* ── Main Page ───────────────────────────────────────────────────────────── */
-type MainTab = "settings" | "connections" | "logs";
+type MainTab = "settings" | "connections" | "logs" | "trend-digest";
 
 export default function AutomationPage() {
   const { toast } = useToast();
@@ -766,6 +768,7 @@ export default function AutomationPage() {
 
   const TABS: { id: MainTab; label: string; icon: typeof Settings; badge?: number }[] = [
     { id: "settings", label: "Cài đặt cửa hàng", icon: Settings, badge: enabledCount > 0 ? enabledCount : undefined },
+    { id: "trend-digest", label: "Weekly Trend Digest", icon: CalendarClock },
     { id: "connections", label: "Kết nối Make.com + Metricool", icon: Link2 },
     { id: "logs", label: "Nhật ký", icon: FileText, badge: logs.length > 0 ? logs.length : undefined },
   ];
@@ -869,6 +872,8 @@ export default function AutomationPage() {
             )}
           </div>
         )}
+
+        {activeTab === "trend-digest" && <TrendDigestPanel />}
 
         {activeTab === "connections" && <ConnectionsPanel />}
 

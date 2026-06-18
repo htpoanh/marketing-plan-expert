@@ -17,7 +17,7 @@ cd "$APP_DIR"
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 PM2_NAME="${PM2_NAME:-marketing-api}"
-WEB_ROOT="${WEB_ROOT:-}"
+WEB_ROOT="${WEB_ROOT:-$APP_DIR/public}"
 
 echo "▶ Deploy bắt đầu: $(date -Is) | branch=$BRANCH | dir=$APP_DIR"
 

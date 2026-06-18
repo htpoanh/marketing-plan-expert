@@ -67,6 +67,13 @@ onlyBuiltDependencies:
   - unrs-resolver
   - protobufjs
 
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  msw: true
+  unrs-resolver: true
+  protobufjs: true
+
 overrides:
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"

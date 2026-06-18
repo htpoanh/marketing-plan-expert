@@ -27,7 +27,7 @@ git reset --hard "origin/$BRANCH"
 
 # 2. Cài dependency đúng theo lockfile.
 corepack enable >/dev/null 2>&1 || true
-pnpm install --frozen-lockfile
+CI=true pnpm install --frozen-lockfile
 
 # 3. Build api-server + frontend. Build TRƯỚC khi restart để nếu lỗi thì
 #    server đang chạy vẫn còn nguyên (fail fast, không downtime oan).

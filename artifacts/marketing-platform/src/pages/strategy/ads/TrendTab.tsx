@@ -141,7 +141,7 @@ export default function TrendTab({ brands, brandsLoading }: Props) {
               ))}
             </datalist>
             <p className="text-[11px] text-muted-foreground">
-              Grok sẽ search web/X/news Đức trong region này.
+              Claude sẽ search web/news Đức trong region này.
             </p>
           </div>
 
@@ -210,7 +210,7 @@ export default function TrendTab({ brands, brandsLoading }: Props) {
             <div className="border border-dashed border-border/50 rounded-xl p-12 text-center text-muted-foreground">
               <Radar className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">
-                Grok 3 sẽ search real-time web/X/news Đức để tìm trend đang lên
+                Claude sẽ search real-time web/news Đức để tìm trend đang lên
                 trong region của bạn.
               </p>
               <p className="text-xs mt-2 opacity-70">
@@ -222,7 +222,7 @@ export default function TrendTab({ brands, brandsLoading }: Props) {
             <div className="border border-border/50 rounded-xl p-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 mx-auto animate-spin text-rose-400" />
               <p className="text-sm text-muted-foreground">
-                Grok đang search web + X + news Đức (last 7 ngày)…
+                Claude đang search web + news Đức (last 7 ngày)…
               </p>
               <p className="text-[11px] text-muted-foreground">
                 ~10-20 giây vì có Live Search • ~€0.025 / lần
@@ -236,7 +236,7 @@ export default function TrendTab({ brands, brandsLoading }: Props) {
                   <span className="text-base">💰</span>
                   <span>
                     <strong className="text-emerald-400">
-                      Cache hit — không gọi Grok
+                      Cache hit — không gọi Claude
                     </strong>{" "}
                     <span className="text-muted-foreground">
                       (report cũ {new Date(result.createdAt).toLocaleString("de-DE")} —

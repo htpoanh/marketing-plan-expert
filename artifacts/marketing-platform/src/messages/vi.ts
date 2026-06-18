@@ -84,14 +84,14 @@ const vi: Record<string, string> = {
   "ads.trend.regionFocus": "Region tập trung",
   "ads.trend.regionPlaceholder": "VD: Bayern",
   "ads.trend.regionHint":
-    "Grok sẽ search web/X/news Đức trong region này.",
+    "Claude sẽ search web/news Đức trong region này.",
   "ads.trend.topic": "Topic seed (tuỳ chọn)",
   "ads.trend.topicPlaceholder":
     "VD: Nail Trends 2026 (để trống = tự discover)",
   "ads.trend.submit.idle": "Quét trend (Live Search)",
   "ads.trend.submit.loading": "Đang quét trend…",
   "ads.trend.empty":
-    "Grok 3 sẽ search real-time web/X/news Đức để tìm trend đang lên trong region của bạn.",
+    "Claude sẽ search real-time web/news Đức để tìm trend đang lên trong region của bạn.",
   "ads.trend.toast.success": "Đã quét trend xong",
   "ads.trend.toast.error": "Quét trend thất bại",
 

@@ -24,6 +24,13 @@ import AIAgentsPage from "@/pages/agents/AIAgentsPage";
 import AutomationPage from "@/pages/automation/AutomationPage";
 import MessengerBot from "@/pages/messenger/MessengerBot";
 import AdsStrategyPage from "@/pages/strategy/ads/AdsStrategyPage";
+import InboxPage from "@/pages/inbox/InboxPage";
+import StrategyInboxPage from "@/pages/strategy-inbox/StrategyInboxPage";
+import TrendIntelligencePage from "@/pages/trends/TrendIntelligencePage";
+import MarketResearchPage from "@/pages/market-research/MarketResearchPage";
+import WeeklyReportPage from "@/pages/weekly-report/WeeklyReportPage";
+import AdsPerformancePage from "@/pages/ads-performance/AdsPerformancePage";
+import VirtualKolPage from "@/pages/kol/VirtualKolPage";
 import { Loader2, Sparkles } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -65,6 +72,13 @@ function ProtectedRoutes() {
       <Route path="/automation" component={AutomationPage} />
       <Route path="/strategy/ads" component={AdsStrategyPage} />
       <Route path="/strategy/ads/:tab" component={AdsStrategyPage} />
+      <Route path="/inbox" component={InboxPage} />
+      <Route path="/strategy-inbox" component={StrategyInboxPage} />
+      <Route path="/trends" component={TrendIntelligencePage} />
+      <Route path="/market-research" component={MarketResearchPage} />
+      <Route path="/weekly-report" component={WeeklyReportPage} />
+      <Route path="/ads-performance" component={AdsPerformancePage} />
+      <Route path="/kol" component={VirtualKolPage} />
       <Route path="/messenger" component={MessengerBot} />
       <Route component={NotFound} />
     </Switch>

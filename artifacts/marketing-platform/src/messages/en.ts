@@ -77,14 +77,14 @@ const en: Record<string, string> = {
   "ads.trend.regionFocus": "Region focus",
   "ads.trend.regionPlaceholder": "e.g. Bayern",
   "ads.trend.regionHint":
-    "Grok will search web / X / news in this region.",
+    "Claude will search web / news in this region.",
   "ads.trend.topic": "Topic seed (optional)",
   "ads.trend.topicPlaceholder":
     "e.g. Nail Trends 2026 (leave empty = auto-discover)",
   "ads.trend.submit.idle": "Scan trends (live search)",
   "ads.trend.submit.loading": "Scanning trends…",
   "ads.trend.empty":
-    "Grok 3 will search web / X / news in real time for rising trends in your region.",
+    "Claude will search web / news in real time for rising trends in your region.",
   "ads.trend.toast.success": "Trend scan complete",
   "ads.trend.toast.error": "Trend scan failed",
 

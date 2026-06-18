@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { 
-  useListBrands, 
-  useRunPipeline, 
-  useListPipelineRuns, 
+import {
+  useListBrands,
+  useRunPipeline,
+  useListPipelineRuns,
   useDeletePipelineRun,
-  useGetPipelineRun
+  useGetPipelineRun,
+  useGenerateContentPipeline
 } from "@workspace/api-client-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { 
-  Sparkles, Bot, Search, BrainCircuit, PenTool, Palette, Save, 
-  ChevronDown, ChevronUp, Copy, CheckCircle2, XCircle, Clock, Trash2, ExternalLink, Eye, X, Image, Loader2, Upload
+import {
+  Sparkles, Bot, Search, BrainCircuit, PenTool, Palette, Save,
+  ChevronDown, ChevronUp, Copy, CheckCircle2, XCircle, Clock, Trash2, ExternalLink, Eye, X, Image, Loader2, Upload, Zap, Wand2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -176,6 +177,182 @@ const CONTENT_FORMATS: { id: ContentFormat; aspectRatio: string; wordCount: stri
 ];
 
 function RunPipelineTab() {
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const [mode, setMode] = useState<"full" | "quick">(urlParams.get("mode") === "quick" ? "quick" : "full");
+
+  return (
+    <div className="space-y-6">
+      {/* Mode toggle: Đầy đủ (5-agent) vs Nhanh (quick draft) */}
+      <div className="inline-flex rounded-xl border border-border/50 bg-secondary/30 p-1">
+        <button
+          type="button"
+          onClick={() => setMode("full")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${mode === "full" ? "bg-primary text-white shadow" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Bot className="w-4 h-4" /> Đầy đủ (5 Agent)
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("quick")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${mode === "quick" ? "bg-primary text-white shadow" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Zap className="w-4 h-4" /> Nhanh
+        </button>
+      </div>
+
+      {mode === "quick" ? (
+        <QuickDraftPanel />
+      ) : (
+        <FullPipelinePanel />
+      )}
+    </div>
+  );
+}
+
+type QuickPlan = {
+  caption?: string | null;
+  hashtags?: string | null;
+  imagePrompt?: string | null;
+  videoPrompt?: string | null;
+  aiReasoning?: string | null;
+};
+
+function QuickDraftPanel() {
+  const { data: brands } = useListBrands();
+  const { toast } = useToast();
+  const generateMutation = useGenerateContentPipeline();
+
+  const [brandId, setBrandId] = useState("");
+  const [topic, setTopic] = useState("");
+  const [pushMetricool, setPushMetricool] = useState(false);
+  const [result, setResult] = useState<{ plan: QuickPlan; metricool: { active?: boolean; reason?: string } | null } | null>(null);
+
+  const generate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandId || !topic.trim()) {
+      toast({ title: "Chọn thương hiệu và nhập chủ đề", variant: "destructive" });
+      return;
+    }
+    generateMutation.mutate(
+      { data: { brandId: Number(brandId), topic: topic.trim(), pushMetricool } },
+      {
+        onSuccess: (res) => {
+          setResult(res as typeof result);
+          toast({ title: "Đã tạo nội dung nháp" });
+        },
+        onError: () => toast({ title: "Lỗi tạo nội dung", variant: "destructive" }),
+      },
+    );
+  };
+
+  const plan = result?.plan;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="lg:col-span-4 space-y-6">
+        <div className="bg-card rounded-2xl border border-border/50 p-6 shadow-lg">
+          <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
+            <Wand2 className="w-4 h-4 text-primary" />
+            Caption tiếng Đức + prompt ảnh/video theo Brand DNA — một bước, không qua 5 Agent.
+          </div>
+          <form onSubmit={generate} className="space-y-5">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Thương hiệu</label>
+              <select
+                required
+                value={brandId}
+                onChange={e => setBrandId(e.target.value)}
+                disabled={generateMutation.isPending}
+                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:ring-2 focus:ring-primary/50 outline-none disabled:opacity-50"
+              >
+                <option value="">-- Chọn cửa hàng --</option>
+                {brands?.map(b => (
+                  <option key={b.id} value={b.id}>{b.brandName}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Chủ đề (Topic)</label>
+              <input
+                required
+                value={topic}
+                onChange={e => setTopic(e.target.value)}
+                disabled={generateMutation.isPending}
+                placeholder="Vd: Sommer Gel-Nägel Aktion"
+                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:ring-2 focus:ring-primary/50 outline-none disabled:opacity-50"
+              />
+            </div>
+
+            <label className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-secondary/30 border border-border/50 cursor-pointer">
+              <span className="text-sm font-medium">Push nháp lên Metricool</span>
+              <input
+                type="checkbox"
+                checked={pushMetricool}
+                onChange={e => setPushMetricool(e.target.checked)}
+                disabled={generateMutation.isPending}
+                className="w-4 h-4 accent-primary"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={generateMutation.isPending}
+              className="w-full py-4 rounded-xl font-bold bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {generateMutation.isPending ? (
+                <><Loader2 className="w-5 h-5 animate-spin" /> Đang tạo...</>
+              ) : (
+                <><Zap className="w-5 h-5" /> Tạo nhanh</>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div className="lg:col-span-8">
+        {!plan ? (
+          <div className="h-full min-h-[400px] border-2 border-dashed border-border/50 rounded-2xl flex flex-col items-center justify-center text-center p-8 bg-card/50">
+            <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center mb-4">
+              <Zap className="w-10 h-10 text-muted-foreground opacity-50" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground">Tạo nội dung nhanh</h3>
+            <p className="text-muted-foreground mt-2 max-w-sm">Chọn cửa hàng, nhập chủ đề và tạo ngay một caption + prompt ảnh/video. Cần phân tích sâu? Chuyển sang chế độ Đầy đủ.</p>
+          </div>
+        ) : (
+          <div className="bg-card border border-border/50 rounded-2xl shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-1">Caption</h4>
+              <p className="text-sm whitespace-pre-wrap">{plan.caption}</p>
+              <p className="text-sm text-primary mt-1">{plan.hashtags}</p>
+            </div>
+            {plan.aiReasoning && (
+              <p className="text-xs text-muted-foreground italic border-t border-border/50 pt-3">{plan.aiReasoning}</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-secondary/40 rounded-xl p-4 border border-border/50">
+                <div className="flex items-center gap-1.5 text-xs font-bold mb-1"><Image className="w-3.5 h-3.5 text-purple-500" /> Image prompt</div>
+                <p className="text-xs text-muted-foreground">{plan.imagePrompt}</p>
+              </div>
+              <div className="bg-secondary/40 rounded-xl p-4 border border-border/50">
+                <div className="flex items-center gap-1.5 text-xs font-bold mb-1"><Palette className="w-3.5 h-3.5 text-blue-500" /> Video prompt</div>
+                <p className="text-xs text-muted-foreground">{plan.videoPrompt}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs border-t border-border/50 pt-3">
+              <ExternalLink className="w-3.5 h-3.5" />
+              {result?.metricool?.active
+                ? <span className="text-emerald-500">Đã push Metricool</span>
+                : <span className="text-amber-500">{result?.metricool?.reason ?? "Metricool chưa kích hoạt (cần key)"}</span>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FullPipelinePanel() {
   const { data: brands } = useListBrands();
   const { toast } = useToast();
   const runMutation = useRunPipeline();
@@ -212,7 +389,7 @@ function RunPipelineTab() {
       toast({ title: "Lỗi", description: "Vui lòng chọn cửa hàng", variant: "destructive" });
       return;
     }
-    
+
     setIsRunning(true);
     setCurrentStep(0);
     setResult(null);

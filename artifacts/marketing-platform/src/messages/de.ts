@@ -84,14 +84,14 @@ const de: Record<string, string> = {
   "ads.trend.regionFocus": "Region-Fokus",
   "ads.trend.regionPlaceholder": "z.B. Bayern",
   "ads.trend.regionHint":
-    "Grok durchsucht Web/X/News-DE in dieser Region.",
+    "Claude durchsucht Web/News-DE in dieser Region.",
   "ads.trend.topic": "Thema (optional)",
   "ads.trend.topicPlaceholder":
     "z.B. Nagel-Trends 2026 (leer = automatisch entdecken)",
   "ads.trend.submit.idle": "Trends scannen (Live-Suche)",
   "ads.trend.submit.loading": "Trends werden gescannt…",
   "ads.trend.empty":
-    "Grok 3 durchsucht Web/X/News-DE in Echtzeit nach steigenden Trends in Ihrer Region.",
+    "Claude durchsucht Web/News-DE in Echtzeit nach steigenden Trends in Ihrer Region.",
   "ads.trend.toast.success": "Trend-Scan abgeschlossen",
   "ads.trend.toast.error": "Trend-Scan fehlgeschlagen",
 

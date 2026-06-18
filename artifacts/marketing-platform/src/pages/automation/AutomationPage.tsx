@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Zap, Play, CheckCircle, XCircle, Clock, Webhook,
   ChevronRight, Info, Loader2, RefreshCw, Copy,
-  ExternalLink, Check, Download, Settings, Link2, FileText,
+  Check, Settings, Link2, FileText,
   CalendarClock,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -307,7 +307,7 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
               className="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-300 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold transition-colors disabled:opacity-50 w-full justify-center"
             >
               {pingingMetricool ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>🔌</span>}
-              {pingingMetricool ? "Đang kết nối Metricool..." : "Ping trực tiếp Metricool (bypass Make.com)"}
+              {pingingMetricool ? "Đang kết nối Metricool..." : "Ping trực tiếp Metricool"}
             </button>
             {pingResult && (
               <div className={`p-3 rounded-xl border text-xs ${pingResult.ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600"}`}>
@@ -339,7 +339,7 @@ function BrandAutomationCard({ item, onSave, onRunNow, onRunTest }: {
                 if (dirty) { onSave(brand.id, local); setDirty(false); }
                 try {
                   await onRunTest(brand.id, local);
-                  const method = local.metricoolToken ? "trực tiếp vào Metricool" : "tới Make.com → Metricool";
+                  const method = local.metricoolToken ? "trực tiếp vào Metricool" : "qua webhook → Metricool";
                   setTestResult({ ok: true, message: `✅ Đã tạo 1 bài Facebook Post và gửi ${method}! Kiểm tra trong Metricool Planner.` });
                 } catch (e: any) {
                   setTestResult({ ok: false, message: e.message });
@@ -440,7 +440,7 @@ function LogsPanel({ logs, refetchLogs }: { logs: AutomationLog[]; refetchLogs: 
                 {activeBrand === "all" && <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cửa hàng</th>}
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bài tạo</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Make.com</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Webhook</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chủ đề</th>
               </tr>
             </thead>
@@ -530,29 +530,14 @@ function ConnectionsPanel() {
   return (
     <div className="space-y-5 max-w-3xl">
 
-      {/* Step 1: Make.com webhook trigger */}
+      {/* Daily run trigger endpoint */}
       <div className="p-5 bg-white rounded-2xl border border-border shadow-sm space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">1</div>
+          <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">1</div>
           <div>
-            <p className="font-bold text-foreground">Make.com — Tạo Scenario tự động hàng ngày</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Make.com gọi vào API của bạn mỗi ngày lúc 17:00</p>
+            <p className="font-bold text-foreground">Endpoint chạy tự động hàng ngày</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Scheduler nội bộ gọi vào endpoint này mỗi ngày lúc 17:00 (giờ Đức)</p>
           </div>
-        </div>
-        <div className="space-y-2 text-sm">
-          {[
-            { step: "a", text: "Vào Make.com → tạo Scenario mới" },
-            { step: "b", text: "Module đầu tiên: \"Schedule\" → Interval: Daily → Time: 17:00 (giờ Đức)" },
-            { step: "c", text: "Module thứ hai: \"HTTP → Make a request\"" },
-            { step: "d", text: "URL: dán URL bên dưới vào → Method: POST → Body type: Raw → Content type: JSON" },
-            { step: "e", text: "Body: {\"secret\": \"your_secret\"} (tùy chọn, thêm bảo mật)" },
-            { step: "f", text: "Bật Scenario → Done!" },
-          ].map(item => (
-            <div key={item.step} className="flex gap-2.5 text-muted-foreground">
-              <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5">{item.step.toUpperCase()}</span>
-              <span>{item.text}</span>
-            </div>
-          ))}
         </div>
         <div className="flex items-center gap-2 p-3 bg-secondary rounded-xl border border-border">
           <code className="flex-1 text-xs font-mono text-primary break-all">{apiUrl}</code>
@@ -563,85 +548,29 @@ function ConnectionsPanel() {
         </div>
       </div>
 
-      {/* Blueprint Download */}
-      <div className="p-5 bg-gradient-to-r from-orange-50 to-violet-50 rounded-2xl border border-orange-200 shadow-sm space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
-              <Download className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-bold text-foreground">Tải Blueprint Make.com — Import 1 click</p>
-              <p className="text-xs text-muted-foreground mt-0.5">File JSON sẵn sàng — không cần cài đặt thủ công</p>
-            </div>
-          </div>
-          <a
-            href={`${BASE}/api/automation/blueprint`}
-            download="ai-marketing-make-blueprint.json"
-            className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-white font-semibold text-sm transition-colors shadow-sm"
-          >
-            <Download className="w-4 h-4" /> Tải Blueprint
-          </a>
-        </div>
-        <div className="space-y-1.5 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground text-sm">Sau khi tải, import vào Make.com:</p>
-          {[
-            "Vào Make.com → My Scenarios → dấu \"...\" → Import Blueprint",
-            "Chọn file vừa tải → Make.com tự tạo Scenario với 3 modules sẵn",
-            "Module 1: Custom Webhook (tự động tạo URL mới → copy URL → dán vào Replit Secrets: MAKE_WEBHOOK_URL)",
-            "Module 3: Thay REPLACE_WITH_METRICOOL_API_TOKEN bằng token Metricool của bạn",
-            "Bật Scenario → Done! Mỗi ngày AI chạy tự động lúc 17:00",
-          ].map((text, i) => (
-            <div key={i} className="flex gap-2">
-              <span className="w-4 h-4 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5">{i + 1}</span>
-              <span>{text}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 p-3 bg-white/70 rounded-xl border border-orange-200">
-          <Info className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-          <p className="text-xs text-muted-foreground">
-            Blueprint chứa sẵn: <span className="text-foreground font-medium">Webhook trigger → Iterator → HTTP to Metricool</span> — chỉ cần thay token Metricool và URL webhook mới.
-          </p>
-        </div>
-      </div>
-
-      {/* Step 2: Make.com → Metricool */}
+      {/* Metricool direct publishing */}
       <div className="p-5 bg-white rounded-2xl border border-border shadow-sm space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-sm">2</div>
           <div>
-            <p className="font-bold text-foreground">Make.com → Metricool — Lên lịch đăng bài</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Sau khi AI tạo content, Make.com gửi sang Metricool tự động</p>
+            <p className="font-bold text-foreground">Metricool — Lên lịch đăng bài trực tiếp</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Sau khi AI tạo content, server gửi thẳng sang Metricool qua API</p>
           </div>
         </div>
-        <div className="space-y-2 text-sm">
-          {[
-            { step: "a", text: "Trong Scenario, sau module HTTP, thêm module \"Metricool → Create Publication\"" },
-            { step: "b", text: "Kết nối tài khoản Metricool (đăng nhập một lần)" },
-            { step: "c", text: "Map fields: Caption → {{response.caption}}, Hashtags → {{response.hashtags}}, Platform → chọn Facebook/Instagram/TikTok" },
-            { step: "d", text: "Scheduled time → ngày mai 10:00 (hoặc tùy chỉnh theo lịch tốt nhất)" },
-            { step: "e", text: "Thêm Iterator nếu có nhiều cửa hàng → loop qua từng brand" },
-          ].map(item => (
-            <div key={item.step} className="flex gap-2.5 text-muted-foreground">
-              <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5">{item.step.toUpperCase()}</span>
-              <span>{item.text}</span>
-            </div>
-          ))}
-        </div>
-        <a href="https://www.make.com/en/integrations/metricool" target="_blank" rel="noreferrer"
-          className="inline-flex items-center gap-2 text-xs text-primary hover:underline font-medium">
-          <ExternalLink className="w-3.5 h-3.5" /> Xem tài liệu Make.com + Metricool
-        </a>
+        <p className="text-xs text-muted-foreground">
+          <Info className="w-3.5 h-3.5 inline mr-1 text-primary" />
+          Nhập <span className="text-foreground font-medium">User ID + API Token Metricool</span> cho từng cửa hàng ở tab "Cài đặt cửa hàng",
+          rồi bấm "Ping trực tiếp Metricool" để kiểm tra kết nối.
+        </p>
       </div>
 
-      {/* Step 3: Test webhook */}
+      {/* Outbound webhook test */}
       <div className="p-5 bg-white rounded-2xl border border-border shadow-sm space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-sm">3</div>
           <div>
-            <p className="font-bold text-foreground">Kiểm tra kết nối Make.com Webhook</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Gửi dữ liệu test để xác nhận Make.com nhận được</p>
+            <p className="font-bold text-foreground">Kiểm tra Outbound Webhook</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Gửi dữ liệu test để xác nhận webhook đích nhận được</p>
           </div>
         </div>
         {webhookResult && (
@@ -656,11 +585,11 @@ function ConnectionsPanel() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-sm transition-colors disabled:opacity-50"
         >
           {testingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : <Webhook className="w-4 h-4" />}
-          {testingWebhook ? "Đang gửi..." : "Test Make.com Webhook"}
+          {testingWebhook ? "Đang gửi..." : "Test Outbound Webhook"}
         </button>
         <p className="text-xs text-muted-foreground">
           <Info className="w-3.5 h-3.5 inline mr-1 text-primary" />
-          Cần cài đặt MAKE_WEBHOOK_URL trong Replit Secrets — lấy từ Make.com → Webhooks → Copy URL.
+          Cần cài đặt OUTBOUND_WEBHOOK_URL trong môi trường server.
         </p>
       </div>
     </div>
@@ -769,7 +698,7 @@ export default function AutomationPage() {
   const TABS: { id: MainTab; label: string; icon: typeof Settings; badge?: number }[] = [
     { id: "settings", label: "Cài đặt cửa hàng", icon: Settings, badge: enabledCount > 0 ? enabledCount : undefined },
     { id: "trend-digest", label: "Weekly Trend Digest", icon: CalendarClock },
-    { id: "connections", label: "Kết nối Make.com + Metricool", icon: Link2 },
+    { id: "connections", label: "Kết nối Metricool", icon: Link2 },
     { id: "logs", label: "Nhật ký", icon: FileText, badge: logs.length > 0 ? logs.length : undefined },
   ];
 
@@ -785,7 +714,7 @@ export default function AutomationPage() {
               </div>
               <h1 className="font-display font-bold text-2xl text-foreground">Automation Tự động</h1>
             </div>
-            <p className="text-muted-foreground text-sm">Mỗi ngày trước 19:00 — AI tự tìm trending, viết Reel + Post + Story → gửi Make.com → Metricool đăng tự động.</p>
+            <p className="text-muted-foreground text-sm">Mỗi ngày trước 19:00 — AI tự tìm trending, viết Reel + Post + Story → gửi thẳng Metricool đăng tự động.</p>
           </div>
           {enabledCount > 0 && activeTab === "settings" && (
             <button
@@ -804,12 +733,11 @@ export default function AutomationPage() {
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Luồng automation khép kín</p>
           <div className="flex items-center gap-2 flex-wrap text-sm">
             {[
-              { icon: "⏰", label: "Make.com 17:00" },
-              { icon: "🔬", label: "Grok: Trending topic" },
-              { icon: "🧠", label: "GPT-4o: Chiến lược" },
+              { icon: "⏰", label: "Scheduler 17:00" },
+              { icon: "🔬", label: "Claude: Trending topic" },
+              { icon: "🧠", label: "Claude: Chiến lược" },
               { icon: "✍️", label: "Gemini: Viết bài" },
               { icon: "💾", label: "Lưu DB" },
-              { icon: "📤", label: "Webhook → Make.com" },
               { icon: "📅", label: "Metricool lên lịch" },
             ].map((step, i, arr) => (
               <div key={i} className="flex items-center gap-2">

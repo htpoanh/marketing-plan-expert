@@ -259,7 +259,7 @@ export function TrendDigestPanel() {
           <Send className="w-3 h-3 inline mr-1.5" />
           Đích đến: tự động chọn theo env —{" "}
           <code className="font-mono">TELEGRAM_BOT_TOKEN</code> + chat ID nếu có,
-          không thì <code className="font-mono">MAKE_WEBHOOK_URL</code>, không thì
+          không thì <code className="font-mono">OUTBOUND_WEBHOOK_URL</code>, không thì
           chỉ log + lưu payload.
         </div>
       </div>

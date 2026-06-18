@@ -98,7 +98,7 @@ export default function AdsStrategyPage() {
                 <Radar className="w-3.5 h-3.5" /> {t("ads.tab.trend")}
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
-                Grok 3 + Search
+                Claude + Web Search
               </div>
             </TabsTrigger>
           </TabsList>

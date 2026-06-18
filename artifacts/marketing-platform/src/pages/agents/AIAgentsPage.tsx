@@ -29,7 +29,7 @@ type AgentConfig = {
 };
 
 const AGENT_META: Record<string, { icon: React.ReactNode; color: string; badge: string; hint: string }> = {
-  grok: {
+  trend: {
     icon: <TrendingUp className="w-5 h-5" />,
     color: "from-orange-500 to-red-500",
     badge: "Agent 1",
@@ -62,7 +62,7 @@ function AgentCard({ agent, profileId, onSaved }: { agent: AgentConfig; profileI
   const [style, setStyle] = useState(agent.outputStyle ?? "");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const meta = AGENT_META[agent.agentKey] ?? AGENT_META.grok;
+  const meta = AGENT_META[agent.agentKey] ?? AGENT_META.trend;
 
   const save = async () => {
     setSaving(true);

@@ -329,12 +329,12 @@ export default function ApprovalDashboard() {
               const brandName = brands.find((b: any) => b.id === plan.brandId)?.brandName;
               const displayCaption = localCaptions[plan.id] ?? cleanText(plan.caption);
               const wordCount = displayCaption.split(/\s+/).filter(Boolean).length;
-              const isRewritingShorter = rewritingId?.id === plan.id && rewritingId.direction === "shorter";
-              const isRewritingLonger = rewritingId?.id === plan.id && rewritingId.direction === "longer";
+              const isRewritingShorter = rewritingId?.id === plan.id && rewritingId?.direction === "shorter";
+              const isRewritingLonger = rewritingId?.id === plan.id && rewritingId?.direction === "longer";
               const anyRewriting = isRewritingShorter || isRewritingLonger;
               const sel = selections[plan.id];
-              const isRewritingSelShorter = rewritingSelectionId?.id === plan.id && rewritingSelectionId.direction === "shorter";
-              const isRewritingSelLonger = rewritingSelectionId?.id === plan.id && rewritingSelectionId.direction === "longer";
+              const isRewritingSelShorter = rewritingSelectionId?.id === plan.id && rewritingSelectionId?.direction === "shorter";
+              const isRewritingSelLonger = rewritingSelectionId?.id === plan.id && rewritingSelectionId?.direction === "longer";
               const anyRewritingSel = isRewritingSelShorter || isRewritingSelLonger;
               const isBusy = approvingId === plan.id || publishingId === plan.id || deletingId === plan.id || markingUsedId === plan.id;
 

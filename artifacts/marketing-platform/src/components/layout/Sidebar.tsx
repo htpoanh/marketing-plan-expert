@@ -11,6 +11,12 @@ import {
   Bot,
   Zap,
   MessagesSquare,
+  Inbox,
+  Lightbulb,
+  TrendingUp,
+  Globe,
+  FileBarChart,
+  Users,
   LogOut,
   User,
 } from "lucide-react";
@@ -21,6 +27,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const navigation = [
   { name: "Tổng quan", href: "/", icon: LayoutDashboard },
+  { name: "Báo cáo tuần", href: "/weekly-report", icon: FileBarChart },
   { name: "Quản lý cửa hàng", href: "/brands", icon: Store },
   { 
     name: "Đánh giá Google", 
@@ -35,6 +42,7 @@ const navigation = [
     icon: Bot,
     children: [
       { name: "Chạy Pipeline", href: "/pipeline" },
+      { name: "Tạo nhanh", href: "/pipeline?mode=quick" },
       { name: "Mô hình Marketing", href: "/pipeline/models" },
       { name: "Cấu hình AI Agents", href: "/agents" },
     ]
@@ -51,6 +59,12 @@ const navigation = [
   { name: "Phê duyệt", href: "/approvals", icon: CheckSquare },
   { name: "Automation", href: "/automation", icon: Zap },
   { name: "Ads Strategy AI", href: "/strategy/ads", icon: BarChart2 },
+  { name: "Hiệu quả quảng cáo", href: "/ads-performance", icon: BarChart2 },
+  { name: "Hộp thư chiến lược", href: "/strategy-inbox", icon: Lightbulb },
+  { name: "Trend Intelligence", href: "/trends", icon: TrendingUp },
+  { name: "Nghiên cứu thị trường", href: "/market-research", icon: Globe },
+  { name: "Virtual KOL", href: "/kol", icon: Users },
+  { name: "Hộp thư Auto-Reply", href: "/inbox", icon: Inbox },
   { name: "AI Đặt lịch Messenger", href: "/messenger", icon: MessagesSquare },
 ];
 

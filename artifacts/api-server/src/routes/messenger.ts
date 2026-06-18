@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import crypto from "node:crypto";
 import { db } from "@workspace/db";
 import {
   messengerConfigsTable,
@@ -8,9 +9,118 @@ import {
 } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import OpenAI from "openai";
+import { handleCommentEvent } from "../services/auto-reply/comment-handler";
 
 const router: IRouter = Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+/** Constant-time string compare that won't throw on length mismatch. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
+/**
+ * Verify Meta's X-Hub-Signature-256 over the RAW request body using the app
+ * secret. FAIL CLOSED: if no secret is configured or the signature is missing
+ * or wrong, the webhook is rejected. This is what stops an attacker from
+ * POSTing forged customer messages/comments to drive the auto-reply engine.
+ */
+function verifyMetaSignature(req: Request): boolean {
+  const appSecret =
+    process.env["META_APP_SECRET"] ?? process.env["FACEBOOK_APP_SECRET"];
+  if (!appSecret) {
+    console.error(
+      "[messenger/webhook] META_APP_SECRET not set — rejecting webhook (fail closed)",
+    );
+    return false;
+  }
+  const header = req.get("x-hub-signature-256");
+  if (!header || !header.startsWith("sha256=")) return false;
+  const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!raw || raw.length === 0) return false;
+  const expected =
+    "sha256=" + crypto.createHmac("sha256", appSecret).update(raw).digest("hex");
+  return safeEqual(header, expected);
+}
+
+// ── FB/IG comment events (Phase G — Auto-Reply Engine) ──────────────────────
+// Page comments arrive on entry.changes (field "feed", item "comment") for
+// Facebook and field "comments" for Instagram — a different shape from the
+// entry.messaging DMs handled below. We classify + auto-reply/escalate via the
+// auto-reply service. Resolution: FB matches config by pageId === entry.id; IG
+// (object "instagram") falls back to the first active IG-enabled config since
+// the messenger_configs table does not store the IG account id.
+async function processCommentChanges(
+  entry: any,
+  platform: "facebook" | "instagram",
+): Promise<void> {
+  const changes: any[] = entry.changes ?? [];
+  if (changes.length === 0) return;
+
+  // Resolve config + brand.
+  let config: any;
+  if (platform === "facebook") {
+    [config] = await db
+      .select()
+      .from(messengerConfigsTable)
+      .where(eq(messengerConfigsTable.pageId, entry.id));
+  }
+  if (!config) {
+    const actives = await db
+      .select()
+      .from(messengerConfigsTable)
+      .where(eq(messengerConfigsTable.isActive, true));
+    config = actives[0];
+  }
+  if (!config || !config.pageAccessToken || !config.brandId) return;
+
+  const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, config.brandId));
+  if (!brand) return;
+
+  for (const change of changes) {
+    const value = change.value ?? {};
+
+    if (platform === "facebook") {
+      // Only act on newly added comments — ignore likes, edits, removes, and
+      // the page's own replies.
+      if (change.field !== "feed") continue;
+      if (value.item !== "comment" || value.verb !== "add") continue;
+      const fromId = value.from?.id;
+      if (!fromId || fromId === entry.id) continue; // skip page's own comments
+      const commentId = value.comment_id;
+      const text = value.message ?? "";
+      if (!commentId || !text.trim()) continue;
+
+      await handleCommentEvent({
+        platform: "facebook",
+        commentId,
+        text,
+        authorName: value.from?.name,
+        brand,
+        pageAccessToken: config.pageAccessToken,
+      });
+    } else {
+      // Instagram comments.
+      if (change.field !== "comments") continue;
+      const commentId = value.id;
+      const text = value.text ?? "";
+      const fromId = value.from?.id;
+      if (!commentId || !text.trim()) continue;
+      if (fromId && fromId === entry.id) continue; // skip own comments
+      await handleCommentEvent({
+        platform: "instagram",
+        commentId,
+        text,
+        authorName: value.from?.username,
+        brand,
+        pageAccessToken: config.pageAccessToken,
+      });
+    }
+  }
+}
 
 // ── Messenger Graph API ───────────────────────────────────────────────────
 async function sendMessage(psid: string, token: string, message: string) {
@@ -58,6 +168,9 @@ async function processMessage(
   const brandName = brand.brandName;
   const services = config.servicesInfo || "Gel Nails, Acryl, Pedicure, Maniküre, Nageldesign";
   const hours = config.businessHoursInfo || "Di–Sa 9:00–19:00, So 10:00–17:00";
+  // Optional self-service booking link (brand.ads_context.bookingUrl). When set,
+  // the assistant offers it first for customers who want to book themselves.
+  const bookingUrl = (brand.adsContext?.bookingUrl ?? "").trim();
 
   const history = (session.conversationHistory as any[]) || [];
   const collected = (session.collectedData as any) || {};
@@ -71,7 +184,11 @@ async function processMessage(
 WICHTIGE REGELN:
 - Antworte IMMER auf Deutsch, freundlich und natürlich
 - Du hilfst beim Terminbuchen und beantwortest Fragen zum Studio
-- Wenn der Kunde einen Termin möchte, sammle ALLE nötigen Infos schrittweise:
+- Wenn der Kunde einen Termin möchte:${bookingUrl ? `
+  - Biete IMMER ZUERST den direkten Buchungslink an, damit der Kunde selbst buchen kann: ${bookingUrl}
+    (z.B. "Am schnellsten buchen Sie direkt hier: ${bookingUrl} 💅")
+  - Wenn der Kunde lieber über den Chat buchen möchte, sammle die Infos schrittweise wie unten.` : ""}
+  sammle ALLE nötigen Infos schrittweise:
   1. Welchen Service möchte der Kunde? (Angeboten: ${services})
   2. Welches Datum? (versuche ein konkretes Datum z.B. "Mittwoch 19. März")
   3. Welche Uhrzeit?
@@ -144,7 +261,7 @@ ${collectedSummary}`;
   if (choice.finish_reason === "tool_calls" && choice.message.tool_calls?.[0]) {
     const toolCall = choice.message.tool_calls[0];
 
-    if (toolCall.function.name === "complete_booking") {
+    if (toolCall.type === "function" && toolCall.function.name === "complete_booking") {
       const args = JSON.parse(toolCall.function.arguments);
       return {
         reply: `Vielen Dank, ${args.customerName}! 🙏 Ich habe Ihren Terminwunsch aufgenommen:\n\n📌 Service: ${args.service}\n📅 Datum: ${args.preferredDate}\n⏰ Uhrzeit: ${args.preferredTime}\n📞 Telefon: ${args.phone}\n\nBitte warten Sie kurz — das Team von ${brandName} bestätigt Ihren Termin in Kürze! ✨`,
@@ -155,7 +272,7 @@ ${collectedSummary}`;
     }
 
     // AI calls save_progress → merge partial data, then ask follow-up
-    if (toolCall.function.name === "save_progress") {
+    if (toolCall.type === "function" && toolCall.function.name === "save_progress") {
       const partial = JSON.parse(toolCall.function.arguments);
       const newCollected = { ...collected };
       for (const [k, v] of Object.entries(partial)) {
@@ -225,14 +342,37 @@ router.get("/webhook", async (req: Request, res: Response) => {
 
 // ── Webhook Receive Messages (POST) ─────────────────────────────────────────
 router.post("/webhook", async (req: Request, res: Response) => {
+  // SECURITY: verify the payload is genuinely from Meta before processing it.
+  // Without this, anyone who knows the public webhook URL could forge events
+  // and drive the auto-reply engine (send DMs via the page token, create
+  // bookings). Reject unsigned/forged requests with 403.
+  if (!verifyMetaSignature(req)) {
+    res.status(403).send("Invalid signature");
+    return;
+  }
+
   res.status(200).send("EVENT_RECEIVED");
 
   try {
     const body = req.body;
+
+    // Instagram comment webhooks arrive under object "instagram".
+    if (body.object === "instagram") {
+      for (const entry of (body.entry || [])) {
+        await processCommentChanges(entry, "instagram");
+      }
+      return;
+    }
+
     if (body.object !== "page") return;
 
     for (const entry of (body.entry || [])) {
       const pageId = entry.id;
+
+      // Phase G — page comments come on entry.changes, not entry.messaging.
+      if (entry.changes) {
+        await processCommentChanges(entry, "facebook");
+      }
 
       // Find config for this page
       const [config] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.pageId, pageId));
@@ -417,101 +557,10 @@ router.post("/webhook", async (req: Request, res: Response) => {
   }
 });
 
-// ── Make.com Integration Endpoint ──────────────────────────────────────────
-// Make.com scenario calls this with the customer message → we return the AI reply
-// Make.com then sends the reply back via Facebook Messenger module
-router.post("/process-make", async (req: Request, res: Response) => {
-  try {
-    const { senderId, message, pageId, brandId } = req.body as {
-      senderId: string;
-      message: string;
-      pageId?: string;
-      brandId?: number;
-    };
-
-    if (!senderId || !message) {
-      return res.status(400).json({ error: "senderId and message are required" });
-    }
-
-    // Find config by pageId or brandId
-    let config: any;
-    if (pageId) {
-      [config] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.pageId, pageId));
-    } else if (brandId) {
-      [config] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.brandId, brandId));
-    } else {
-      // Fall back to first active config
-      const configs = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.isActive, true));
-      config = configs[0];
-    }
-
-    if (!config) return res.status(404).json({ error: "No Messenger config found for this page/brand" });
-
-    const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, config.brandId));
-    if (!brand) return res.status(404).json({ error: "Brand not found" });
-
-    // Get or create session
-    let [session] = await db.select().from(messengerSessionsTable).where(eq(messengerSessionsTable.psid, senderId));
-    if (!session) {
-      [session] = await db.insert(messengerSessionsTable).values({
-        psid: senderId,
-        brandId: config.brandId,
-        state: "idle",
-        collectedData: {},
-        conversationHistory: [],
-      }).returning();
-    }
-
-    const history = ((session.conversationHistory as any[]) || []);
-    const updatedHistory = [...history.slice(-8), { role: "user", content: message }];
-
-    const { reply, newState, collectedData, shouldBookNow } = await processMessage(
-      message, { ...session, conversationHistory: updatedHistory }, brand, config
-    );
-
-    if (shouldBookNow) {
-      const [appt] = await db.insert(appointmentsTable).values({
-        brandId: config.brandId,
-        customerPsid: senderId,
-        customerName: collectedData.customerName,
-        service: collectedData.service,
-        preferredDate: collectedData.preferredDate,
-        preferredTime: collectedData.preferredTime,
-        phone: collectedData.phone,
-        status: "pending",
-        managerNotifiedAt: new Date(),
-      }).returning();
-
-      await db.update(messengerSessionsTable)
-        .set({ state: "waiting_manager", collectedData, appointmentId: appt.id, conversationHistory: [...updatedHistory, { role: "assistant", content: reply }], updatedAt: new Date() })
-        .where(eq(messengerSessionsTable.psid, senderId));
-
-      // Return reply + booking data (Make.com sends reply, and optionally notifies manager via separate route)
-      return res.json({
-        reply,
-        bookingCreated: true,
-        appointmentId: appt.id,
-        bookingData: collectedData,
-        managerMessage: `📅 NEUE BUCHUNGSANFRAGE\n\n👤 ${collectedData.customerName}\n💅 ${collectedData.service}\n📆 ${collectedData.preferredDate} um ${collectedData.preferredTime}\n📞 ${collectedData.phone}\n\nAntworten Sie mit JA oder NEIN.`,
-        managerPsid: config.managerPsid,
-      });
-    } else {
-      await db.update(messengerSessionsTable)
-        .set({ state: newState, collectedData, conversationHistory: [...updatedHistory, { role: "assistant", content: reply }], updatedAt: new Date() })
-        .where(eq(messengerSessionsTable.psid, senderId));
-
-      return res.json({ reply, bookingCreated: false });
-    }
-  } catch (err: any) {
-    console.error("Make.com process error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── Config CRUD ────────────────────────────────────────────────────────────
 router.get("/config/:brandId", async (req: Request, res: Response) => {
   try {
-    const brandId = parseInt(req.params.brandId);
+    const brandId = parseInt(String(req.params.brandId));
     const [config] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.brandId, brandId));
     res.json(config ?? null);
   } catch (err: any) {
@@ -521,7 +570,7 @@ router.get("/config/:brandId", async (req: Request, res: Response) => {
 
 router.post("/config/:brandId", async (req: Request, res: Response) => {
   try {
-    const brandId = parseInt(req.params.brandId);
+    const brandId = parseInt(String(req.params.brandId));
     const { pageAccessToken, verifyToken, managerPsid, pageId, isActive, welcomeMessage, businessHoursInfo, servicesInfo } = req.body;
 
     const [existing] = await db.select().from(messengerConfigsTable).where(eq(messengerConfigsTable.brandId, brandId));
@@ -576,7 +625,7 @@ router.get("/appointments", async (req: Request, res: Response) => {
 
 router.patch("/appointments/:id/status", async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     const { status } = req.body;
 
     const [appt] = await db.update(appointmentsTable)

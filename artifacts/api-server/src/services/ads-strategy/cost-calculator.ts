@@ -26,10 +26,6 @@ const RATES: Record<string, Rate> = {
   // OpenAI
   "gpt-4o": { inputPerMillion: 2.34, outputPerMillion: 9.35 },
   "gpt-4o-mini": { inputPerMillion: 0.14, outputPerMillion: 0.56 },
-
-  // xAI Grok
-  "grok-3": { inputPerMillion: 2.8, outputPerMillion: 14.0 },
-  "grok-3-latest": { inputPerMillion: 2.8, outputPerMillion: 14.0 },
 };
 
 const FALLBACK_RATE: Rate = { inputPerMillion: 5.0, outputPerMillion: 15.0 };

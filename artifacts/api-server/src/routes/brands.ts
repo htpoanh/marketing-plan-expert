@@ -44,9 +44,9 @@ router.get("/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, id));
     if (!brand) return res.status(404).json({ error: "Brand not found" });
-    res.json(brand);
+    return res.json(brand);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch brand" });
+    return res.status(500).json({ error: "Failed to fetch brand" });
   }
 });
 
@@ -75,9 +75,9 @@ router.put("/:id", async (req, res) => {
       .where(eq(brandsTable.id, id))
       .returning();
     if (!brand) return res.status(404).json({ error: "Brand not found" });
-    res.json(brand);
+    return res.json(brand);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update brand" });
+    return res.status(500).json({ error: "Failed to update brand" });
   }
 });
 
@@ -105,10 +105,10 @@ router.post("/:id/clone", async (req, res) => {
       }).catch(() => {});
     }
 
-    res.status(201).json(cloned);
+    return res.status(201).json(cloned);
   } catch (error) {
     console.error("[clone brand]", error);
-    res.status(500).json({ error: "Failed to clone brand" });
+    return res.status(500).json({ error: "Failed to clone brand" });
   }
 });
 
@@ -117,9 +117,9 @@ router.delete("/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     const [deleted] = await db.delete(brandsTable).where(eq(brandsTable.id, id)).returning();
     if (!deleted) return res.status(404).json({ error: "Brand not found" });
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete brand" });
+    return res.status(500).json({ error: "Failed to delete brand" });
   }
 });
 

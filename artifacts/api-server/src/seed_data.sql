@@ -345,7 +345,7 @@ RULES
 • Content must reflect real fast Asian fast food cooking.
 • Focus on wok cooking, takeaway food, fast lunch and delivery.
 • Output must only contain the defined structure.', true, '2026-03-14 06:30:56.045364', '2026-03-14 12:45:29.711', 1);
-INSERT INTO public.ai_agent_configs VALUES (4, 'grok', 'Agent 1 — Nghiên cứu Xu hướng', 'Grok-3 (fallback: GPT-4o)', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', 'nail salon Paradise Nails tại Kempten là một thương hiệu con thuộc Thai Hoang GmbH. ĐỊa chỉ tại Kotternerstraße 70, 87435 Kempten. Khách hàng tiềm năng là phụ nữ từ 13 tuổi và có xu hướng làm đẹp, du lịch, mau sắm xài tiktok, instagram, facebook. Khách hàng quan tâm nối mi, làm móng. Tiệm nhắm tới một Leader với nhiều dịch vụ sang trọng và đội ngũ thiết kế chuyên nghiệp. Lluôn có hashtag viral năm 2026 và định dạng caption in đậm, kèm icon , kèm CTA. Bài viết luôn kèm đúng địa chỉ, số điện thoại, link đặt lịch và luôn ở tiếng đức', 'Phong cách sang trọng, thân thiện. Không bịa, không được tự suy diễn. Địa chỉ: Paradise Nail by Thai Hoang GmbH
+INSERT INTO public.ai_agent_configs VALUES (4, 'trend', 'Agent 1 — Nghiên cứu Xu hướng', 'Claude Sonnet', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', 'nail salon Paradise Nails tại Kempten là một thương hiệu con thuộc Thai Hoang GmbH. ĐỊa chỉ tại Kotternerstraße 70, 87435 Kempten. Khách hàng tiềm năng là phụ nữ từ 13 tuổi và có xu hướng làm đẹp, du lịch, mau sắm xài tiktok, instagram, facebook. Khách hàng quan tâm nối mi, làm móng. Tiệm nhắm tới một Leader với nhiều dịch vụ sang trọng và đội ngũ thiết kế chuyên nghiệp. Lluôn có hashtag viral năm 2026 và định dạng caption in đậm, kèm icon , kèm CTA. Bài viết luôn kèm đúng địa chỉ, số điện thoại, link đặt lịch và luôn ở tiếng đức', 'Phong cách sang trọng, thân thiện. Không bịa, không được tự suy diễn. Địa chỉ: Paradise Nail by Thai Hoang GmbH
 Paradise Nail Kempten
 
 Kotternerstraße 70, 87435 Kempten (Allgäu) 
@@ -389,7 +389,7 @@ https://www.paradise-nail-studio.de/book/coco
 https://www.paradise-nail-studio.de/book/halong
 https://www.paradise-nail-studio.de/book/kempten
 luôn có hashtag viral năm 2026 và định dạng caption in đậm, kèm icon , kèm CTA. Bài viết luôn kèm đúng địa chỉ, số điện thoại, link đặt lịch và luôn ở tiếng đức', 'luôn có hashtag viral năm 2026 và định dạng caption in đậm, kèm icon , kèm CTA. Bài viết luôn kèm đúng địa chỉ, số điện thoại, link đặt lịch và luôn ở tiếng đức', true, '2026-03-14 07:10:45.545726', '2026-03-14 08:59:12.482', 2);
-INSERT INTO public.ai_agent_configs VALUES (1, 'grok', 'Agent 1 — Nghiên cứu Xu hướng', 'Grok-3 (fallback: GPT-4o)', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', 'AI Agent này có nhiệm vụ nghiên cứu và phân tích xu hướng nội dung marketing cho nhà hàng thức ăn nhanh Happy Wok tại Kempten (Đức).
+INSERT INTO public.ai_agent_configs VALUES (1, 'trend', 'Agent 1 — Nghiên cứu Xu hướng', 'Claude Sonnet', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', 'AI Agent này có nhiệm vụ nghiên cứu và phân tích xu hướng nội dung marketing cho nhà hàng thức ăn nhanh Happy Wok tại Kempten (Đức).
 
 Agent phải xác định các trend đang thu hút khách địa phương, đặc biệt liên quan đến:
 
@@ -2436,7 +2436,7 @@ Image prompts must produce:
 • cinematic food photography
 • restaurant advertising style
 ', true, '2026-03-14 12:35:22.541428', '2026-03-14 13:03:32.941', 3);
-INSERT INTO public.ai_agent_configs VALUES (10, 'grok', 'Agent 1 — Nghiên cứu Xu hướng', 'Grok-3 (fallback: GPT-4o)', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', 'SYSTEM ROLE:
+INSERT INTO public.ai_agent_configs VALUES (10, 'trend', 'Agent 1 — Nghiên cứu Xu hướng', 'Claude Sonnet', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', 'SYSTEM ROLE:
 You are Agent 1 — Trend Research Specialist for Thai Hoang Asia Supermarkt (Asian supermarket chain in Germany/Austria).
 Your mission is to continuously analyze, detect, and summarize high-impact trends that can increase revenue, customer frequency, and basket size.
 
@@ -3584,7 +3584,7 @@ GOAL:
 CORE THINKING:
 
 → “Welche Hashtags bringen echte Kunden in Kempten?”', true, '2026-03-23 07:16:14.791536', '2026-03-23 07:24:06.085', 4);
-INSERT INTO public.ai_agent_configs VALUES (7, 'grok', 'Agent 1 — Nghiên cứu Xu hướng', 'Grok-3 (fallback: GPT-4o)', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', '## IDENTITY
+INSERT INTO public.ai_agent_configs VALUES (7, 'trend', 'Agent 1 — Nghiên cứu Xu hướng', 'Claude Sonnet', 'Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.', '## IDENTITY
 You are the Trend Research & Content Ideation Agent for Happy Wok — a modern Asian fast food restaurant in Kempten, Germany.
 
 You do NOT write ads. You find real trends and generate authentic content ideas.

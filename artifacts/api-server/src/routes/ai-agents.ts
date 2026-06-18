@@ -1,15 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { aiAgentConfigsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { aiAgentConfigsTable, aiProfilesTable } from "@workspace/db/schema";
+import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 const DEFAULT_AGENTS = [
   {
-    agentKey: "grok",
+    agentKey: "trend",
     agentName: "Agent 1 — Nghiên cứu Xu hướng",
-    aiModel: "Grok-3 (fallback: GPT-4o)",
+    aiModel: "Claude Sonnet",
     defaultRole: "Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.",
     expertiseArea: "",
     customInstructions: "",
@@ -19,7 +19,7 @@ const DEFAULT_AGENTS = [
   {
     agentKey: "openai",
     agentName: "Agent 2 & 4 — Chiến lược & Prompt",
-    aiModel: "GPT-4o",
+    aiModel: "Claude Sonnet (chiến lược) + GPT-4o (prompt ảnh)",
     defaultRole: "Chuyên gia chiến lược marketing và prompt engineering. Phân tích trend, chọn mô hình marketing phù hợp (AIDA, STP, 4P...) và tạo prompts chuyên nghiệp cho hình ảnh/video.",
     expertiseArea: "",
     customInstructions: "",
@@ -48,28 +48,49 @@ const DEFAULT_AGENTS = [
   },
 ];
 
-async function ensureDefaultAgents() {
+async function getDefaultProfileId(): Promise<number> {
+  const [existing] = await db
+    .select()
+    .from(aiProfilesTable)
+    .where(eq(aiProfilesTable.isDefault, true));
+  if (existing) return existing.id;
+
+  const [created] = await db
+    .insert(aiProfilesTable)
+    .values({ profileName: "Mặc định", industry: "Chung", isDefault: true })
+    .returning();
+  return created.id;
+}
+
+async function ensureDefaultAgents(profileId: number) {
   for (const agent of DEFAULT_AGENTS) {
     const existing = await db
       .select()
       .from(aiAgentConfigsTable)
-      .where(eq(aiAgentConfigsTable.agentKey, agent.agentKey));
+      .where(
+        and(
+          eq(aiAgentConfigsTable.profileId, profileId),
+          eq(aiAgentConfigsTable.agentKey, agent.agentKey)
+        )
+      );
     if (existing.length === 0) {
-      await db.insert(aiAgentConfigsTable).values(agent);
+      await db.insert(aiAgentConfigsTable).values({ ...agent, profileId });
     }
   }
 }
 
 router.get("/", async (_req, res) => {
   try {
-    await ensureDefaultAgents();
+    const profileId = await getDefaultProfileId();
+    await ensureDefaultAgents(profileId);
     const agents = await db
       .select()
       .from(aiAgentConfigsTable)
+      .where(eq(aiAgentConfigsTable.profileId, profileId))
       .orderBy(aiAgentConfigsTable.id);
-    res.json(agents);
+    return res.json(agents);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch AI agent configs" });
+    return res.status(500).json({ error: "Failed to fetch AI agent configs" });
   }
 });
 
@@ -78,10 +99,16 @@ router.put("/:agentKey", async (req, res) => {
     const { agentKey } = req.params;
     const { expertiseArea, customInstructions, outputStyle, agentName, isActive } = req.body;
 
+    const profileId = await getDefaultProfileId();
     const [existing] = await db
       .select()
       .from(aiAgentConfigsTable)
-      .where(eq(aiAgentConfigsTable.agentKey, agentKey));
+      .where(
+        and(
+          eq(aiAgentConfigsTable.profileId, profileId),
+          eq(aiAgentConfigsTable.agentKey, agentKey)
+        )
+      );
 
     if (!existing) {
       return res.status(404).json({ error: "Agent config not found" });
@@ -97,12 +124,12 @@ router.put("/:agentKey", async (req, res) => {
         isActive: isActive ?? existing.isActive,
         updatedAt: new Date(),
       })
-      .where(eq(aiAgentConfigsTable.agentKey, agentKey))
+      .where(eq(aiAgentConfigsTable.id, existing.id))
       .returning();
 
-    res.json(updated);
+    return res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update AI agent config" });
+    return res.status(500).json({ error: "Failed to update AI agent config" });
   }
 });
 
@@ -112,6 +139,7 @@ router.post("/reset/:agentKey", async (req, res) => {
     const defaultAgent = DEFAULT_AGENTS.find(a => a.agentKey === agentKey);
     if (!defaultAgent) return res.status(404).json({ error: "Agent not found" });
 
+    const profileId = await getDefaultProfileId();
     const [updated] = await db
       .update(aiAgentConfigsTable)
       .set({
@@ -120,12 +148,17 @@ router.post("/reset/:agentKey", async (req, res) => {
         outputStyle: "",
         updatedAt: new Date(),
       })
-      .where(eq(aiAgentConfigsTable.agentKey, agentKey))
+      .where(
+        and(
+          eq(aiAgentConfigsTable.profileId, profileId),
+          eq(aiAgentConfigsTable.agentKey, agentKey)
+        )
+      )
       .returning();
 
-    res.json(updated);
+    return res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Failed to reset AI agent config" });
+    return res.status(500).json({ error: "Failed to reset AI agent config" });
   }
 });
 

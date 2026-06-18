@@ -292,7 +292,7 @@ router.get("/url", async (req, res) => {
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", signedState);
 
-  res.redirect(url.toString());
+  return res.redirect(url.toString());
 });
 
 // GET /callback  — PUBLIC route, called by Google after user consent
@@ -447,7 +447,7 @@ router.get("/status", async (req, res) => {
     });
   } catch (err) {
     console.error("[google-auth/status] Error:", err);
-    res.status(500).json({ error: "Failed to get status" });
+    return res.status(500).json({ error: "Failed to get status" });
   }
 });
 
@@ -459,9 +459,9 @@ router.delete("/disconnect", async (req, res) => {
   try {
     await ensureTable();
     await db.execute(sql`DELETE FROM google_oauth_tokens WHERE brand_id = ${parseInt(brandId)}`);
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: "Failed to disconnect" });
+    return res.status(500).json({ error: "Failed to disconnect" });
   }
 });
 
@@ -493,10 +493,10 @@ router.get("/locations", async (req, res) => {
       })
     );
 
-    res.json({ locations });
+    return res.json({ locations });
   } catch (err) {
     console.error("[google-auth/locations] Error:", err);
-    res.status(500).json({ error: "Failed to fetch locations" });
+    return res.status(500).json({ error: "Failed to fetch locations" });
   }
 });
 
@@ -528,9 +528,9 @@ router.put("/set-manual-path", async (req, res) => {
           updated_at    = NOW()
       WHERE brand_id = ${brandId}
     `);
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: "Failed to set manual path" });
+    return res.status(500).json({ error: "Failed to set manual path" });
   }
 });
 
@@ -553,9 +553,9 @@ router.put("/set-location", async (req, res) => {
           updated_at    = NOW()
       WHERE brand_id = ${brandId}
     `);
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: "Failed to set location" });
+    return res.status(500).json({ error: "Failed to set location" });
   }
 });
 

@@ -16,4 +16,3 @@ process.env.ADMIN_PASSWORD ??= "test-admin";
 process.env.AI_INTEGRATIONS_GEMINI_API_KEY ??= "test-gemini-key";
 process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ??= "test-anthropic-key";
 process.env.OPENAI_API_KEY ??= "test-openai-key";
-process.env.GROK_API_KEY ??= "test-grok-key";

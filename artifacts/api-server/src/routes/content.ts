@@ -75,10 +75,10 @@ Yêu cầu:
       };
     }
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
     console.error("Error generating content:", error);
-    res.status(500).json({ error: "Failed to generate content" });
+    return res.status(500).json({ error: "Failed to generate content" });
   }
 });
 
@@ -129,10 +129,10 @@ Yêu cầu:
       result = { suggestedTopics: [], suggestedGoals: [] };
     }
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
     console.error("Error analyzing situation:", error);
-    res.status(500).json({ error: "Failed to analyze situation" });
+    return res.status(500).json({ error: "Failed to analyze situation" });
   }
 });
 
@@ -221,10 +221,10 @@ Trả về JSON (không markdown):
       persistError = msg;
     }
 
-    res.json({ ...result, ...(persistError ? { _persistError: persistError } : {}) });
+    return res.json({ ...result, ...(persistError ? { _persistError: persistError } : {}) });
   } catch (error) {
     console.error("Error generating strategy:", error);
-    res.status(500).json({ error: "Failed to generate strategy" });
+    return res.status(500).json({ error: "Failed to generate strategy" });
   }
 });
 

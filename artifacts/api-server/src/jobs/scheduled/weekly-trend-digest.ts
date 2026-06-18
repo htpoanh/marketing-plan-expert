@@ -4,7 +4,7 @@
  * For every brand whose ads_context has primaryRegions set:
  *   1. Run M4 Trend Pulse via the existing service (cache hits are FREE)
  *   2. Format the top 3 trends per brand into a Markdown message
- *   3. Dispatch via Telegram / Make.com webhook (see dispatcher.ts)
+ *   3. Dispatch via Telegram / outbound webhook (see dispatcher.ts)
  *   4. Audit-log the run in scheduled_runs
  *
  * Designed to be safe to retry — at-most-once delivery is fine for a
@@ -134,7 +134,7 @@ function pickRegion(brand: Brand): string {
 // ── Runner (touches DB + AI) ─────────────────────────────────────────────────
 export type RunOptions = {
   trigger: "cron" | "manual";
-  /** When true, skip the cache (force fresh Grok call). Off by default — we
+  /** When true, skip the cache (force a fresh AI call). Off by default — we
    *  WANT cache hits because they make the digest free for repeat runs. */
   bypassCache?: boolean;
 };

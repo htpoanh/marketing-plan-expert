@@ -100,10 +100,10 @@ Trả về mảng JSON thuần túy, không markdown.`;
       return plan;
     }));
 
-    res.json(inserted);
+    return res.json(inserted);
   } catch (error) {
     console.error("Error generating content plan:", error);
-    res.status(500).json({ error: "Failed to generate content plan" });
+    return res.status(500).json({ error: "Failed to generate content plan" });
   }
 });
 
@@ -118,9 +118,9 @@ router.get("/", async (req, res) => {
       ? await db.select().from(contentPlansTable).where(and(...conditions)).orderBy(contentPlansTable.publishDate)
       : await db.select().from(contentPlansTable).orderBy(contentPlansTable.publishDate);
 
-    res.json(plans);
+    return res.json(plans);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch content plans" });
+    return res.status(500).json({ error: "Failed to fetch content plans" });
   }
 });
 
@@ -142,9 +142,9 @@ router.post("/", async (req, res) => {
       videoPrompt: body.videoPrompt ?? null,
       status: "draft",
     }).returning();
-    res.status(201).json(plan);
+    return res.status(201).json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to create content plan" });
+    return res.status(500).json({ error: "Failed to create content plan" });
   }
 });
 
@@ -153,9 +153,9 @@ router.get("/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     const [plan] = await db.select().from(contentPlansTable).where(eq(contentPlansTable.id, id));
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
-    res.json(plan);
+    return res.json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch content plan" });
+    return res.status(500).json({ error: "Failed to fetch content plan" });
   }
 });
 
@@ -180,9 +180,9 @@ router.put("/:id", async (req, res) => {
 
     const [plan] = await db.update(contentPlansTable).set(updateData).where(eq(contentPlansTable.id, id)).returning();
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
-    res.json(plan);
+    return res.json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update content plan" });
+    return res.status(500).json({ error: "Failed to update content plan" });
   }
 });
 
@@ -196,9 +196,9 @@ router.patch("/:id/rate", async (req, res) => {
       .where(eq(contentPlansTable.id, id))
       .returning();
     if (!plan) return res.status(404).json({ error: "Not found" });
-    res.json(plan);
+    return res.json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to save rating" });
+    return res.status(500).json({ error: "Failed to save rating" });
   }
 });
 
@@ -209,9 +209,9 @@ router.post("/bulk-delete", async (req, res) => {
     if (!ids?.length) return res.status(400).json({ error: "No IDs provided" });
     const { inArray } = await import("drizzle-orm");
     await db.delete(contentPlansTable).where(inArray(contentPlansTable.id, ids));
-    res.json({ deleted: ids.length });
+    return res.json({ deleted: ids.length });
   } catch (error) {
-    res.status(500).json({ error: "Failed to bulk delete" });
+    return res.status(500).json({ error: "Failed to bulk delete" });
   }
 });
 
@@ -224,9 +224,9 @@ router.post("/bulk-review", async (req, res) => {
     await db.update(contentPlansTable)
       .set({ status: "review", updatedAt: new Date() })
       .where(inArray(contentPlansTable.id, ids));
-    res.json({ updated: ids.length });
+    return res.json({ updated: ids.length });
   } catch (error) {
-    res.status(500).json({ error: "Failed to bulk update" });
+    return res.status(500).json({ error: "Failed to bulk update" });
   }
 });
 
@@ -304,7 +304,7 @@ router.post("/:id/generate-image", async (req, res) => {
         style: provider === "dalle3-natural" ? "natural" : "vivid",
         response_format: "url",
       });
-      imageUrl = response.data[0]?.url ?? undefined;
+      imageUrl = response.data?.[0]?.url ?? undefined;
 
     } else if (provider === "gpt-image-1") {
       // gpt-image-1 uses "low"/"medium"/"high"/"auto" — not "standard"
@@ -315,12 +315,12 @@ router.post("/:id/generate-image", async (req, res) => {
         size: "1024x1024",
         quality: "medium",
       } as any);
-      const b64 = (response.data[0] as any)?.b64_json;
+      const b64 = (response.data?.[0] as any)?.b64_json;
       if (b64) {
         imageBase64 = `data:image/png;base64,${b64}`;
         imageUrl = imageBase64;
       } else {
-        imageUrl = response.data[0]?.url ?? undefined;
+        imageUrl = response.data?.[0]?.url ?? undefined;
       }
 
     }
@@ -337,7 +337,7 @@ router.post("/:id/generate-image", async (req, res) => {
       if (u) updatedPlan = u;
     }
 
-    res.json({
+    return res.json({
       imageUrl,
       imageBase64: imageUrl?.startsWith("data:") ? imageUrl : undefined,
       provider,
@@ -347,7 +347,7 @@ router.post("/:id/generate-image", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Generate image error:", error);
-    res.status(500).json({ error: error?.message ?? "Failed to generate image" });
+    return res.status(500).json({ error: error?.message ?? "Failed to generate image" });
   }
 });
 
@@ -384,10 +384,10 @@ router.post("/rewrite-selection", async (req, res) => {
       max_tokens: 300,
     });
     const result = cleanPostText(completion.choices[0]?.message?.content ?? text);
-    res.json({ result, wordCount: result.split(/\s+/).filter(Boolean).length });
+    return res.json({ result, wordCount: result.split(/\s+/).filter(Boolean).length });
   } catch (error: any) {
     console.error("Rewrite selection error:", error);
-    res.status(500).json({ error: error?.message ?? "Failed to rewrite selection" });
+    return res.status(500).json({ error: error?.message ?? "Failed to rewrite selection" });
   }
 });
 
@@ -447,10 +447,10 @@ Schreibe jetzt den neuen Caption-Text:`;
       .returning();
 
     const wordCount = newCaption.split(/\s+/).filter(Boolean).length;
-    res.json({ ok: true, plan: updated, wordCount });
+    return res.json({ ok: true, plan: updated, wordCount });
   } catch (error: any) {
     console.error("Rewrite error:", error);
-    res.status(500).json({ error: error?.message ?? "Failed to rewrite content" });
+    return res.status(500).json({ error: error?.message ?? "Failed to rewrite content" });
   }
 });
 
@@ -458,9 +458,9 @@ router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await db.delete(contentPlansTable).where(eq(contentPlansTable.id, id));
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete content plan" });
+    return res.status(500).json({ error: "Failed to delete content plan" });
   }
 });
 
@@ -472,9 +472,9 @@ router.post("/:id/mark-used", async (req, res) => {
       .where(eq(contentPlansTable.id, id))
       .returning();
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
-    res.json(plan);
+    return res.json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to mark content plan as used" });
+    return res.status(500).json({ error: "Failed to mark content plan as used" });
   }
 });
 
@@ -486,9 +486,9 @@ router.post("/:id/approve", async (req, res) => {
       .where(eq(contentPlansTable.id, id))
       .returning();
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
-    res.json(plan);
+    return res.json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to approve content plan" });
+    return res.status(500).json({ error: "Failed to approve content plan" });
   }
 });
 
@@ -501,9 +501,9 @@ router.post("/:id/reject", async (req, res) => {
       .where(eq(contentPlansTable.id, id))
       .returning();
     if (!plan) return res.status(404).json({ error: "Content plan not found" });
-    res.json(plan);
+    return res.json(plan);
   } catch (error) {
-    res.status(500).json({ error: "Failed to reject content plan" });
+    return res.status(500).json({ error: "Failed to reject content plan" });
   }
 });
 
@@ -601,11 +601,11 @@ router.post("/:id/publish", async (req, res) => {
       }
 
     } else {
-      // ── MAKE.COM WEBHOOK FALLBACK ────────────────────────────────────────
-      const makeWebhook = process.env.MAKE_WEBHOOK_URL;
-      if (makeWebhook) {
+      // ── OUTBOUND WEBHOOK FALLBACK ────────────────────────────────────────
+      const outboundWebhook = process.env.OUTBOUND_WEBHOOK_URL;
+      if (outboundWebhook) {
         try {
-          const resp = await fetch(makeWebhook, {
+          const resp = await fetch(outboundWebhook, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -629,9 +629,9 @@ router.post("/:id/publish", async (req, res) => {
           if (resp.ok) {
             let data: any = {};
             try { data = await resp.json(); } catch {}
-            metricoolJobId = data?.id ?? data?.jobId ?? `make_${Date.now()}`;
+            metricoolJobId = data?.id ?? data?.jobId ?? `webhook_${Date.now()}`;
           } else {
-            publishError = `Make.com HTTP ${resp.status}`;
+            publishError = `Webhook HTTP ${resp.status}`;
           }
         } catch (e: any) {
           publishError = e.message;
@@ -648,9 +648,9 @@ router.post("/:id/publish", async (req, res) => {
       .where(eq(contentPlansTable.id, id))
       .returning();
 
-    res.json(updated);
+    return res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Failed to publish content plan" });
+    return res.status(500).json({ error: "Failed to publish content plan" });
   }
 });
 

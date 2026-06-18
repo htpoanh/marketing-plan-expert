@@ -15,7 +15,7 @@ router.post("/login", (req, res) => {
 
   if (username === expectedUsername && password === expectedPassword) {
     req.session.isAdmin = true;
-    req.session.save((err) => {
+    return req.session.save((err) => {
       if (err) {
         return res.status(500).json({ error: "Session save failed" });
       }

@@ -370,7 +370,7 @@ router.post("/performance", async (req, res) => {
   }
 });
 
-// ── M4 — Trend Pulse (Grok 3 with Live Search) ───────────────────────────────
+// ── M4 — Trend Pulse (Claude with Web Search) ────────────────────────────────
 const trendInputSchema = z.object({
   brandId: z.number().int().positive(),
   regionFocus: z.string().min(1).max(200),

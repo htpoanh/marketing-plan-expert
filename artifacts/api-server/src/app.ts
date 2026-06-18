@@ -46,7 +46,16 @@ app.use(cors({
         },
 }));
 
-app.use(express.json({ limit: "50mb" }));
+// Capture the raw request body so webhook handlers can verify HMAC signatures
+// (e.g. Meta's X-Hub-Signature-256). Cheap — just stashes the buffer.
+app.use(
+  express.json({
+    limit: "50mb",
+    verify: (req, _res, buf) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 const isProd = process.env["NODE_ENV"] === "production";

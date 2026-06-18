@@ -50,10 +50,10 @@ router.get("/templates", async (req, res) => {
     const rows = await db.execute(
       sql`SELECT * FROM review_reply_templates WHERE brand_id = ${brandId} ORDER BY rating ASC`
     );
-    res.json(rows.rows);
+    return res.json(rows.rows);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to fetch templates" });
+    return res.status(500).json({ error: "Failed to fetch templates" });
   }
 });
 
@@ -72,10 +72,10 @@ router.put("/templates", async (req, res) => {
     const rows = await db.execute(
       sql`SELECT * FROM review_reply_templates WHERE brand_id = ${brandId} AND rating = ${rating} LIMIT 1`
     );
-    res.json(rows.rows[0]);
+    return res.json(rows.rows[0]);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to save template" });
+    return res.status(500).json({ error: "Failed to save template" });
   }
 });
 
@@ -121,10 +121,10 @@ Anforderungen:
           SET template_text = EXCLUDED.template_text, updated_at = NOW()`
     );
 
-    res.json({ template });
+    return res.json({ template });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to generate template" });
+    return res.status(500).json({ error: "Failed to generate template" });
   }
 });
 
@@ -165,10 +165,10 @@ Verwende [Kundenname] als Platzhalter. 2-4 Sätze auf Deutsch. Gib NUR den Vorla
       );
     }
 
-    res.json({ success: true, templates: results });
+    return res.json({ success: true, templates: results });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to generate all templates" });
+    return res.status(500).json({ error: "Failed to generate all templates" });
   }
 });
 
@@ -325,7 +325,7 @@ router.post("/sync", async (req, res) => {
       sql`UPDATE brands SET google_place_id = ${placeId} WHERE id = ${brandId} AND (google_place_id IS NULL OR google_place_id = '')`
     );
 
-    res.json({
+    return res.json({
       success: true,
       imported,
       skipped,
@@ -335,7 +335,7 @@ router.post("/sync", async (req, res) => {
     });
   } catch (error) {
     console.error("[reviews/sync] Unexpected error:", error);
-    res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ Google Reviews. Vui lòng thử lại." });
+    return res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ Google Reviews. Vui lòng thử lại." });
   }
 });
 
@@ -400,10 +400,10 @@ router.post("/sync-all-places", async (req, res) => {
     }
 
     console.log(`[sync-all-places] Done: ${totalImported} imported, ${totalSkipped} skipped across ${brands.rows.length} brands`);
-    res.json({ success: true, totalImported, totalSkipped, brands: results });
+    return res.json({ success: true, totalImported, totalSkipped, brands: results });
   } catch (error) {
     console.error("[sync-all-places] Error:", error);
-    res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ tất cả Reviews." });
+    return res.status(500).json({ error: "Lỗi máy chủ khi đồng bộ tất cả Reviews." });
   }
 });
 
@@ -449,9 +449,9 @@ router.get("/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     const [review] = await db.select().from(reviewsTable).where(eq(reviewsTable.id, id));
     if (!review) return res.status(404).json({ error: "Review not found" });
-    res.json(review);
+    return res.json(review);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch review" });
+    return res.status(500).json({ error: "Failed to fetch review" });
   }
 });
 
@@ -504,10 +504,10 @@ Schreibe eine natürliche, professionelle Google-Bewertungsantwort auf Deutsch (
     const reply = replyBlock.type === "text"
       ? replyBlock.text.trim()
       : "Vielen Dank für Ihre Bewertung! Wir freuen uns über Ihr Feedback.";
-    res.json({ reply, fromTemplate: false });
+    return res.json({ reply, fromTemplate: false });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to generate reply" });
+    return res.status(500).json({ error: "Failed to generate reply" });
   }
 });
 
@@ -520,9 +520,9 @@ router.post("/:id/reply", async (req, res) => {
       .where(eq(reviewsTable.id, id))
       .returning();
     if (!review) return res.status(404).json({ error: "Review not found" });
-    res.json(review);
+    return res.json(review);
   } catch (error) {
-    res.status(500).json({ error: "Failed to save reply" });
+    return res.status(500).json({ error: "Failed to save reply" });
   }
 });
 
@@ -540,7 +540,7 @@ type SyncGmbResult = {
   warning?: string;
 };
 
-async function syncGmbForBrand(brandId: number): Promise<
+export async function syncGmbForBrand(brandId: number): Promise<
   | { ok: true; data: SyncGmbResult }
   | { ok: false; status: number; error: string; apiEnableUrl?: string; rateLimited?: boolean; showManual?: boolean }
 > {
@@ -910,10 +910,10 @@ router.post("/reply-gmb/:id", async (req, res) => {
       .where(eq(reviewsTable.id, id))
       .returning();
 
-    res.json({ success: true, review: updated });
+    return res.json({ success: true, review: updated });
   } catch (error) {
     console.error("[reply-gmb] Unexpected error:", error);
-    res.status(500).json({ error: "Lỗi máy chủ khi đăng phản hồi lên Google." });
+    return res.status(500).json({ error: "Lỗi máy chủ khi đăng phản hồi lên Google." });
   }
 });
 

@@ -19,7 +19,6 @@
     "@workspace/integrations-anthropic-ai": "workspace:*",
     "@workspace/integrations-gemini-ai": "workspace:*",
     "@workspace/integrations-openai": "workspace:*",
-    "@workspace/integrations-xai": "workspace:*",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2",

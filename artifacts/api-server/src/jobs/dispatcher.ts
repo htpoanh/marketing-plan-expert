@@ -3,14 +3,14 @@
  *
  * Resolution order:
  *   1. TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID  → direct Telegram Bot API
- *   2. MAKE_WEBHOOK_URL                         → POST JSON, let Make.com route
+ *   2. OUTBOUND_WEBHOOK_URL                     → POST JSON to a generic webhook
  *   3. (no env)                                 → log + persist payload only
  *
  * Always returns a structured result so the caller can persist what
  * actually happened to scheduled_runs.summary.
  */
 
-export type DispatchTarget = "telegram" | "make" | "none";
+export type DispatchTarget = "telegram" | "webhook" | "none";
 
 export type DispatchResult = {
   target: DispatchTarget;
@@ -24,7 +24,7 @@ export type DispatchPayload = {
   eventType: string;
   /** Markdown-friendly text body for Telegram / fallback display. */
   text: string;
-  /** Optional structured data — Make.com scenarios may want to read this. */
+  /** Optional structured data for the webhook consumer. */
   data?: Record<string, unknown>;
 };
 
@@ -35,16 +35,16 @@ export async function dispatchDigest(
 ): Promise<DispatchResult> {
   const tgToken = process.env.TELEGRAM_BOT_TOKEN;
   const tgChatId = process.env.TELEGRAM_CHAT_ID;
-  const makeUrl = process.env.MAKE_WEBHOOK_URL;
+  const webhookUrl = process.env.OUTBOUND_WEBHOOK_URL;
 
   if (tgToken && tgChatId) {
     return sendTelegram(tgToken, tgChatId, payload);
   }
-  if (makeUrl) {
-    return sendMakeWebhook(makeUrl, payload);
+  if (webhookUrl) {
+    return sendWebhook(webhookUrl, payload);
   }
   console.warn(
-    `[dispatcher] No TELEGRAM_BOT_TOKEN/CHAT_ID or MAKE_WEBHOOK_URL set — payload not delivered. Event: ${payload.eventType}`,
+    `[dispatcher] No TELEGRAM_BOT_TOKEN/CHAT_ID or OUTBOUND_WEBHOOK_URL set — payload not delivered. Event: ${payload.eventType}`,
   );
   return { target: "none", ok: false, error: "no delivery target configured" };
 }
@@ -90,7 +90,7 @@ async function sendTelegram(
   }
 }
 
-async function sendMakeWebhook(
+async function sendWebhook(
   url: string,
   payload: DispatchPayload,
 ): Promise<DispatchResult> {
@@ -107,18 +107,18 @@ async function sendMakeWebhook(
     if (!res.ok) {
       const body = (await res.text().catch(() => "")) || "";
       return {
-        target: "make",
+        target: "webhook",
         ok: false,
         status: res.status,
-        error: `Make.com HTTP ${res.status}: ${body.slice(0, 200)}`,
+        error: `Webhook HTTP ${res.status}: ${body.slice(0, 200)}`,
       };
     }
-    return { target: "make", ok: true, status: res.status };
+    return { target: "webhook", ok: true, status: res.status };
   } catch (e) {
     return {
-      target: "make",
+      target: "webhook",
       ok: false,
-      error: `Make.com dispatch threw: ${e instanceof Error ? e.message : String(e)}`,
+      error: `Webhook dispatch threw: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 }

@@ -20,33 +20,20 @@ import { buildImagePromptGuidance } from "../lib/imagePromptBuilder";
 const router: IRouter = Router();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const grok = new OpenAI({
-  apiKey: process.env.GROK_API_KEY,
-  baseURL: "https://api.x.ai/v1",
-});
 const gemini = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-async function callGrokJSON(prompt: string, system: string): Promise<any> {
-  try {
-    const r = await grok.chat.completions.create({
-      model: "grok-3",
-      max_tokens: 2048,
-      response_format: { type: "json_object" },
-      messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-    });
-    return JSON.parse(r.choices[0]?.message?.content ?? "{}");
-  } catch {
-    const r = await openai.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 2048,
-      response_format: { type: "json_object" },
-      messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-    });
-    return JSON.parse(r.choices[0]?.message?.content ?? "{}");
-  }
+// Trend research for the daily automation runner (GPT-4o).
+async function callTrendJSON(prompt: string, system: string): Promise<any> {
+  const r = await openai.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 2048,
+    response_format: { type: "json_object" },
+    messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+  });
+  return JSON.parse(r.choices[0]?.message?.content ?? "{}");
 }
 
 async function callOpenAIJSON(prompt: string, system: string): Promise<any> {
@@ -161,7 +148,7 @@ router.post("/settings/:brandId", async (req, res) => {
       return res.json(created);
     }
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message });
   }
 });
 
@@ -185,15 +172,15 @@ router.get("/logs", async (req, res) => {
   }
 });
 
-// ── POST /automation/test-webhook — test Make.com webhook ────────────────────
+// ── POST /automation/test-webhook — test the outbound webhook ────────────────
 router.post("/test-webhook", async (_req, res) => {
-  const webhookUrl = process.env.MAKE_WEBHOOK_URL;
-  if (!webhookUrl) return res.status(400).json({ error: "MAKE_WEBHOOK_URL chưa được cấu hình trong Secrets" });
+  const webhookUrl = process.env.OUTBOUND_WEBHOOK_URL;
+  if (!webhookUrl) return res.status(400).json({ error: "OUTBOUND_WEBHOOK_URL chưa được cấu hình trong Secrets" });
   try {
     const testPayload = {
       event: "automation_test",
       timestamp: new Date().toISOString(),
-      message: "Kết nối Make.com thành công từ AI Marketing Platform!",
+      message: "Kết nối webhook thành công từ AI Marketing Platform!",
       sampleContent: {
         brandName: "Test Store",
         contentType: "post",
@@ -207,9 +194,9 @@ router.post("/test-webhook", async (_req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(testPayload),
     });
-    res.json({ ok: r.ok, status: r.status, message: r.ok ? "Webhook test thành công!" : "Webhook phản hồi lỗi" });
+    return res.json({ ok: r.ok, status: r.status, message: r.ok ? "Webhook test thành công!" : "Webhook phản hồi lỗi" });
   } catch (e: any) {
-    res.status(500).json({ error: `Không kết nối được webhook: ${e.message}` });
+    return res.status(500).json({ error: `Không kết nối được webhook: ${e.message}` });
   }
 });
 
@@ -218,7 +205,7 @@ async function runAutomationForBrand(
   brand: typeof brandsTable.$inferSelect,
   settings: typeof automationSettingsTable.$inferSelect,
   dryRun = false,
-): Promise<{ brandId: number; brandName: string; plans: number[]; summary: string; error?: string }> {
+): Promise<{ brandId: number; brandName: string; plans: number[]; summary: string; trendTopic: string; error?: string }> {
   const platforms = settings.platforms.split(",").map(p => p.trim()).filter(Boolean);
   const contentTypes = settings.contentTypes.split(",").map(c => c.trim()).filter(Boolean);
   const now = new Date();
@@ -241,7 +228,7 @@ async function runAutomationForBrand(
     brand.businessHours ? `Öffnungszeiten: ${brand.businessHours}` : null,
   ].filter(Boolean).join(", ");
 
-  // ── Step 1: Find trending topic for today (Grok) ──────────────────────────
+  // ── Step 1: Find trending topic for today ─────────────────────────────────
   const trendPrompt = `Du bist ein Social-Media-Trend-Experte für den deutschen Markt.
 
 LADEN-INFORMATION:
@@ -265,7 +252,7 @@ Finde das BESTE Trend-Thema für heute für dieses Geschäft. Gib JSON zurück:
   }
 }`;
 
-  const trendData = await callGrokJSON(trendPrompt, "Du bist ein Experte für Echtzeit-Social-Media-Trends im deutschsprachigen Raum. Antworte nur auf Deutsch.");
+  const trendData = await callTrendJSON(trendPrompt, "Du bist ein Experte für Echtzeit-Social-Media-Trends im deutschsprachigen Raum. Antworte nur auf Deutsch.");
   const topic = trendData.topic ?? `${brand.industry} Tagesaktion`;
   const goal = settings.customGoal ?? trendData.goal ?? "Mehr Kunden gewinnen";
 
@@ -361,15 +348,15 @@ ${buildImagePromptGuidance(brand, topic)}`;
     plans: savedPlanIds,
     summary: `${savedPlanIds.length} Beiträge erstellt: ${contentTypes.join(", ")} für ${platforms.join(", ")}`,
     trendTopic: topic,
-  } as any;
+  };
 }
 
-// ── POST /automation/run — main automation runner (called by Make.com) ────────
+// ── POST /automation/run — main automation runner ────────────────────────────
 router.post("/run", async (req, res) => {
-  const webhookUrl = process.env.MAKE_WEBHOOK_URL;
+  const webhookUrl = process.env.OUTBOUND_WEBHOOK_URL;
   const { brandIds, dryRun = false, secret } = req.body;
 
-  // Optional: simple secret check for Make.com calls
+  // Optional: simple secret check for outbound automation calls
   // if (secret !== process.env.AUTOMATION_SECRET) return res.status(401).json({ error: "Unauthorized" });
 
   try {
@@ -417,12 +404,12 @@ router.post("/run", async (req, res) => {
       }
     }
 
-    // Send all results to Make.com webhook with FULL content details
+    // Send all results to the outbound webhook with FULL content details
     if (!dryRun && webhookUrl && results.some(r => r.ok)) {
       const successResults = results.filter(r => r.ok);
       const planIds = successResults.flatMap(r => r.plans ?? []);
 
-      // Fetch full content plan details for Make.com → Metricool
+      // Fetch full content plan details for the outbound webhook → Metricool
       const planDetails = planIds.length > 0
         ? await db.select({
             id: contentPlansTable.id,
@@ -499,7 +486,7 @@ router.post("/run", async (req, res) => {
         });
         webhookOk = whResp.ok;
         if (!whResp.ok) webhookErrMsg = `HTTP ${whResp.status}`;
-        console.log(`Webhook sent: ${contentDetails.length} content plans to Make.com (status: ${whResp.status})`);
+        console.log(`Webhook sent: ${contentDetails.length} content plans to outbound webhook (status: ${whResp.status})`);
       } catch (e: any) {
         webhookErrMsg = e.message;
         console.warn("Webhook send failed:", e);
@@ -538,7 +525,7 @@ router.post("/run", async (req, res) => {
       }).catch(() => {});
     }
 
-    res.json({
+    return res.json({
       ok: true,
       dryRun,
       totalBrands: results.length,
@@ -547,7 +534,7 @@ router.post("/run", async (req, res) => {
     });
   } catch (e: any) {
     console.error("Automation run error:", e);
-    res.status(500).json({ ok: false, error: e.message });
+    return res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -606,8 +593,8 @@ router.post("/run/:brandId", async (req, res) => {
         .where(eq(automationSettingsTable.brandId, brandId));
     }
 
-    // Send content to Metricool (direct) or Make.com webhook fallback
-    const webhookUrl = process.env.MAKE_WEBHOOK_URL;
+    // Send content to Metricool (direct) or the outbound webhook fallback
+    const webhookUrl = process.env.OUTBOUND_WEBHOOK_URL;
     const mcToken = runSettings.metricoolToken;
     const mcUserId = runSettings.metricoolAccountId;
     let webhookOk = false;
@@ -615,7 +602,7 @@ router.post("/run/:brandId", async (req, res) => {
     let deliveryMethod = "not_configured";
 
     if (!dryRun && result.plans?.length > 0 && runSettings.autoApprove) {
-      // Only post to Metricool/Make.com if autoApprove is enabled
+      // Only post to Metricool / outbound webhook if autoApprove is enabled
       // (when autoApprove=false, content waits in Phê duyệt queue)
       const planDetails = await db.select({
         id: contentPlansTable.id,
@@ -660,8 +647,8 @@ router.post("/run/:brandId", async (req, res) => {
         console.log(`[direct-metricool] ${successCount}/${planDetails.length} posts scheduled. Errors: ${webhookErrMsg}`);
 
       } else if (webhookUrl) {
-        // ── MAKE.COM WEBHOOK FALLBACK ─────────────────────────────────────────
-        deliveryMethod = "make_webhook";
+        // ── OUTBOUND WEBHOOK FALLBACK ─────────────────────────────────────────
+        deliveryMethod = "outbound_webhook";
         try {
           const platformMap: Record<string, string> = { "Facebook": "facebook", "Instagram": "instagram", "TikTok": "tiktok" };
           const contentDetails = planDetails.map(p => ({
@@ -706,9 +693,9 @@ router.post("/run/:brandId", async (req, res) => {
       }).catch(() => {});
     }
 
-    res.json({ ok: true, ...result, dryRun });
+    return res.json({ ok: true, ...result, dryRun });
   } catch (e: any) {
-    res.status(500).json({ ok: false, error: e.message });
+    return res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -861,7 +848,7 @@ router.get("/metricool-brands", async (req, res) => {
   }
 });
 
-// ── POST /automation/test-metricool/:brandId — direct Metricool ping (bypass Make.com) ─────
+// ── POST /automation/test-metricool/:brandId — direct Metricool ping ─────
 router.post("/test-metricool/:brandId", async (req, res) => {
   const { blogId: userId, metricoolToken, text, scheduledAt } = req.body;
 
@@ -883,88 +870,6 @@ router.post("/test-metricool/:brandId", async (req, res) => {
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e.message });
   }
-});
-
-// ── GET /automation/blueprint — serve importable Make.com blueprint ───────────
-router.get("/blueprint", (_req, res) => {
-  const blueprint = {
-    name: "🤖 AI Marketing Platform – Daily Auto Post",
-    flow: [
-      {
-        id: 1,
-        module: "gateway:CustomWebHook",
-        version: 1,
-        parameters: { hook: 0, maxResults: 1 },
-        mapper: {},
-        metadata: {
-          designer: { x: 0, y: 0, name: "📥 Receive from AI Marketing App" },
-          restore: { hook: { label: "AI Marketing – Daily Content" } },
-        },
-      },
-      {
-        id: 2,
-        module: "builtin:BasicIterator",
-        version: 1,
-        parameters: {},
-        mapper: { array: "{{1.contentDetails}}" },
-        metadata: {
-          designer: { x: 300, y: 0, name: "🔁 Loop each content plan" },
-        },
-      },
-      {
-        id: 3,
-        module: "http:ActionSendData",
-        version: 3,
-        parameters: { handleErrors: true, useNewZLibDecompression: true },
-        mapper: {
-          url: "https://app.metricool.com/api/v2/planning",
-          method: "POST",
-          headers: [
-            {
-              name: "Authorization",
-              value: "Bearer REPLACE_WITH_METRICOOL_API_TOKEN",
-            },
-            { name: "Content-Type", value: "application/json" },
-          ],
-          bodyType: "raw",
-          contentType: "application/json",
-          body: JSON.stringify({
-            blogId: "{{2.value.metricoolAccountId}}",
-            text: "{{2.value.fullText}}",
-            date: "{{2.value.publishDate}}",
-            networks: [{ type: "{{2.value.metricoolNetwork}}" }],
-          }),
-        },
-        metadata: {
-          designer: { x: 600, y: 0, name: "📅 Schedule in Metricool" },
-        },
-      },
-    ],
-    metadata: {
-      instant: true,
-      version: 1,
-      scenario: {
-        roundtrips: 1,
-        maxErrors: 3,
-        autoCommit: true,
-        autoCommitTriggerLast: true,
-        sequential: true,
-        confidential: false,
-        dataloss: false,
-        dlq: false,
-        freshVariables: false,
-      },
-      designer: { orphans: [] },
-      zone: "eu2.make.com",
-    },
-  };
-
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader(
-    "Content-Disposition",
-    'attachment; filename="ai-marketing-make-blueprint.json"'
-  );
-  res.json(blueprint);
 });
 
 // ── Phase 5a — Scheduled jobs catalog + audit log ──────────────────────────
@@ -1024,7 +929,7 @@ router.post("/scheduled-jobs/:jobKey/trigger", async (req, res) => {
   try {
     const { jobKey } = req.params;
     // Fire-and-forget — return immediately so the UI doesn't hang while
-    // Grok runs for ~10-20s × N brands. The audit row appears in
+    // the AI runs for ~10-20s × N brands. The audit row appears in
     // /scheduled-runs as soon as the runner starts.
     triggerJobNow(jobKey).catch((e) => {
       console.error(`[scheduled-jobs trigger] ${jobKey} threw:`, e);

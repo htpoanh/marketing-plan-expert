@@ -20,12 +20,54 @@ import {
   WEEKLY_TREND_DIGEST_KEY,
   runWeeklyTrendDigest,
 } from "./scheduled/weekly-trend-digest";
+import {
+  REVIEW_AUTO_REPLY_KEY,
+  runReviewAutoReply,
+} from "./scheduled/review-auto-reply";
+import {
+  BRAND_MEMORY_REBUILD_KEY,
+  runBrandMemoryRebuild,
+} from "./scheduled/brand-memory-rebuild";
+import {
+  MARKET_INTELLIGENCE_SCAN_KEY,
+  runMarketIntelligenceScan,
+} from "./scheduled/market-intelligence-scan";
+import {
+  WEEKLY_REPORT_GENERATE_KEY,
+  runWeeklyReportGenerate,
+} from "./scheduled/weekly-report-generate";
+import {
+  ADS_PERFORMANCE_PULL_KEY,
+  runAdsPerformancePull,
+} from "./scheduled/ads-performance-pull";
+import {
+  REVIEW_SYNC_KEY,
+  runReviewSync,
+} from "./scheduled/review-sync";
 
 type JobRunner = (trigger: "cron" | "manual") => Promise<void>;
 
 const JOB_RUNNERS: Record<string, JobRunner> = {
   [WEEKLY_TREND_DIGEST_KEY]: async (trigger) => {
     await runWeeklyTrendDigest({ trigger });
+  },
+  [REVIEW_AUTO_REPLY_KEY]: async (trigger) => {
+    await runReviewAutoReply({ trigger });
+  },
+  [BRAND_MEMORY_REBUILD_KEY]: async (trigger) => {
+    await runBrandMemoryRebuild({ trigger });
+  },
+  [MARKET_INTELLIGENCE_SCAN_KEY]: async (trigger) => {
+    await runMarketIntelligenceScan({ trigger });
+  },
+  [WEEKLY_REPORT_GENERATE_KEY]: async (trigger) => {
+    await runWeeklyReportGenerate({ trigger });
+  },
+  [ADS_PERFORMANCE_PULL_KEY]: async (trigger) => {
+    await runAdsPerformancePull({ trigger });
+  },
+  [REVIEW_SYNC_KEY]: async (trigger) => {
+    await runReviewSync({ trigger });
   },
 };
 

@@ -7,9 +7,9 @@ const router: IRouter = Router();
 
 const DEFAULT_AGENT_TEMPLATES = [
   {
-    agentKey: "grok",
+    agentKey: "trend",
     agentName: "Agent 1 — Nghiên cứu Xu hướng",
-    aiModel: "Grok-3 (fallback: GPT-4o)",
+    aiModel: "Claude Sonnet",
     defaultRole: "Chuyên gia phân tích xu hướng thị trường thời gian thực. Nghiên cứu keyword trending, bối cảnh mùa vụ, và góc độ tiếp cận tốt nhất cho chiến dịch.",
     expertiseArea: "",
     customInstructions: "",
@@ -19,7 +19,7 @@ const DEFAULT_AGENT_TEMPLATES = [
   {
     agentKey: "openai",
     agentName: "Agent 2 & 4 — Chiến lược & Prompt",
-    aiModel: "GPT-4o",
+    aiModel: "Claude Sonnet (chiến lược) + GPT-4o (prompt ảnh)",
     defaultRole: "Chuyên gia chiến lược marketing và prompt engineering. Phân tích trend, chọn mô hình marketing phù hợp (AIDA, STP, 4P...) và tạo prompts chuyên nghiệp cho hình ảnh/video.",
     expertiseArea: "",
     customInstructions: "",
@@ -137,10 +137,10 @@ router.post("/", async (req, res) => {
       .from(aiAgentConfigsTable)
       .where(eq(aiAgentConfigsTable.profileId, newProfile.id));
 
-    res.json({ ...newProfile, agents });
+    return res.json({ ...newProfile, agents });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to create profile" });
+    return res.status(500).json({ error: "Failed to create profile" });
   }
 });
 
@@ -161,9 +161,9 @@ router.put("/:id", async (req, res) => {
       .returning();
 
     if (!updated) return res.status(404).json({ error: "Profile not found" });
-    res.json(updated);
+    return res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update profile" });
+    return res.status(500).json({ error: "Failed to update profile" });
   }
 });
 
@@ -181,9 +181,9 @@ router.delete("/:id", async (req, res) => {
     await db.delete(aiAgentConfigsTable).where(eq(aiAgentConfigsTable.profileId, profileId));
     await db.delete(aiProfilesTable).where(eq(aiProfilesTable.id, profileId));
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete profile" });
+    return res.status(500).json({ error: "Failed to delete profile" });
   }
 });
 
@@ -235,9 +235,9 @@ router.put("/:id/agents/:agentKey", async (req, res) => {
       )
       .returning();
 
-    res.json(updated);
+    return res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update agent" });
+    return res.status(500).json({ error: "Failed to update agent" });
   }
 });
 
@@ -258,9 +258,9 @@ router.post("/:id/reset/:agentKey", async (req, res) => {
       .returning();
 
     if (!updated) return res.status(404).json({ error: "Agent not found" });
-    res.json(updated);
+    return res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: "Failed to reset agent" });
+    return res.status(500).json({ error: "Failed to reset agent" });
   }
 });
 

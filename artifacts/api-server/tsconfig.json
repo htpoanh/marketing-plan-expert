@@ -21,9 +21,6 @@
     },
     {
       "path": "../../lib/integrations-openai"
-    },
-    {
-      "path": "../../lib/integrations-xai"
     }
   ]
 }

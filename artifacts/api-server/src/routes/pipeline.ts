@@ -107,12 +107,6 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ── Grok / xAI (Trend Research) ───────────────────────────────────────────────
-const grok = new OpenAI({
-  apiKey: process.env.GROK_API_KEY,
-  baseURL: "https://api.x.ai/v1",
-});
-
 const BASE_SYSTEM_JSON = "Luôn trả về JSON hợp lệ theo đúng cấu trúc yêu cầu, không có markdown hay code block.";
 
 function buildSystemPrompt(agentConfig: any, baseRole: string): string {
@@ -163,9 +157,22 @@ async function callGeminiJSONGeneric(prompt: string, systemPrompt: string): Prom
   return safeParseJSON(text);
 }
 
-// Agent 1: Trend research — goes directly to OpenAI (Grok disabled, no credits)
-async function callGrokJSON(prompt: string, systemPrompt: string): Promise<any> {
-  return callOpenAIJSON(prompt, systemPrompt);
+// Claude Sonnet — analysis + strategy lead (Agents 1 & 2). Prefills `{` so the
+// model returns JSON only; safeParseJSON tolerates any stray wrapping.
+async function callClaudeJSON(prompt: string, systemPrompt: string): Promise<any> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4000,
+    temperature: 0.7,
+    system: systemPrompt,
+    messages: [
+      { role: "user", content: prompt },
+      { role: "assistant", content: "{" },
+    ],
+  });
+  const block = message.content.find((b) => b.type === "text");
+  const raw = "{" + (block && block.type === "text" ? block.text : "");
+  return safeParseJSON(raw);
 }
 
 // Agent 2 & 4: OpenAI GPT-4o — strategy reasoning + prompt engineering (fallback: Gemini)
@@ -333,9 +340,9 @@ router.get("/runs/:id", async (req, res) => {
     const [run] = await db.select().from(pipelineRunsTable).where(eq(pipelineRunsTable.id, id));
     if (!run) return res.status(404).json({ error: "Pipeline run not found" });
     const [brand] = await db.select().from(brandsTable).where(eq(brandsTable.id, run.brandId));
-    res.json({ ...run, brandName: brand?.brandName ?? null });
+    return res.json({ ...run, brandName: brand?.brandName ?? null });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch pipeline run" });
+    return res.status(500).json({ error: "Failed to fetch pipeline run" });
   }
 });
 
@@ -394,12 +401,12 @@ router.post("/run", async (req, res) => {
     const agentConfigs = profileId
       ? await db.select().from(aiAgentConfigsTable).where(eq(aiAgentConfigsTable.profileId, profileId))
       : await db.select().from(aiAgentConfigsTable);
-    const grokConfig = agentConfigs.find(a => a.agentKey === "grok");
+    const trendConfig = agentConfigs.find(a => a.agentKey === "trend");
     const openaiConfig = agentConfigs.find(a => a.agentKey === "openai");
     const geminiConfig = agentConfigs.find(a => a.agentKey === "gemini");
     const claudeConfig = agentConfigs.find(a => a.agentKey === "claude");
 
-    const grokSystem = buildSystemPrompt(grokConfig, "Du bist ein Experte für Echtzeit-Markttrends mit 10 Jahren Erfahrung im deutschen Markt.");
+    const trendSystem = buildSystemPrompt(trendConfig, "Du bist ein Experte für Echtzeit-Markttrends mit 10 Jahren Erfahrung im deutschen Markt.");
     const openaiSystem = buildSystemPrompt(openaiConfig, "Du bist ein führender Marketing-Stratege und Prompt-Engineering-Experte.");
     const geminiSystem = buildSystemPrompt(geminiConfig, "Du bist ein Top-Copywriter, Experte für viralen deutschen Content auf Social Media. Schreibe immer auf Deutsch, natürlich und überzeugend.");
     const claudeSystem = buildSystemPrompt(claudeConfig, "Du bist ein erfahrener Redakteur für deutschen Social-Media-Content. Du verfeinerst Texte zu natürlichem, emotionalem und überzeugendem Deutsch.");
@@ -442,7 +449,7 @@ Anforderungen:
 - seasonalContext: aktuelle Saison, Feiertage oder Events die das Marketing beeinflussen
 - hotTopics: 5 heiße Themen in der Branche auf Deutsch`;
 
-    const trendData = await callGrokJSON(trendPrompt, grokSystem);
+    const trendData = await callClaudeJSON(trendPrompt, trendSystem);
     await db.update(pipelineRunsTable).set({ trendData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 2: STRATEGY PLANNER ─────────────────────────────────────────────
@@ -479,7 +486,7 @@ Gib JSON zurück (kein Markdown):
   "contentPillars": ["Content-Säule 1", "Säule 2", "Säule 3", "Säule 4"]
 }`;
 
-    const strategyData = await callOpenAIJSON(strategyPrompt, openaiSystem);
+    const strategyData = await callClaudeJSON(strategyPrompt, openaiSystem);
     await db.update(pipelineRunsTable).set({ strategyData }).where(eq(pipelineRunsTable.id, runId));
 
     // ─── AGENT 3 & 4: PER-PLATFORM CONTENT + PROMPT ────────────────────────────
@@ -608,14 +615,14 @@ ${buildImagePromptGuidance(brand, topic)}`;
       .returning();
 
     const [finalBrand] = await db.select().from(brandsTable).where(eq(brandsTable.id, brandId));
-    res.json({ ...updated, brandName: finalBrand?.brandName ?? null });
+    return res.json({ ...updated, brandName: finalBrand?.brandName ?? null });
 
   } catch (error: any) {
     console.error("Pipeline error:", error);
     await db.update(pipelineRunsTable)
       .set({ status: "failed", errorMessage: error?.message ?? "Unknown error", updatedAt: new Date() })
       .where(eq(pipelineRunsTable.id, runId));
-    res.status(500).json({ error: "Pipeline thất bại: " + (error?.message ?? "Unknown error") });
+    return res.status(500).json({ error: "Pipeline thất bại: " + (error?.message ?? "Unknown error") });
   }
 });
 

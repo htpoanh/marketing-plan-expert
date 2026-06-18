@@ -41,6 +41,7 @@ describe("estimateCostEur", () => {
     expect(card["claude-haiku-4-5-20251001"]).toBeDefined();
     expect(card["gemini-2.5-flash"]).toBeDefined();
     expect(card["claude-sonnet-4-5-20250929"]).toBeDefined();
-    expect(card["grok-3"]).toBeDefined();
+    // M4 Trend Pulse now runs on Claude (was Grok).
+    expect(card["claude-sonnet-4-6"]).toBeDefined();
   });
 });

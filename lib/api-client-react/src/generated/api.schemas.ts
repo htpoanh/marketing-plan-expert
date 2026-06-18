@@ -161,6 +161,8 @@ export interface ContentPlan {
   imagePrompt: string | null;
   /** @nullable */
   videoPrompt: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
   topic: string;
   status: string;
   /** @nullable */
@@ -235,6 +237,7 @@ export interface RunPipelineBody {
   platform: string;
   contentCount?: number;
   storeSituation?: string;
+  contentFormat?: string;
 }
 
 export interface TrendData {
@@ -282,6 +285,8 @@ export interface PipelineRun {
   goal: string;
   platform: string;
   contentCount: number;
+  /** @nullable */
+  storeSituation?: string | null;
   status: string;
   trendData?: TrendData | null;
   strategyData?: StrategyData | null;
@@ -563,6 +568,458 @@ export interface AdsCostBucket {
   totalCostEur: string;
 }
 
+export type ReplyPlatform = (typeof ReplyPlatform)[keyof typeof ReplyPlatform];
+
+export const ReplyPlatform = {
+  google: "google",
+  facebook: "facebook",
+  instagram: "instagram",
+  messenger: "messenger",
+} as const;
+
+export type ReplyIntent = (typeof ReplyIntent)[keyof typeof ReplyIntent];
+
+export const ReplyIntent = {
+  booking: "booking",
+  price: "price",
+  complaint: "complaint",
+  compliment: "compliment",
+  other: "other",
+} as const;
+
+export type ReplyStatus = (typeof ReplyStatus)[keyof typeof ReplyStatus];
+
+export const ReplyStatus = {
+  pending: "pending",
+  auto_sent: "auto_sent",
+  manual_sent: "manual_sent",
+  escalated: "escalated",
+  skipped: "skipped",
+} as const;
+
+/**
+ * @nullable
+ */
+export type ReplyQueueItemReplyMode =
+  | (typeof ReplyQueueItemReplyMode)[keyof typeof ReplyQueueItemReplyMode]
+  | null;
+
+export const ReplyQueueItemReplyMode = {
+  public: "public",
+  private: "private",
+} as const;
+
+export interface ReplyQueueItem {
+  id: number;
+  brandId: number;
+  platform: ReplyPlatform;
+  /** @nullable */
+  externalId?: string | null;
+  /** @nullable */
+  reviewId?: number | null;
+  /** @nullable */
+  authorName?: string | null;
+  /** @nullable */
+  rating?: number | null;
+  /** @nullable */
+  originalMessage?: string | null;
+  /** @nullable */
+  suggestedReply?: string | null;
+  /** @nullable */
+  replyMode?: ReplyQueueItemReplyMode;
+  intent?: ReplyIntent | null;
+  /**
+   * Decimal(3,2) as string, -1.00..1.00
+   * @nullable
+   */
+  sentiment?: string | null;
+  status: ReplyStatus;
+  /** @nullable */
+  statusReason?: string | null;
+  /** @nullable */
+  sentReply?: string | null;
+  /** @nullable */
+  sentAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Only manual transitions are allowed here (e.g. skip a row)
+ * @nullable
+ */
+export type UpdateReplyQueueBodyStatus =
+  | (typeof UpdateReplyQueueBodyStatus)[keyof typeof UpdateReplyQueueBodyStatus]
+  | null;
+
+export const UpdateReplyQueueBodyStatus = {
+  pending: "pending",
+  skipped: "skipped",
+} as const;
+
+export interface UpdateReplyQueueBody {
+  /** @nullable */
+  suggestedReply?: string | null;
+  /**
+   * Only manual transitions are allowed here (e.g. skip a row)
+   * @nullable
+   */
+  status?: UpdateReplyQueueBodyStatus;
+}
+
+export interface SendReplyBody {
+  /**
+   * Override text to send. Defaults to the stored suggestedReply.
+   * @nullable
+   */
+  replyText?: string | null;
+}
+
+export interface AutoReplyStats {
+  autoRepliedToday: number;
+  pending: number;
+  escalated: number;
+  /** @nullable */
+  avgResponseMinutes: number | null;
+}
+
+export interface AutoReplySettings {
+  brandId: number;
+  googleEnabled: boolean;
+  fbCommentsEnabled: boolean;
+  igCommentsEnabled: boolean;
+  dailyCap: number;
+  escalateThreshold: number;
+}
+
+export interface UpdateAutoReplySettingsBody {
+  googleEnabled?: boolean;
+  fbCommentsEnabled?: boolean;
+  igCommentsEnabled?: boolean;
+  /**
+   * @minimum 1
+   * @maximum 500
+   */
+  dailyCap?: number;
+  /**
+   * @minimum 0
+   * @maximum 5
+   */
+  escalateThreshold?: number;
+}
+
+export type StrategyInputType =
+  (typeof StrategyInputType)[keyof typeof StrategyInputType];
+
+export const StrategyInputType = {
+  campaign_idea: "campaign_idea",
+  company_goal: "company_goal",
+  format_test: "format_test",
+  feedback: "feedback",
+  other: "other",
+} as const;
+
+export type StrategyPriority =
+  (typeof StrategyPriority)[keyof typeof StrategyPriority];
+
+export const StrategyPriority = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type StrategyStatus =
+  (typeof StrategyStatus)[keyof typeof StrategyStatus];
+
+export const StrategyStatus = {
+  pending: "pending",
+  analyzed: "analyzed",
+  incorporated: "incorporated",
+  archived: "archived",
+} as const;
+
+export type StrategyAnalysisFeasibilityRating =
+  (typeof StrategyAnalysisFeasibilityRating)[keyof typeof StrategyAnalysisFeasibilityRating];
+
+export const StrategyAnalysisFeasibilityRating = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type StrategyAnalysisFeasibility = {
+  rating: StrategyAnalysisFeasibilityRating;
+  rationale: string;
+};
+
+export interface StrategyAnalysis {
+  summary: string;
+  feasibility: StrategyAnalysisFeasibility;
+  timeline: string;
+  resources: string[];
+  risks: string[];
+  recommendedWeek: string;
+  /** @nullable */
+  alignsWithTrends?: string | null;
+}
+
+export interface StrategyInboxItem {
+  id: number;
+  /** @nullable */
+  brandId: number | null;
+  inputType: StrategyInputType;
+  content: string;
+  priority: StrategyPriority;
+  /** @nullable */
+  deadline?: string | null;
+  claudeAnalysis?: StrategyAnalysis | null;
+  status: StrategyStatus;
+  /** @nullable */
+  incorporatedInWeek?: number | null;
+  /** @nullable */
+  tokensInput?: number | null;
+  /** @nullable */
+  tokensOutput?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStrategyInboxBody {
+  /**
+   * null = applies to all brands
+   * @nullable
+   */
+  brandId?: number | null;
+  inputType: StrategyInputType;
+  /** @minLength 1 */
+  content: string;
+  priority?: StrategyPriority;
+  /** @nullable */
+  deadline?: string | null;
+}
+
+export interface UpdateStrategyInboxBody {
+  status?: StrategyStatus;
+  /** @nullable */
+  incorporatedInWeek?: number | null;
+  priority?: StrategyPriority;
+}
+
+export type TrendInsightStatus =
+  (typeof TrendInsightStatus)[keyof typeof TrendInsightStatus];
+
+export const TrendInsightStatus = {
+  new: "new",
+  proposed: "proposed",
+  backlog: "backlog",
+  skipped: "skipped",
+  actioned: "actioned",
+} as const;
+
+export interface TrendFactors {
+  trendStrength: number;
+  relevance: number;
+  strategyAlignment: number;
+  productionDifficulty: number;
+}
+
+export interface TrendInsight {
+  id: number;
+  /** @nullable */
+  brandId: number | null;
+  trendName: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  source?: string | null;
+  /** Decimal(6,1) as string */
+  trendScore: string;
+  factors?: TrendFactors | null;
+  /** @nullable */
+  momentum?: string | null;
+  /** @nullable */
+  estimatedWindowDays?: number | null;
+  /** @nullable */
+  suggestedAngle?: string | null;
+  /** @nullable */
+  suggestedKeywords?: string[] | null;
+  /** @nullable */
+  strategyAlignmentNote?: string | null;
+  /** @nullable */
+  recommendedAction?: string | null;
+  status: TrendInsightStatus;
+  /** @nullable */
+  weekNumber?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScanTrendBody {
+  brandId: number;
+  /** @nullable */
+  regionFocus?: string | null;
+}
+
+export interface ScanTrendResult {
+  inserted: TrendInsight[];
+  /** @nullable */
+  costEur?: string | null;
+  region: string;
+}
+
+export interface UpdateTrendInsightBody {
+  status: TrendInsightStatus;
+}
+
+export interface KolCharacter {
+  id: number;
+  name: string;
+  handle: string;
+  /** @nullable */
+  brandIds?: number[] | null;
+  /** @nullable */
+  personality?: string | null;
+  /** @nullable */
+  voiceId?: string | null;
+  /** @nullable */
+  visualSeed?: string | null;
+  /** @nullable */
+  language?: string | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface KolPost {
+  id: number;
+  characterId: number;
+  /** @nullable */
+  contentPlanId?: number | null;
+  /** @nullable */
+  script?: string | null;
+  /** @nullable */
+  caption?: string | null;
+  /** @nullable */
+  hashtags?: string[] | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  audioUrl?: string | null;
+  /** @nullable */
+  videoUrl?: string | null;
+  /** @nullable */
+  metricoolPostId?: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export type AdsPerformanceRowPlatform =
+  (typeof AdsPerformanceRowPlatform)[keyof typeof AdsPerformanceRowPlatform];
+
+export const AdsPerformanceRowPlatform = {
+  facebook: "facebook",
+  tiktok: "tiktok",
+  google: "google",
+} as const;
+
+export interface AdsPerformanceRow {
+  id: number;
+  brandId: number;
+  platform: AdsPerformanceRowPlatform;
+  /** @nullable */
+  weekStart?: string | null;
+  /** @nullable */
+  spendEur?: string | null;
+  /** @nullable */
+  reach?: number | null;
+  /** @nullable */
+  impressions?: number | null;
+  /** @nullable */
+  clicks?: number | null;
+  /** @nullable */
+  ctr?: string | null;
+  /** @nullable */
+  cpm?: string | null;
+  /** @nullable */
+  cpc?: string | null;
+  /** @nullable */
+  roas?: string | null;
+  /** @nullable */
+  topCreativeId?: string | null;
+  createdAt: string;
+}
+
+export type WeeklyReportKpiData = { [key: string]: unknown } | null;
+
+export type WeeklyReportSections = { [key: string]: unknown } | null;
+
+export type WeeklyReportChatLogItem = { [key: string]: unknown };
+
+export interface WeeklyReport {
+  id: number;
+  weekNumber: number;
+  /** @nullable */
+  weekStart?: string | null;
+  kpiData?: WeeklyReportKpiData;
+  sections?: WeeklyReportSections;
+  /** @nullable */
+  trendAnalysis?: string | null;
+  chatLog?: WeeklyReportChatLogItem[];
+  approvedByUser: boolean;
+  autoApproved: boolean;
+  /** @nullable */
+  approvedAt?: string | null;
+  telegramSent: boolean;
+  createdAt: string;
+}
+
+export type MarketIntelligenceItemContent = { [key: string]: unknown } | null;
+
+export interface MarketIntelligenceItem {
+  id: number;
+  /** @nullable */
+  brandId: number | null;
+  /** @nullable */
+  weekNumber?: number | null;
+  source: string;
+  /** @nullable */
+  category?: string | null;
+  title: string;
+  content?: MarketIntelligenceItemContent;
+  /** @nullable */
+  relevanceScore?: number | null;
+  /** @nullable */
+  urgency?: string | null;
+  incorporated: boolean;
+  createdAt: string;
+}
+
+export type BrandMemoryTopFormatsItem = { [key: string]: unknown };
+
+export type BrandMemoryTopTopicsItem = { [key: string]: unknown };
+
+export type BrandMemoryTopIntentKeywordsItem = { [key: string]: unknown };
+
+export type BrandMemoryTrendAlignmentsItem = { [key: string]: unknown };
+
+export type BrandMemoryAudienceIca = { [key: string]: unknown } | null;
+
+export type BrandMemoryAdsPerformanceHistoryItem = { [key: string]: unknown };
+
+export interface BrandMemory {
+  id: number;
+  brandId: number;
+  version: number;
+  topFormats?: BrandMemoryTopFormatsItem[];
+  topTopics?: BrandMemoryTopTopicsItem[];
+  bestHours?: number[];
+  provenHashtags?: string[];
+  topIntentKeywords?: BrandMemoryTopIntentKeywordsItem[];
+  trendAlignments?: BrandMemoryTrendAlignmentsItem[];
+  audienceIca?: BrandMemoryAudienceIca;
+  adsPerformanceHistory?: BrandMemoryAdsPerformanceHistoryItem[];
+  updatedAt: string;
+}
+
 export type ListPipelineRunsParams = {
   brandId?: number;
 };
@@ -608,4 +1065,200 @@ export type GetAdsCostSummaryParams = {
    * ISO date — start of window. Defaults to start of current month.
    */
   since?: string;
+};
+
+export type ListReplyQueueParams = {
+  brandId?: number;
+  platform?: ListReplyQueuePlatform;
+  status?: ListReplyQueueStatus;
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
+};
+
+export type ListReplyQueuePlatform =
+  (typeof ListReplyQueuePlatform)[keyof typeof ListReplyQueuePlatform];
+
+export const ListReplyQueuePlatform = {
+  google: "google",
+  facebook: "facebook",
+  instagram: "instagram",
+  messenger: "messenger",
+} as const;
+
+export type ListReplyQueueStatus =
+  (typeof ListReplyQueueStatus)[keyof typeof ListReplyQueueStatus];
+
+export const ListReplyQueueStatus = {
+  pending: "pending",
+  auto_sent: "auto_sent",
+  manual_sent: "manual_sent",
+  escalated: "escalated",
+  skipped: "skipped",
+} as const;
+
+export type GetAutoReplyStatsParams = {
+  brandId?: number;
+};
+
+export type ListStrategyInboxItemsParams = {
+  brandId?: number;
+  status?: ListStrategyInboxItemsStatus;
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
+};
+
+export type ListStrategyInboxItemsStatus =
+  (typeof ListStrategyInboxItemsStatus)[keyof typeof ListStrategyInboxItemsStatus];
+
+export const ListStrategyInboxItemsStatus = {
+  pending: "pending",
+  analyzed: "analyzed",
+  incorporated: "incorporated",
+  archived: "archived",
+} as const;
+
+export type ListTrendInsightsParams = {
+  brandId?: number;
+  status?: ListTrendInsightsStatus;
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
+};
+
+export type ListTrendInsightsStatus =
+  (typeof ListTrendInsightsStatus)[keyof typeof ListTrendInsightsStatus];
+
+export const ListTrendInsightsStatus = {
+  new: "new",
+  proposed: "proposed",
+  backlog: "backlog",
+  skipped: "skipped",
+  actioned: "actioned",
+} as const;
+
+export type ScanMarketIntelligenceBody = {
+  brandId: number;
+};
+
+export type ScanMarketIntelligence200 = {
+  inserted: MarketIntelligenceItem[];
+};
+
+export type ListMarketIntelligenceParams = {
+  brandId?: number;
+  source?: string;
+  /**
+   * @minimum 1
+   * @maximum 300
+   */
+  limit?: number;
+};
+
+export type ListWeeklyReportsParams = {
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+};
+
+export type ScanAdsPerformanceBody = {
+  brandId: number;
+};
+
+export type ScanAdsPerformance200StatusesItem = {
+  platform: string;
+  active: boolean;
+  /** @nullable */
+  reason?: string | null;
+};
+
+export type ScanAdsPerformance200 = {
+  weekStart: string;
+  statuses: ScanAdsPerformance200StatusesItem[];
+  inserted: AdsPerformanceRow[];
+};
+
+export type ListAdsPerformanceParams = {
+  brandId?: number;
+  platform?: ListAdsPerformancePlatform;
+  /**
+   * @minimum 1
+   * @maximum 300
+   */
+  limit?: number;
+};
+
+export type ListAdsPerformancePlatform =
+  (typeof ListAdsPerformancePlatform)[keyof typeof ListAdsPerformancePlatform];
+
+export const ListAdsPerformancePlatform = {
+  facebook: "facebook",
+  tiktok: "tiktok",
+  google: "google",
+} as const;
+
+export type GetAdsPerformanceSummaryParams = {
+  brandId?: number;
+};
+
+export type GetAdsPerformanceSummary200Summary = { [key: string]: unknown };
+
+export type GetAdsPerformanceSummary200Suggestion = {
+  [key: string]: unknown;
+} | null;
+
+export type GetAdsPerformanceSummary200 = {
+  summary: GetAdsPerformanceSummary200Summary;
+  suggestion?: GetAdsPerformanceSummary200Suggestion;
+};
+
+export type GenerateContentPipelineBody = {
+  brandId: number;
+  topic: string;
+  /** @nullable */
+  platform?: string | null;
+  /** @nullable */
+  trendInsightId?: number | null;
+  /** @nullable */
+  strategyInboxId?: number | null;
+  pushMetricool?: boolean;
+};
+
+export type GenerateContentPipeline201Metricool = {
+  [key: string]: unknown;
+} | null;
+
+export type GenerateContentPipeline201 = {
+  plan: ContentPlan;
+  metricool?: GenerateContentPipeline201Metricool;
+};
+
+export type ListKolPostsParams = {
+  characterId?: number;
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
+};
+
+export type GenerateKolPostBody = {
+  characterId: number;
+  topic: string;
+};
+
+export type GenerateKolPost201Voice = { [key: string]: unknown } | null;
+
+export type GenerateKolPost201 = {
+  post: KolPost;
+  voice?: GenerateKolPost201Voice;
 };

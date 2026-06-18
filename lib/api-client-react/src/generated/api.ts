@@ -18,41 +18,78 @@ import type {
 
 import type {
   AdsCostBucket,
+  AdsPerformanceRow,
   AdsReport,
   AnalyzeAdsPerformanceBody,
+  AutoReplySettings,
+  AutoReplyStats,
   Brand,
   BrandAdsContextEnvelope,
+  BrandMemory,
   ContentPlan,
   CreateBrandBody,
   CreateContentPlanBody,
   CreateReviewBody,
+  CreateStrategyInboxBody,
   ErrorResponse,
   GenerateAdsAudienceBody,
   GenerateAdsKeywordsBody,
   GenerateContentBody,
+  GenerateContentPipeline201,
+  GenerateContentPipelineBody,
   GenerateContentPlanBody,
+  GenerateKolPost201,
+  GenerateKolPostBody,
   GenerateStrategyBody,
   GeneratedContent,
   GetAdsCostSummaryParams,
+  GetAdsPerformanceSummary200,
+  GetAdsPerformanceSummaryParams,
   GetAdsTrendBody,
+  GetAutoReplyStatsParams,
   GetReviewStatsParams,
   HealthStatus,
+  KolCharacter,
+  KolPost,
+  ListAdsPerformanceParams,
   ListAdsReportsParams,
   ListContentPlansParams,
+  ListKolPostsParams,
+  ListMarketIntelligenceParams,
   ListPipelineRunsParams,
+  ListReplyQueueParams,
   ListReviewsParams,
+  ListStrategyInboxItemsParams,
+  ListTrendInsightsParams,
+  ListWeeklyReportsParams,
+  MarketIntelligenceItem,
   MarketingModel,
   MarketingStrategy,
   PipelineRun,
   RejectBody,
+  ReplyQueueItem,
   Review,
   ReviewReplyResponse,
   ReviewStats,
   RunPipelineBody,
   SaveReplyBody,
+  ScanAdsPerformance200,
+  ScanAdsPerformanceBody,
+  ScanMarketIntelligence200,
+  ScanMarketIntelligenceBody,
+  ScanTrendBody,
+  ScanTrendResult,
+  SendReplyBody,
+  StrategyInboxItem,
+  TrendInsight,
   UpdateAdsReportBody,
+  UpdateAutoReplySettingsBody,
   UpdateBrandAdsContextBody,
   UpdateContentPlanBody,
+  UpdateReplyQueueBody,
+  UpdateStrategyInboxBody,
+  UpdateTrendInsightBody,
+  WeeklyReport,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -3522,3 +3559,2832 @@ export function useGetAdsCostSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List unified inbox rows (Google reviews + FB/IG comments)
+ */
+export const getListReplyQueueUrl = (params?: ListReplyQueueParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/auto-reply/queue?${stringifiedParams}`
+    : `/api/auto-reply/queue`;
+};
+
+export const listReplyQueue = async (
+  params?: ListReplyQueueParams,
+  options?: RequestInit,
+): Promise<ReplyQueueItem[]> => {
+  return customFetch<ReplyQueueItem[]>(getListReplyQueueUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListReplyQueueQueryKey = (params?: ListReplyQueueParams) => {
+  return [`/api/auto-reply/queue`, ...(params ? [params] : [])] as const;
+};
+
+export const getListReplyQueueQueryOptions = <
+  TData = Awaited<ReturnType<typeof listReplyQueue>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListReplyQueueParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReplyQueue>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListReplyQueueQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listReplyQueue>>> = ({
+    signal,
+  }) => listReplyQueue(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listReplyQueue>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListReplyQueueQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listReplyQueue>>
+>;
+export type ListReplyQueueQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List unified inbox rows (Google reviews + FB/IG comments)
+ */
+
+export function useListReplyQueue<
+  TData = Awaited<ReturnType<typeof listReplyQueue>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListReplyQueueParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReplyQueue>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListReplyQueueQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Edit the suggested reply or change status (skip) on a queue row
+ */
+export const getUpdateReplyQueueItemUrl = (id: number) => {
+  return `/api/auto-reply/queue/${id}`;
+};
+
+export const updateReplyQueueItem = async (
+  id: number,
+  updateReplyQueueBody: UpdateReplyQueueBody,
+  options?: RequestInit,
+): Promise<ReplyQueueItem> => {
+  return customFetch<ReplyQueueItem>(getUpdateReplyQueueItemUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateReplyQueueBody),
+  });
+};
+
+export const getUpdateReplyQueueItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReplyQueueItem>>,
+    TError,
+    { id: number; data: BodyType<UpdateReplyQueueBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateReplyQueueItem>>,
+  TError,
+  { id: number; data: BodyType<UpdateReplyQueueBody> },
+  TContext
+> => {
+  const mutationKey = ["updateReplyQueueItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateReplyQueueItem>>,
+    { id: number; data: BodyType<UpdateReplyQueueBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateReplyQueueItem(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateReplyQueueItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateReplyQueueItem>>
+>;
+export type UpdateReplyQueueItemMutationBody = BodyType<UpdateReplyQueueBody>;
+export type UpdateReplyQueueItemMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Edit the suggested reply or change status (skip) on a queue row
+ */
+export const useUpdateReplyQueueItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReplyQueueItem>>,
+    TError,
+    { id: number; data: BodyType<UpdateReplyQueueBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateReplyQueueItem>>,
+  TError,
+  { id: number; data: BodyType<UpdateReplyQueueBody> },
+  TContext
+> => {
+  return useMutation(getUpdateReplyQueueItemMutationOptions(options));
+};
+
+/**
+ * @summary Send a queued/escalated reply (pushes to Google or Meta), marks manual_sent
+ */
+export const getSendReplyQueueItemUrl = (id: number) => {
+  return `/api/auto-reply/queue/${id}/send`;
+};
+
+export const sendReplyQueueItem = async (
+  id: number,
+  sendReplyBody?: SendReplyBody,
+  options?: RequestInit,
+): Promise<ReplyQueueItem> => {
+  return customFetch<ReplyQueueItem>(getSendReplyQueueItemUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendReplyBody),
+  });
+};
+
+export const getSendReplyQueueItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendReplyQueueItem>>,
+    TError,
+    { id: number; data: BodyType<SendReplyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendReplyQueueItem>>,
+  TError,
+  { id: number; data: BodyType<SendReplyBody> },
+  TContext
+> => {
+  const mutationKey = ["sendReplyQueueItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendReplyQueueItem>>,
+    { id: number; data: BodyType<SendReplyBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return sendReplyQueueItem(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendReplyQueueItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendReplyQueueItem>>
+>;
+export type SendReplyQueueItemMutationBody = BodyType<SendReplyBody>;
+export type SendReplyQueueItemMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send a queued/escalated reply (pushes to Google or Meta), marks manual_sent
+ */
+export const useSendReplyQueueItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendReplyQueueItem>>,
+    TError,
+    { id: number; data: BodyType<SendReplyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendReplyQueueItem>>,
+  TError,
+  { id: number; data: BodyType<SendReplyBody> },
+  TContext
+> => {
+  return useMutation(getSendReplyQueueItemMutationOptions(options));
+};
+
+/**
+ * @summary Inbox stats — auto-replied today, pending, escalated, avg response time
+ */
+export const getGetAutoReplyStatsUrl = (params?: GetAutoReplyStatsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/auto-reply/stats?${stringifiedParams}`
+    : `/api/auto-reply/stats`;
+};
+
+export const getAutoReplyStats = async (
+  params?: GetAutoReplyStatsParams,
+  options?: RequestInit,
+): Promise<AutoReplyStats> => {
+  return customFetch<AutoReplyStats>(getGetAutoReplyStatsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutoReplyStatsQueryKey = (
+  params?: GetAutoReplyStatsParams,
+) => {
+  return [`/api/auto-reply/stats`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAutoReplyStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutoReplyStats>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAutoReplyStatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutoReplyStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAutoReplyStatsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAutoReplyStats>>
+  > = ({ signal }) => getAutoReplyStats(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutoReplyStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutoReplyStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutoReplyStats>>
+>;
+export type GetAutoReplyStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Inbox stats — auto-replied today, pending, escalated, avg response time
+ */
+
+export function useGetAutoReplyStats<
+  TData = Awaited<ReturnType<typeof getAutoReplyStats>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAutoReplyStatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutoReplyStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutoReplyStatsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get per-brand auto-reply toggles + guards (defaults if no row yet)
+ */
+export const getGetAutoReplySettingsUrl = (brandId: number) => {
+  return `/api/auto-reply/settings/${brandId}`;
+};
+
+export const getAutoReplySettings = async (
+  brandId: number,
+  options?: RequestInit,
+): Promise<AutoReplySettings> => {
+  return customFetch<AutoReplySettings>(getGetAutoReplySettingsUrl(brandId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAutoReplySettingsQueryKey = (brandId: number) => {
+  return [`/api/auto-reply/settings/${brandId}`] as const;
+};
+
+export const getGetAutoReplySettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAutoReplySettings>>,
+  TError = ErrorType<unknown>,
+>(
+  brandId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutoReplySettings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAutoReplySettingsQueryKey(brandId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAutoReplySettings>>
+  > = ({ signal }) =>
+    getAutoReplySettings(brandId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!brandId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAutoReplySettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAutoReplySettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAutoReplySettings>>
+>;
+export type GetAutoReplySettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get per-brand auto-reply toggles + guards (defaults if no row yet)
+ */
+
+export function useGetAutoReplySettings<
+  TData = Awaited<ReturnType<typeof getAutoReplySettings>>,
+  TError = ErrorType<unknown>,
+>(
+  brandId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAutoReplySettings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAutoReplySettingsQueryOptions(brandId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update per-brand auto-reply toggles + guards (upsert)
+ */
+export const getUpdateAutoReplySettingsUrl = (brandId: number) => {
+  return `/api/auto-reply/settings/${brandId}`;
+};
+
+export const updateAutoReplySettings = async (
+  brandId: number,
+  updateAutoReplySettingsBody: UpdateAutoReplySettingsBody,
+  options?: RequestInit,
+): Promise<AutoReplySettings> => {
+  return customFetch<AutoReplySettings>(
+    getUpdateAutoReplySettingsUrl(brandId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateAutoReplySettingsBody),
+    },
+  );
+};
+
+export const getUpdateAutoReplySettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAutoReplySettings>>,
+    TError,
+    { brandId: number; data: BodyType<UpdateAutoReplySettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAutoReplySettings>>,
+  TError,
+  { brandId: number; data: BodyType<UpdateAutoReplySettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAutoReplySettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAutoReplySettings>>,
+    { brandId: number; data: BodyType<UpdateAutoReplySettingsBody> }
+  > = (props) => {
+    const { brandId, data } = props ?? {};
+
+    return updateAutoReplySettings(brandId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAutoReplySettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAutoReplySettings>>
+>;
+export type UpdateAutoReplySettingsMutationBody =
+  BodyType<UpdateAutoReplySettingsBody>;
+export type UpdateAutoReplySettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update per-brand auto-reply toggles + guards (upsert)
+ */
+export const useUpdateAutoReplySettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAutoReplySettings>>,
+    TError,
+    { brandId: number; data: BodyType<UpdateAutoReplySettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAutoReplySettings>>,
+  TError,
+  { brandId: number; data: BodyType<UpdateAutoReplySettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAutoReplySettingsMutationOptions(options));
+};
+
+/**
+ * @summary List strategy inbox items (filterable)
+ */
+export const getListStrategyInboxItemsUrl = (
+  params?: ListStrategyInboxItemsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/strategy-inbox?${stringifiedParams}`
+    : `/api/strategy-inbox`;
+};
+
+export const listStrategyInboxItems = async (
+  params?: ListStrategyInboxItemsParams,
+  options?: RequestInit,
+): Promise<StrategyInboxItem[]> => {
+  return customFetch<StrategyInboxItem[]>(
+    getListStrategyInboxItemsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListStrategyInboxItemsQueryKey = (
+  params?: ListStrategyInboxItemsParams,
+) => {
+  return [`/api/strategy-inbox`, ...(params ? [params] : [])] as const;
+};
+
+export const getListStrategyInboxItemsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStrategyInboxItems>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListStrategyInboxItemsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStrategyInboxItems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListStrategyInboxItemsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listStrategyInboxItems>>
+  > = ({ signal }) =>
+    listStrategyInboxItems(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStrategyInboxItems>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStrategyInboxItemsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStrategyInboxItems>>
+>;
+export type ListStrategyInboxItemsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List strategy inbox items (filterable)
+ */
+
+export function useListStrategyInboxItems<
+  TData = Awaited<ReturnType<typeof listStrategyInboxItems>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListStrategyInboxItemsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStrategyInboxItems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStrategyInboxItemsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Submit an item — runs Claude analysis synchronously and saves it
+ */
+export const getCreateStrategyInboxItemUrl = () => {
+  return `/api/strategy-inbox`;
+};
+
+export const createStrategyInboxItem = async (
+  createStrategyInboxBody: CreateStrategyInboxBody,
+  options?: RequestInit,
+): Promise<StrategyInboxItem> => {
+  return customFetch<StrategyInboxItem>(getCreateStrategyInboxItemUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createStrategyInboxBody),
+  });
+};
+
+export const getCreateStrategyInboxItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStrategyInboxItem>>,
+    TError,
+    { data: BodyType<CreateStrategyInboxBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createStrategyInboxItem>>,
+  TError,
+  { data: BodyType<CreateStrategyInboxBody> },
+  TContext
+> => {
+  const mutationKey = ["createStrategyInboxItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createStrategyInboxItem>>,
+    { data: BodyType<CreateStrategyInboxBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createStrategyInboxItem(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateStrategyInboxItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createStrategyInboxItem>>
+>;
+export type CreateStrategyInboxItemMutationBody =
+  BodyType<CreateStrategyInboxBody>;
+export type CreateStrategyInboxItemMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit an item — runs Claude analysis synchronously and saves it
+ */
+export const useCreateStrategyInboxItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStrategyInboxItem>>,
+    TError,
+    { data: BodyType<CreateStrategyInboxBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createStrategyInboxItem>>,
+  TError,
+  { data: BodyType<CreateStrategyInboxBody> },
+  TContext
+> => {
+  return useMutation(getCreateStrategyInboxItemMutationOptions(options));
+};
+
+export const getGetStrategyInboxItemUrl = (id: number) => {
+  return `/api/strategy-inbox/${id}`;
+};
+
+export const getStrategyInboxItem = async (
+  id: number,
+  options?: RequestInit,
+): Promise<StrategyInboxItem> => {
+  return customFetch<StrategyInboxItem>(getGetStrategyInboxItemUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStrategyInboxItemQueryKey = (id: number) => {
+  return [`/api/strategy-inbox/${id}`] as const;
+};
+
+export const getGetStrategyInboxItemQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStrategyInboxItem>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStrategyInboxItem>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStrategyInboxItemQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStrategyInboxItem>>
+  > = ({ signal }) => getStrategyInboxItem(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStrategyInboxItem>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStrategyInboxItemQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStrategyInboxItem>>
+>;
+export type GetStrategyInboxItemQueryError = ErrorType<ErrorResponse>;
+
+export function useGetStrategyInboxItem<
+  TData = Awaited<ReturnType<typeof getStrategyInboxItem>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStrategyInboxItem>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStrategyInboxItemQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update status / incorporated week
+ */
+export const getUpdateStrategyInboxItemUrl = (id: number) => {
+  return `/api/strategy-inbox/${id}`;
+};
+
+export const updateStrategyInboxItem = async (
+  id: number,
+  updateStrategyInboxBody: UpdateStrategyInboxBody,
+  options?: RequestInit,
+): Promise<StrategyInboxItem> => {
+  return customFetch<StrategyInboxItem>(getUpdateStrategyInboxItemUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateStrategyInboxBody),
+  });
+};
+
+export const getUpdateStrategyInboxItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateStrategyInboxItem>>,
+    TError,
+    { id: number; data: BodyType<UpdateStrategyInboxBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateStrategyInboxItem>>,
+  TError,
+  { id: number; data: BodyType<UpdateStrategyInboxBody> },
+  TContext
+> => {
+  const mutationKey = ["updateStrategyInboxItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateStrategyInboxItem>>,
+    { id: number; data: BodyType<UpdateStrategyInboxBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateStrategyInboxItem(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateStrategyInboxItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateStrategyInboxItem>>
+>;
+export type UpdateStrategyInboxItemMutationBody =
+  BodyType<UpdateStrategyInboxBody>;
+export type UpdateStrategyInboxItemMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update status / incorporated week
+ */
+export const useUpdateStrategyInboxItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateStrategyInboxItem>>,
+    TError,
+    { id: number; data: BodyType<UpdateStrategyInboxBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateStrategyInboxItem>>,
+  TError,
+  { id: number; data: BodyType<UpdateStrategyInboxBody> },
+  TContext
+> => {
+  return useMutation(getUpdateStrategyInboxItemMutationOptions(options));
+};
+
+export const getDeleteStrategyInboxItemUrl = (id: number) => {
+  return `/api/strategy-inbox/${id}`;
+};
+
+export const deleteStrategyInboxItem = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteStrategyInboxItemUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteStrategyInboxItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStrategyInboxItem>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteStrategyInboxItem>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteStrategyInboxItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteStrategyInboxItem>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteStrategyInboxItem(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteStrategyInboxItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteStrategyInboxItem>>
+>;
+
+export type DeleteStrategyInboxItemMutationError = ErrorType<ErrorResponse>;
+
+export const useDeleteStrategyInboxItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStrategyInboxItem>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteStrategyInboxItem>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteStrategyInboxItemMutationOptions(options));
+};
+
+/**
+ * @summary Re-run Claude analysis for an existing item
+ */
+export const getReanalyzeStrategyInboxItemUrl = (id: number) => {
+  return `/api/strategy-inbox/${id}/reanalyze`;
+};
+
+export const reanalyzeStrategyInboxItem = async (
+  id: number,
+  options?: RequestInit,
+): Promise<StrategyInboxItem> => {
+  return customFetch<StrategyInboxItem>(getReanalyzeStrategyInboxItemUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getReanalyzeStrategyInboxItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reanalyzeStrategyInboxItem>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reanalyzeStrategyInboxItem>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["reanalyzeStrategyInboxItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reanalyzeStrategyInboxItem>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return reanalyzeStrategyInboxItem(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReanalyzeStrategyInboxItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reanalyzeStrategyInboxItem>>
+>;
+
+export type ReanalyzeStrategyInboxItemMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Re-run Claude analysis for an existing item
+ */
+export const useReanalyzeStrategyInboxItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reanalyzeStrategyInboxItem>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reanalyzeStrategyInboxItem>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getReanalyzeStrategyInboxItemMutationOptions(options));
+};
+
+/**
+ * @summary Run Grok trend scan for a brand, score + persist insights
+ */
+export const getScanTrendIntelligenceUrl = () => {
+  return `/api/trend-intelligence/scan`;
+};
+
+export const scanTrendIntelligence = async (
+  scanTrendBody: ScanTrendBody,
+  options?: RequestInit,
+): Promise<ScanTrendResult> => {
+  return customFetch<ScanTrendResult>(getScanTrendIntelligenceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scanTrendBody),
+  });
+};
+
+export const getScanTrendIntelligenceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanTrendIntelligence>>,
+    TError,
+    { data: BodyType<ScanTrendBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scanTrendIntelligence>>,
+  TError,
+  { data: BodyType<ScanTrendBody> },
+  TContext
+> => {
+  const mutationKey = ["scanTrendIntelligence"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scanTrendIntelligence>>,
+    { data: BodyType<ScanTrendBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scanTrendIntelligence(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScanTrendIntelligenceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scanTrendIntelligence>>
+>;
+export type ScanTrendIntelligenceMutationBody = BodyType<ScanTrendBody>;
+export type ScanTrendIntelligenceMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Run Grok trend scan for a brand, score + persist insights
+ */
+export const useScanTrendIntelligence = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanTrendIntelligence>>,
+    TError,
+    { data: BodyType<ScanTrendBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scanTrendIntelligence>>,
+  TError,
+  { data: BodyType<ScanTrendBody> },
+  TContext
+> => {
+  return useMutation(getScanTrendIntelligenceMutationOptions(options));
+};
+
+/**
+ * @summary List scored trend insights (highest score first)
+ */
+export const getListTrendInsightsUrl = (params?: ListTrendInsightsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/trend-intelligence?${stringifiedParams}`
+    : `/api/trend-intelligence`;
+};
+
+export const listTrendInsights = async (
+  params?: ListTrendInsightsParams,
+  options?: RequestInit,
+): Promise<TrendInsight[]> => {
+  return customFetch<TrendInsight[]>(getListTrendInsightsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTrendInsightsQueryKey = (
+  params?: ListTrendInsightsParams,
+) => {
+  return [`/api/trend-intelligence`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTrendInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTrendInsights>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListTrendInsightsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTrendInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListTrendInsightsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTrendInsights>>
+  > = ({ signal }) => listTrendInsights(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTrendInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTrendInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTrendInsights>>
+>;
+export type ListTrendInsightsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List scored trend insights (highest score first)
+ */
+
+export function useListTrendInsights<
+  TData = Awaited<ReturnType<typeof listTrendInsights>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListTrendInsightsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTrendInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTrendInsightsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update insight status
+ */
+export const getUpdateTrendInsightUrl = (id: number) => {
+  return `/api/trend-intelligence/${id}`;
+};
+
+export const updateTrendInsight = async (
+  id: number,
+  updateTrendInsightBody: UpdateTrendInsightBody,
+  options?: RequestInit,
+): Promise<TrendInsight> => {
+  return customFetch<TrendInsight>(getUpdateTrendInsightUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateTrendInsightBody),
+  });
+};
+
+export const getUpdateTrendInsightMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTrendInsight>>,
+    TError,
+    { id: number; data: BodyType<UpdateTrendInsightBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTrendInsight>>,
+  TError,
+  { id: number; data: BodyType<UpdateTrendInsightBody> },
+  TContext
+> => {
+  const mutationKey = ["updateTrendInsight"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTrendInsight>>,
+    { id: number; data: BodyType<UpdateTrendInsightBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateTrendInsight(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTrendInsightMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTrendInsight>>
+>;
+export type UpdateTrendInsightMutationBody = BodyType<UpdateTrendInsightBody>;
+export type UpdateTrendInsightMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update insight status
+ */
+export const useUpdateTrendInsight = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTrendInsight>>,
+    TError,
+    { id: number; data: BodyType<UpdateTrendInsightBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTrendInsight>>,
+  TError,
+  { id: number; data: BodyType<UpdateTrendInsightBody> },
+  TContext
+> => {
+  return useMutation(getUpdateTrendInsightMutationOptions(options));
+};
+
+export const getDeleteTrendInsightUrl = (id: number) => {
+  return `/api/trend-intelligence/${id}`;
+};
+
+export const deleteTrendInsight = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteTrendInsightUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteTrendInsightMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTrendInsight>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTrendInsight>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteTrendInsight"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTrendInsight>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteTrendInsight(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTrendInsightMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTrendInsight>>
+>;
+
+export type DeleteTrendInsightMutationError = ErrorType<ErrorResponse>;
+
+export const useDeleteTrendInsight = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTrendInsight>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTrendInsight>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteTrendInsightMutationOptions(options));
+};
+
+/**
+ * @summary Get the learning memory for a brand
+ */
+export const getGetBrandMemoryUrl = (brandId: number) => {
+  return `/api/brand-memory/${brandId}`;
+};
+
+export const getBrandMemory = async (
+  brandId: number,
+  options?: RequestInit,
+): Promise<BrandMemory> => {
+  return customFetch<BrandMemory>(getGetBrandMemoryUrl(brandId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBrandMemoryQueryKey = (brandId: number) => {
+  return [`/api/brand-memory/${brandId}`] as const;
+};
+
+export const getGetBrandMemoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBrandMemory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  brandId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrandMemory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBrandMemoryQueryKey(brandId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBrandMemory>>> = ({
+    signal,
+  }) => getBrandMemory(brandId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!brandId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBrandMemory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBrandMemoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBrandMemory>>
+>;
+export type GetBrandMemoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the learning memory for a brand
+ */
+
+export function useGetBrandMemory<
+  TData = Awaited<ReturnType<typeof getBrandMemory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  brandId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBrandMemory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBrandMemoryQueryOptions(brandId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Rebuild a brand's memory from current signals
+ */
+export const getRebuildBrandMemoryUrl = (brandId: number) => {
+  return `/api/brand-memory/${brandId}/rebuild`;
+};
+
+export const rebuildBrandMemory = async (
+  brandId: number,
+  options?: RequestInit,
+): Promise<BrandMemory> => {
+  return customFetch<BrandMemory>(getRebuildBrandMemoryUrl(brandId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRebuildBrandMemoryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rebuildBrandMemory>>,
+    TError,
+    { brandId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rebuildBrandMemory>>,
+  TError,
+  { brandId: number },
+  TContext
+> => {
+  const mutationKey = ["rebuildBrandMemory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rebuildBrandMemory>>,
+    { brandId: number }
+  > = (props) => {
+    const { brandId } = props ?? {};
+
+    return rebuildBrandMemory(brandId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RebuildBrandMemoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rebuildBrandMemory>>
+>;
+
+export type RebuildBrandMemoryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Rebuild a brand's memory from current signals
+ */
+export const useRebuildBrandMemory = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rebuildBrandMemory>>,
+    TError,
+    { brandId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rebuildBrandMemory>>,
+  TError,
+  { brandId: number },
+  TContext
+> => {
+  return useMutation(getRebuildBrandMemoryMutationOptions(options));
+};
+
+/**
+ * @summary Run all collectors for a brand and persist signals
+ */
+export const getScanMarketIntelligenceUrl = () => {
+  return `/api/market-intelligence/scan`;
+};
+
+export const scanMarketIntelligence = async (
+  scanMarketIntelligenceBody: ScanMarketIntelligenceBody,
+  options?: RequestInit,
+): Promise<ScanMarketIntelligence200> => {
+  return customFetch<ScanMarketIntelligence200>(
+    getScanMarketIntelligenceUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(scanMarketIntelligenceBody),
+    },
+  );
+};
+
+export const getScanMarketIntelligenceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanMarketIntelligence>>,
+    TError,
+    { data: BodyType<ScanMarketIntelligenceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scanMarketIntelligence>>,
+  TError,
+  { data: BodyType<ScanMarketIntelligenceBody> },
+  TContext
+> => {
+  const mutationKey = ["scanMarketIntelligence"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scanMarketIntelligence>>,
+    { data: BodyType<ScanMarketIntelligenceBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scanMarketIntelligence(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScanMarketIntelligenceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scanMarketIntelligence>>
+>;
+export type ScanMarketIntelligenceMutationBody =
+  BodyType<ScanMarketIntelligenceBody>;
+export type ScanMarketIntelligenceMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Run all collectors for a brand and persist signals
+ */
+export const useScanMarketIntelligence = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanMarketIntelligence>>,
+    TError,
+    { data: BodyType<ScanMarketIntelligenceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scanMarketIntelligence>>,
+  TError,
+  { data: BodyType<ScanMarketIntelligenceBody> },
+  TContext
+> => {
+  return useMutation(getScanMarketIntelligenceMutationOptions(options));
+};
+
+/**
+ * @summary List collected market signals
+ */
+export const getListMarketIntelligenceUrl = (
+  params?: ListMarketIntelligenceParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/market-intelligence?${stringifiedParams}`
+    : `/api/market-intelligence`;
+};
+
+export const listMarketIntelligence = async (
+  params?: ListMarketIntelligenceParams,
+  options?: RequestInit,
+): Promise<MarketIntelligenceItem[]> => {
+  return customFetch<MarketIntelligenceItem[]>(
+    getListMarketIntelligenceUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListMarketIntelligenceQueryKey = (
+  params?: ListMarketIntelligenceParams,
+) => {
+  return [`/api/market-intelligence`, ...(params ? [params] : [])] as const;
+};
+
+export const getListMarketIntelligenceQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMarketIntelligence>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListMarketIntelligenceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMarketIntelligence>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListMarketIntelligenceQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMarketIntelligence>>
+  > = ({ signal }) =>
+    listMarketIntelligence(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMarketIntelligence>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMarketIntelligenceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMarketIntelligence>>
+>;
+export type ListMarketIntelligenceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List collected market signals
+ */
+
+export function useListMarketIntelligence<
+  TData = Awaited<ReturnType<typeof listMarketIntelligence>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListMarketIntelligenceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMarketIntelligence>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMarketIntelligenceQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getDeleteMarketIntelligenceUrl = (id: number) => {
+  return `/api/market-intelligence/${id}`;
+};
+
+export const deleteMarketIntelligence = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteMarketIntelligenceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteMarketIntelligenceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMarketIntelligence>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMarketIntelligence>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteMarketIntelligence"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMarketIntelligence>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteMarketIntelligence(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMarketIntelligenceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMarketIntelligence>>
+>;
+
+export type DeleteMarketIntelligenceMutationError = ErrorType<ErrorResponse>;
+
+export const useDeleteMarketIntelligence = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMarketIntelligence>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMarketIntelligence>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteMarketIntelligenceMutationOptions(options));
+};
+
+/**
+ * @summary Assemble + persist a new weekly report
+ */
+export const getGenerateWeeklyReportUrl = () => {
+  return `/api/weekly-report/generate`;
+};
+
+export const generateWeeklyReport = async (
+  options?: RequestInit,
+): Promise<WeeklyReport> => {
+  return customFetch<WeeklyReport>(getGenerateWeeklyReportUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getGenerateWeeklyReportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateWeeklyReport>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateWeeklyReport>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["generateWeeklyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateWeeklyReport>>,
+    void
+  > = () => {
+    return generateWeeklyReport(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateWeeklyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateWeeklyReport>>
+>;
+
+export type GenerateWeeklyReportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Assemble + persist a new weekly report
+ */
+export const useGenerateWeeklyReport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateWeeklyReport>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateWeeklyReport>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getGenerateWeeklyReportMutationOptions(options));
+};
+
+/**
+ * @summary List weekly reports (most recent first)
+ */
+export const getListWeeklyReportsUrl = (params?: ListWeeklyReportsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/weekly-report?${stringifiedParams}`
+    : `/api/weekly-report`;
+};
+
+export const listWeeklyReports = async (
+  params?: ListWeeklyReportsParams,
+  options?: RequestInit,
+): Promise<WeeklyReport[]> => {
+  return customFetch<WeeklyReport[]>(getListWeeklyReportsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListWeeklyReportsQueryKey = (
+  params?: ListWeeklyReportsParams,
+) => {
+  return [`/api/weekly-report`, ...(params ? [params] : [])] as const;
+};
+
+export const getListWeeklyReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listWeeklyReports>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWeeklyReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWeeklyReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListWeeklyReportsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listWeeklyReports>>
+  > = ({ signal }) => listWeeklyReports(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listWeeklyReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListWeeklyReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listWeeklyReports>>
+>;
+export type ListWeeklyReportsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List weekly reports (most recent first)
+ */
+
+export function useListWeeklyReports<
+  TData = Awaited<ReturnType<typeof listWeeklyReports>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWeeklyReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWeeklyReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListWeeklyReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetWeeklyReportUrl = (id: number) => {
+  return `/api/weekly-report/${id}`;
+};
+
+export const getWeeklyReport = async (
+  id: number,
+  options?: RequestInit,
+): Promise<WeeklyReport> => {
+  return customFetch<WeeklyReport>(getGetWeeklyReportUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWeeklyReportQueryKey = (id: number) => {
+  return [`/api/weekly-report/${id}`] as const;
+};
+
+export const getGetWeeklyReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWeeklyReport>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWeeklyReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWeeklyReportQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeeklyReport>>> = ({
+    signal,
+  }) => getWeeklyReport(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWeeklyReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWeeklyReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWeeklyReport>>
+>;
+export type GetWeeklyReportQueryError = ErrorType<ErrorResponse>;
+
+export function useGetWeeklyReport<
+  TData = Awaited<ReturnType<typeof getWeeklyReport>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWeeklyReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWeeklyReportQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mark a weekly report approved
+ */
+export const getApproveWeeklyReportUrl = (id: number) => {
+  return `/api/weekly-report/${id}/approve`;
+};
+
+export const approveWeeklyReport = async (
+  id: number,
+  options?: RequestInit,
+): Promise<WeeklyReport> => {
+  return customFetch<WeeklyReport>(getApproveWeeklyReportUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getApproveWeeklyReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveWeeklyReport>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveWeeklyReport>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["approveWeeklyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveWeeklyReport>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return approveWeeklyReport(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveWeeklyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveWeeklyReport>>
+>;
+
+export type ApproveWeeklyReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Mark a weekly report approved
+ */
+export const useApproveWeeklyReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveWeeklyReport>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveWeeklyReport>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getApproveWeeklyReportMutationOptions(options));
+};
+
+/**
+ * @summary Run ad-platform readers for a brand (inactive readers reported, not saved)
+ */
+export const getScanAdsPerformanceUrl = () => {
+  return `/api/ads-performance/scan`;
+};
+
+export const scanAdsPerformance = async (
+  scanAdsPerformanceBody: ScanAdsPerformanceBody,
+  options?: RequestInit,
+): Promise<ScanAdsPerformance200> => {
+  return customFetch<ScanAdsPerformance200>(getScanAdsPerformanceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scanAdsPerformanceBody),
+  });
+};
+
+export const getScanAdsPerformanceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanAdsPerformance>>,
+    TError,
+    { data: BodyType<ScanAdsPerformanceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scanAdsPerformance>>,
+  TError,
+  { data: BodyType<ScanAdsPerformanceBody> },
+  TContext
+> => {
+  const mutationKey = ["scanAdsPerformance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scanAdsPerformance>>,
+    { data: BodyType<ScanAdsPerformanceBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scanAdsPerformance(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScanAdsPerformanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scanAdsPerformance>>
+>;
+export type ScanAdsPerformanceMutationBody = BodyType<ScanAdsPerformanceBody>;
+export type ScanAdsPerformanceMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Run ad-platform readers for a brand (inactive readers reported, not saved)
+ */
+export const useScanAdsPerformance = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanAdsPerformance>>,
+    TError,
+    { data: BodyType<ScanAdsPerformanceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scanAdsPerformance>>,
+  TError,
+  { data: BodyType<ScanAdsPerformanceBody> },
+  TContext
+> => {
+  return useMutation(getScanAdsPerformanceMutationOptions(options));
+};
+
+/**
+ * @summary List ads performance rows
+ */
+export const getListAdsPerformanceUrl = (params?: ListAdsPerformanceParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/ads-performance?${stringifiedParams}`
+    : `/api/ads-performance`;
+};
+
+export const listAdsPerformance = async (
+  params?: ListAdsPerformanceParams,
+  options?: RequestInit,
+): Promise<AdsPerformanceRow[]> => {
+  return customFetch<AdsPerformanceRow[]>(getListAdsPerformanceUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdsPerformanceQueryKey = (
+  params?: ListAdsPerformanceParams,
+) => {
+  return [`/api/ads-performance`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdsPerformanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdsPerformance>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdsPerformanceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdsPerformance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdsPerformanceQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdsPerformance>>
+  > = ({ signal }) => listAdsPerformance(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdsPerformance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdsPerformanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdsPerformance>>
+>;
+export type ListAdsPerformanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List ads performance rows
+ */
+
+export function useListAdsPerformance<
+  TData = Awaited<ReturnType<typeof listAdsPerformance>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdsPerformanceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdsPerformance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdsPerformanceQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Cross-platform blended ROAS + reallocation suggestion
+ */
+export const getGetAdsPerformanceSummaryUrl = (
+  params?: GetAdsPerformanceSummaryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/ads-performance/summary?${stringifiedParams}`
+    : `/api/ads-performance/summary`;
+};
+
+export const getAdsPerformanceSummary = async (
+  params?: GetAdsPerformanceSummaryParams,
+  options?: RequestInit,
+): Promise<GetAdsPerformanceSummary200> => {
+  return customFetch<GetAdsPerformanceSummary200>(
+    getGetAdsPerformanceSummaryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAdsPerformanceSummaryQueryKey = (
+  params?: GetAdsPerformanceSummaryParams,
+) => {
+  return [`/api/ads-performance/summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAdsPerformanceSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdsPerformanceSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAdsPerformanceSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdsPerformanceSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdsPerformanceSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdsPerformanceSummary>>
+  > = ({ signal }) =>
+    getAdsPerformanceSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdsPerformanceSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdsPerformanceSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdsPerformanceSummary>>
+>;
+export type GetAdsPerformanceSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Cross-platform blended ROAS + reallocation suggestion
+ */
+
+export function useGetAdsPerformanceSummary<
+  TData = Awaited<ReturnType<typeof getAdsPerformanceSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAdsPerformanceSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdsPerformanceSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdsPerformanceSummaryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate a caption + image/video prompts draft (optional Metricool push)
+ */
+export const getGenerateContentPipelineUrl = () => {
+  return `/api/content-pipeline/generate`;
+};
+
+export const generateContentPipeline = async (
+  generateContentPipelineBody: GenerateContentPipelineBody,
+  options?: RequestInit,
+): Promise<GenerateContentPipeline201> => {
+  return customFetch<GenerateContentPipeline201>(
+    getGenerateContentPipelineUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(generateContentPipelineBody),
+    },
+  );
+};
+
+export const getGenerateContentPipelineMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateContentPipeline>>,
+    TError,
+    { data: BodyType<GenerateContentPipelineBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateContentPipeline>>,
+  TError,
+  { data: BodyType<GenerateContentPipelineBody> },
+  TContext
+> => {
+  const mutationKey = ["generateContentPipeline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateContentPipeline>>,
+    { data: BodyType<GenerateContentPipelineBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateContentPipeline(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateContentPipelineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateContentPipeline>>
+>;
+export type GenerateContentPipelineMutationBody =
+  BodyType<GenerateContentPipelineBody>;
+export type GenerateContentPipelineMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Generate a caption + image/video prompts draft (optional Metricool push)
+ */
+export const useGenerateContentPipeline = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateContentPipeline>>,
+    TError,
+    { data: BodyType<GenerateContentPipelineBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateContentPipeline>>,
+  TError,
+  { data: BodyType<GenerateContentPipelineBody> },
+  TContext
+> => {
+  return useMutation(getGenerateContentPipelineMutationOptions(options));
+};
+
+/**
+ * @summary List the AI KOL characters
+ */
+export const getListKolCharactersUrl = () => {
+  return `/api/virtual-kol/characters`;
+};
+
+export const listKolCharacters = async (
+  options?: RequestInit,
+): Promise<KolCharacter[]> => {
+  return customFetch<KolCharacter[]>(getListKolCharactersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListKolCharactersQueryKey = () => {
+  return [`/api/virtual-kol/characters`] as const;
+};
+
+export const getListKolCharactersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listKolCharacters>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listKolCharacters>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListKolCharactersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listKolCharacters>>
+  > = ({ signal }) => listKolCharacters({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listKolCharacters>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListKolCharactersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listKolCharacters>>
+>;
+export type ListKolCharactersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List the AI KOL characters
+ */
+
+export function useListKolCharacters<
+  TData = Awaited<ReturnType<typeof listKolCharacters>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listKolCharacters>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListKolCharactersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List generated KOL posts
+ */
+export const getListKolPostsUrl = (params?: ListKolPostsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/virtual-kol/posts?${stringifiedParams}`
+    : `/api/virtual-kol/posts`;
+};
+
+export const listKolPosts = async (
+  params?: ListKolPostsParams,
+  options?: RequestInit,
+): Promise<KolPost[]> => {
+  return customFetch<KolPost[]>(getListKolPostsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListKolPostsQueryKey = (params?: ListKolPostsParams) => {
+  return [`/api/virtual-kol/posts`, ...(params ? [params] : [])] as const;
+};
+
+export const getListKolPostsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listKolPosts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListKolPostsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listKolPosts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListKolPostsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listKolPosts>>> = ({
+    signal,
+  }) => listKolPosts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listKolPosts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListKolPostsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listKolPosts>>
+>;
+export type ListKolPostsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List generated KOL posts
+ */
+
+export function useListKolPosts<
+  TData = Awaited<ReturnType<typeof listKolPosts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListKolPostsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listKolPosts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListKolPostsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate a KOL post (script + caption + media prompts; TTS/video gated by keys)
+ */
+export const getGenerateKolPostUrl = () => {
+  return `/api/virtual-kol/generate`;
+};
+
+export const generateKolPost = async (
+  generateKolPostBody: GenerateKolPostBody,
+  options?: RequestInit,
+): Promise<GenerateKolPost201> => {
+  return customFetch<GenerateKolPost201>(getGenerateKolPostUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateKolPostBody),
+  });
+};
+
+export const getGenerateKolPostMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateKolPost>>,
+    TError,
+    { data: BodyType<GenerateKolPostBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateKolPost>>,
+  TError,
+  { data: BodyType<GenerateKolPostBody> },
+  TContext
+> => {
+  const mutationKey = ["generateKolPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateKolPost>>,
+    { data: BodyType<GenerateKolPostBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateKolPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateKolPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateKolPost>>
+>;
+export type GenerateKolPostMutationBody = BodyType<GenerateKolPostBody>;
+export type GenerateKolPostMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Generate a KOL post (script + caption + media prompts; TTS/video gated by keys)
+ */
+export const useGenerateKolPost = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateKolPost>>,
+    TError,
+    { data: BodyType<GenerateKolPostBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateKolPost>>,
+  TError,
+  { data: BodyType<GenerateKolPostBody> },
+  TContext
+> => {
+  return useMutation(getGenerateKolPostMutationOptions(options));
+};

@@ -22,6 +22,16 @@ export const contentPlansTable = pgTable("content_plans", {
   status: text("status").default("draft").notNull(),
   rejectReason: text("reject_reason"),
   metricoolJobId: text("metricool_job_id"),
+  // ── Phase F — Content Pipeline (additive) ──────────────────────────────────
+  aiReasoning: text("ai_reasoning"),
+  trendSource: text("trend_source"),
+  strategyInboxId: integer("strategy_inbox_id"),
+  videoUrl: text("video_url"),
+  metricoolPostId: text("metricool_post_id"),
+  scheduledDate: timestamp("scheduled_date"),
+  weekNumber: integer("week_number"),
+  kolCharacterId: integer("kol_character_id"),
+  adsSuitable: boolean("ads_suitable").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

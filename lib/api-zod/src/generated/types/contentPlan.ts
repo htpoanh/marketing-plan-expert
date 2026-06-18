@@ -26,6 +26,8 @@ export interface ContentPlan {
   imagePrompt: string | null;
   /** @nullable */
   videoPrompt: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
   topic: string;
   status: string;
   /** @nullable */

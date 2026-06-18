@@ -6,12 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface RunPipelineBody {
+export interface ScanTrendBody {
   brandId: number;
-  topic: string;
-  goal: string;
-  platform: string;
-  contentCount?: number;
-  storeSituation?: string;
-  contentFormat?: string;
+  /** @nullable */
+  regionFocus?: string | null;
 }

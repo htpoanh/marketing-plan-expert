@@ -25,6 +25,24 @@ tags:
     description: AI marketing strategy generation
   - name: adsStrategy
     description: Ads Strategy Agent (M1 Audience, M2 Keywords, M3 Performance, M4 Trend)
+  - name: autoReply
+    description: Auto-Reply Engine (Google reviews + FB/IG comments unified inbox)
+  - name: strategyInbox
+    description: Strategy Inbox — ad-hoc ideas/goals analysed by Claude
+  - name: trendIntelligence
+    description: Trend Intelligence — scored trends (strength×relevance×alignment÷difficulty)
+  - name: brandMemory
+    description: Brand Memory — per-brand learning store rebuilt weekly
+  - name: marketIntelligence
+    description: Market Research — signals from news / maps / trends / reddit / tiktok
+  - name: weeklyReport
+    description: Weekly Meeting Dashboard — KPI + sections + insights
+  - name: adsPerformance
+    description: Ads Performance Reader — FB/TikTok/Google weekly pulls + budget optimizer
+  - name: contentPipeline
+    description: Content Pipeline — caption + image/video prompts + Metricool draft
+  - name: virtualKol
+    description: Virtual KOL — AI characters (script, caption, TTS, video)
 paths:
   /healthz:
     get:
@@ -940,6 +958,881 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdsCostBucket"
 
+  # ── Auto-Reply Engine (Phase G) ─────────────────────────────────────────────
+  /auto-reply/queue:
+    get:
+      operationId: listReplyQueue
+      tags: [autoReply]
+      summary: List unified inbox rows (Google reviews + FB/IG comments)
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: platform
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [google, facebook, instagram, messenger]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, auto_sent, manual_sent, escalated, skipped]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Queue rows (most recent first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReplyQueueItem"
+
+  /auto-reply/queue/{id}:
+    patch:
+      operationId: updateReplyQueueItem
+      tags: [autoReply]
+      summary: Edit the suggested reply or change status (skip) on a queue row
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReplyQueueBody"
+      responses:
+        "200":
+          description: Updated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyQueueItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auto-reply/queue/{id}/send:
+    post:
+      operationId: sendReplyQueueItem
+      tags: [autoReply]
+      summary: Send a queued/escalated reply (pushes to Google or Meta), marks manual_sent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendReplyBody"
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyQueueItem"
+        "400":
+          description: Send failed (upstream API error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auto-reply/stats:
+    get:
+      operationId: getAutoReplyStats
+      tags: [autoReply]
+      summary: Inbox stats — auto-replied today, pending, escalated, avg response time
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoReplyStats"
+
+  /auto-reply/settings/{brandId}:
+    get:
+      operationId: getAutoReplySettings
+      tags: [autoReply]
+      summary: Get per-brand auto-reply toggles + guards (defaults if no row yet)
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoReplySettings"
+    patch:
+      operationId: updateAutoReplySettings
+      tags: [autoReply]
+      summary: Update per-brand auto-reply toggles + guards (upsert)
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAutoReplySettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoReplySettings"
+
+  # ── Strategy Inbox (Phase B) ────────────────────────────────────────────────
+  /strategy-inbox:
+    get:
+      operationId: listStrategyInboxItems
+      tags: [strategyInbox]
+      summary: List strategy inbox items (filterable)
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, analyzed, incorporated, archived]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Items (most recent first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StrategyInboxItem"
+    post:
+      operationId: createStrategyInboxItem
+      tags: [strategyInbox]
+      summary: Submit an item — runs Claude analysis synchronously and saves it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStrategyInboxBody"
+      responses:
+        "201":
+          description: Created + analysed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyInboxItem"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /strategy-inbox/{id}:
+    get:
+      operationId: getStrategyInboxItem
+      tags: [strategyInbox]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyInboxItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateStrategyInboxItem
+      tags: [strategyInbox]
+      summary: Update status / incorporated week
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStrategyInboxBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyInboxItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteStrategyInboxItem
+      tags: [strategyInbox]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /strategy-inbox/{id}/reanalyze:
+    post:
+      operationId: reanalyzeStrategyInboxItem
+      tags: [strategyInbox]
+      summary: Re-run Claude analysis for an existing item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Re-analysed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyInboxItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Trend Intelligence (Phase D) ────────────────────────────────────────────
+  /trend-intelligence/scan:
+    post:
+      operationId: scanTrendIntelligence
+      tags: [trendIntelligence]
+      summary: Run Grok trend scan for a brand, score + persist insights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanTrendBody"
+      responses:
+        "200":
+          description: Scanned + scored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanTrendResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Brand not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trend-intelligence:
+    get:
+      operationId: listTrendInsights
+      tags: [trendIntelligence]
+      summary: List scored trend insights (highest score first)
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [new, proposed, backlog, skipped, actioned]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Insights
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrendInsight"
+
+  /trend-intelligence/{id}:
+    patch:
+      operationId: updateTrendInsight
+      tags: [trendIntelligence]
+      summary: Update insight status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTrendInsightBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrendInsight"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTrendInsight
+      tags: [trendIntelligence]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Brand Memory (Phase I) ──────────────────────────────────────────────────
+  /brand-memory/{brandId}:
+    get:
+      operationId: getBrandMemory
+      tags: [brandMemory]
+      summary: Get the learning memory for a brand
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Brand memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandMemory"
+        "404":
+          description: Not built yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /brand-memory/{brandId}/rebuild:
+    post:
+      operationId: rebuildBrandMemory
+      tags: [brandMemory]
+      summary: Rebuild a brand's memory from current signals
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Rebuilt memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandMemory"
+        "404":
+          description: Brand not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Market Intelligence (Phase C) ───────────────────────────────────────────
+  /market-intelligence/scan:
+    post:
+      operationId: scanMarketIntelligence
+      tags: [marketIntelligence]
+      summary: Run all collectors for a brand and persist signals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brandId: { type: integer }
+              required: [brandId]
+      responses:
+        "200":
+          description: Collected signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inserted:
+                    type: array
+                    items: { $ref: "#/components/schemas/MarketIntelligenceItem" }
+                required: [inserted]
+        "404":
+          description: Brand not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /market-intelligence:
+    get:
+      operationId: listMarketIntelligence
+      tags: [marketIntelligence]
+      summary: List collected market signals
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: source
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 300, default: 100 }
+      responses:
+        "200":
+          description: Signals (most recent first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MarketIntelligenceItem" }
+
+  /market-intelligence/{id}:
+    delete:
+      operationId: deleteMarketIntelligence
+      tags: [marketIntelligence]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Weekly Report (Phase E) ─────────────────────────────────────────────────
+  /weekly-report/generate:
+    post:
+      operationId: generateWeeklyReport
+      tags: [weeklyReport]
+      summary: Assemble + persist a new weekly report
+      responses:
+        "201":
+          description: Generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyReport"
+
+  /weekly-report:
+    get:
+      operationId: listWeeklyReports
+      tags: [weeklyReport]
+      summary: List weekly reports (most recent first)
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WeeklyReport" }
+
+  /weekly-report/{id}:
+    get:
+      operationId: getWeeklyReport
+      tags: [weeklyReport]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /weekly-report/{id}/approve:
+    post:
+      operationId: approveWeeklyReport
+      tags: [weeklyReport]
+      summary: Mark a weekly report approved
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Ads Performance (Phase A) ───────────────────────────────────────────────
+  /ads-performance/scan:
+    post:
+      operationId: scanAdsPerformance
+      tags: [adsPerformance]
+      summary: Run ad-platform readers for a brand (inactive readers reported, not saved)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brandId: { type: integer }
+              required: [brandId]
+      responses:
+        "200":
+          description: Scan result with per-platform status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  weekStart: { type: string }
+                  statuses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        platform: { type: string }
+                        active: { type: boolean }
+                        reason: { type: ["string", "null"] }
+                      required: [platform, active]
+                  inserted:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdsPerformanceRow" }
+                required: [weekStart, statuses, inserted]
+        "404":
+          description: Brand not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ads-performance:
+    get:
+      operationId: listAdsPerformance
+      tags: [adsPerformance]
+      summary: List ads performance rows
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: platform
+          in: query
+          required: false
+          schema: { type: string, enum: [facebook, tiktok, google] }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 300, default: 100 }
+      responses:
+        "200":
+          description: Rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdsPerformanceRow" }
+
+  /ads-performance/summary:
+    get:
+      operationId: getAdsPerformanceSummary
+      tags: [adsPerformance]
+      summary: Cross-platform blended ROAS + reallocation suggestion
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary: { type: object, additionalProperties: true }
+                  suggestion:
+                    oneOf:
+                      - type: object
+                        additionalProperties: true
+                      - type: "null"
+                required: [summary]
+
+  # ── Content Pipeline (Phase F) ──────────────────────────────────────────────
+  /content-pipeline/generate:
+    post:
+      operationId: generateContentPipeline
+      tags: [contentPipeline]
+      summary: Generate a caption + image/video prompts draft (optional Metricool push)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brandId: { type: integer }
+                topic: { type: string }
+                platform: { type: ["string", "null"] }
+                trendInsightId: { type: ["integer", "null"] }
+                strategyInboxId: { type: ["integer", "null"] }
+                pushMetricool: { type: boolean, default: false }
+              required: [brandId, topic]
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan: { $ref: "#/components/schemas/ContentPlan" }
+                  metricool:
+                    oneOf:
+                      - type: object
+                        additionalProperties: true
+                      - type: "null"
+                required: [plan]
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Virtual KOL (Phase H) ───────────────────────────────────────────────────
+  /virtual-kol/characters:
+    get:
+      operationId: listKolCharacters
+      tags: [virtualKol]
+      summary: List the AI KOL characters
+      responses:
+        "200":
+          description: Characters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KolCharacter" }
+
+  /virtual-kol/posts:
+    get:
+      operationId: listKolPosts
+      tags: [virtualKol]
+      summary: List generated KOL posts
+      parameters:
+        - name: characterId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KolPost" }
+
+  /virtual-kol/generate:
+    post:
+      operationId: generateKolPost
+      tags: [virtualKol]
+      summary: Generate a KOL post (script + caption + media prompts; TTS/video gated by keys)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                characterId: { type: integer }
+                topic: { type: string }
+              required: [characterId, topic]
+      responses:
+        "201":
+          description: Generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  post: { $ref: "#/components/schemas/KolPost" }
+                  voice:
+                    oneOf:
+                      - type: object
+                        additionalProperties: true
+                      - type: "null"
+                required: [post]
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Character not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1278,6 +2171,8 @@ components:
           type: ["string", "null"]
         videoPrompt:
           type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
         topic:
           type: string
         status:
@@ -1418,6 +2313,8 @@ components:
           type: integer
         storeSituation:
           type: string
+        contentFormat:
+          type: string
       required:
         - brandId
         - topic
@@ -1545,6 +2442,8 @@ components:
           type: string
         contentCount:
           type: integer
+        storeSituation:
+          type: ["string", "null"]
         status:
           type: string
         trendData:
@@ -1856,3 +2755,383 @@ components:
         - totalTokensInput
         - totalTokensOutput
         - totalCostEur
+
+    # ── Auto-Reply Engine (Phase G) ───────────────────────────────────────────
+    ReplyPlatform:
+      type: string
+      enum: [google, facebook, instagram, messenger]
+
+    ReplyIntent:
+      type: string
+      enum: [booking, price, complaint, compliment, other]
+
+    ReplyStatus:
+      type: string
+      enum: [pending, auto_sent, manual_sent, escalated, skipped]
+
+    ReplyQueueItem:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: integer }
+        platform: { $ref: "#/components/schemas/ReplyPlatform" }
+        externalId: { type: ["string", "null"] }
+        reviewId: { type: ["integer", "null"] }
+        authorName: { type: ["string", "null"] }
+        rating: { type: ["integer", "null"] }
+        originalMessage: { type: ["string", "null"] }
+        suggestedReply: { type: ["string", "null"] }
+        replyMode: { type: ["string", "null"], enum: [public, private, null] }
+        intent: { oneOf: [{ $ref: "#/components/schemas/ReplyIntent" }, { type: "null" }] }
+        sentiment: { type: ["string", "null"], description: "Decimal(3,2) as string, -1.00..1.00" }
+        status: { $ref: "#/components/schemas/ReplyStatus" }
+        statusReason: { type: ["string", "null"] }
+        sentReply: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - brandId
+        - platform
+        - status
+        - createdAt
+        - updatedAt
+
+    UpdateReplyQueueBody:
+      type: object
+      properties:
+        suggestedReply: { type: ["string", "null"] }
+        status:
+          type: ["string", "null"]
+          enum: [pending, skipped, null]
+          description: Only manual transitions are allowed here (e.g. skip a row)
+
+    SendReplyBody:
+      type: object
+      properties:
+        replyText:
+          type: ["string", "null"]
+          description: Override text to send. Defaults to the stored suggestedReply.
+
+    AutoReplyStats:
+      type: object
+      properties:
+        autoRepliedToday: { type: integer }
+        pending: { type: integer }
+        escalated: { type: integer }
+        avgResponseMinutes: { type: ["number", "null"] }
+      required:
+        - autoRepliedToday
+        - pending
+        - escalated
+        - avgResponseMinutes
+
+    AutoReplySettings:
+      type: object
+      properties:
+        brandId: { type: integer }
+        googleEnabled: { type: boolean }
+        fbCommentsEnabled: { type: boolean }
+        igCommentsEnabled: { type: boolean }
+        dailyCap: { type: integer }
+        escalateThreshold: { type: integer }
+      required:
+        - brandId
+        - googleEnabled
+        - fbCommentsEnabled
+        - igCommentsEnabled
+        - dailyCap
+        - escalateThreshold
+
+    UpdateAutoReplySettingsBody:
+      type: object
+      properties:
+        googleEnabled: { type: boolean }
+        fbCommentsEnabled: { type: boolean }
+        igCommentsEnabled: { type: boolean }
+        dailyCap: { type: integer, minimum: 1, maximum: 500 }
+        escalateThreshold: { type: integer, minimum: 0, maximum: 5 }
+
+    # ── Strategy Inbox (Phase B) ──────────────────────────────────────────────
+    StrategyInputType:
+      type: string
+      enum: [campaign_idea, company_goal, format_test, feedback, other]
+
+    StrategyPriority:
+      type: string
+      enum: [high, medium, low]
+
+    StrategyStatus:
+      type: string
+      enum: [pending, analyzed, incorporated, archived]
+
+    StrategyAnalysis:
+      type: object
+      properties:
+        summary: { type: string }
+        feasibility:
+          type: object
+          properties:
+            rating: { type: string, enum: [high, medium, low] }
+            rationale: { type: string }
+          required: [rating, rationale]
+        timeline: { type: string }
+        resources: { type: array, items: { type: string } }
+        risks: { type: array, items: { type: string } }
+        recommendedWeek: { type: string }
+        alignsWithTrends: { type: ["string", "null"] }
+      required: [summary, feasibility, timeline, resources, risks, recommendedWeek]
+
+    StrategyInboxItem:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: ["integer", "null"] }
+        inputType: { $ref: "#/components/schemas/StrategyInputType" }
+        content: { type: string }
+        priority: { $ref: "#/components/schemas/StrategyPriority" }
+        deadline: { type: ["string", "null"], format: date }
+        claudeAnalysis:
+          oneOf:
+            - $ref: "#/components/schemas/StrategyAnalysis"
+            - type: "null"
+        status: { $ref: "#/components/schemas/StrategyStatus" }
+        incorporatedInWeek: { type: ["integer", "null"] }
+        tokensInput: { type: ["integer", "null"] }
+        tokensOutput: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - brandId
+        - inputType
+        - content
+        - priority
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateStrategyInboxBody:
+      type: object
+      properties:
+        brandId:
+          type: ["integer", "null"]
+          description: null = applies to all brands
+        inputType: { $ref: "#/components/schemas/StrategyInputType" }
+        content: { type: string, minLength: 1 }
+        priority: { $ref: "#/components/schemas/StrategyPriority" }
+        deadline: { type: ["string", "null"], format: date }
+      required: [inputType, content]
+
+    UpdateStrategyInboxBody:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/StrategyStatus" }
+        incorporatedInWeek: { type: ["integer", "null"] }
+        priority: { $ref: "#/components/schemas/StrategyPriority" }
+
+    # ── Trend Intelligence (Phase D) ──────────────────────────────────────────
+    TrendInsightStatus:
+      type: string
+      enum: [new, proposed, backlog, skipped, actioned]
+
+    TrendFactors:
+      type: object
+      properties:
+        trendStrength: { type: number }
+        relevance: { type: number }
+        strategyAlignment: { type: number }
+        productionDifficulty: { type: number }
+      required: [trendStrength, relevance, strategyAlignment, productionDifficulty]
+
+    TrendInsight:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: ["integer", "null"] }
+        trendName: { type: string }
+        description: { type: ["string", "null"] }
+        source: { type: ["string", "null"] }
+        trendScore: { type: string, description: "Decimal(6,1) as string" }
+        factors:
+          oneOf:
+            - $ref: "#/components/schemas/TrendFactors"
+            - type: "null"
+        momentum: { type: ["string", "null"] }
+        estimatedWindowDays: { type: ["integer", "null"] }
+        suggestedAngle: { type: ["string", "null"] }
+        suggestedKeywords:
+          type: ["array", "null"]
+          items: { type: string }
+        strategyAlignmentNote: { type: ["string", "null"] }
+        recommendedAction: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/TrendInsightStatus" }
+        weekNumber: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - brandId
+        - trendName
+        - trendScore
+        - status
+        - createdAt
+        - updatedAt
+
+    ScanTrendBody:
+      type: object
+      properties:
+        brandId: { type: integer }
+        regionFocus: { type: ["string", "null"] }
+      required: [brandId]
+
+    ScanTrendResult:
+      type: object
+      properties:
+        inserted:
+          type: array
+          items: { $ref: "#/components/schemas/TrendInsight" }
+        costEur: { type: ["string", "null"] }
+        region: { type: string }
+      required: [inserted, region]
+
+    UpdateTrendInsightBody:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/TrendInsightStatus" }
+      required: [status]
+
+    # ── Brand Memory (Phase I) ────────────────────────────────────────────────
+    KolCharacter:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        handle: { type: string }
+        brandIds: { type: ["array", "null"], items: { type: integer } }
+        personality: { type: ["string", "null"] }
+        voiceId: { type: ["string", "null"] }
+        visualSeed: { type: ["string", "null"] }
+        language: { type: ["string", "null"] }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, handle, active, createdAt]
+
+    KolPost:
+      type: object
+      properties:
+        id: { type: integer }
+        characterId: { type: integer }
+        contentPlanId: { type: ["integer", "null"] }
+        script: { type: ["string", "null"] }
+        caption: { type: ["string", "null"] }
+        hashtags: { type: ["array", "null"], items: { type: string } }
+        imageUrl: { type: ["string", "null"] }
+        audioUrl: { type: ["string", "null"] }
+        videoUrl: { type: ["string", "null"] }
+        metricoolPostId: { type: ["string", "null"] }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, characterId, status, createdAt]
+
+    AdsPerformanceRow:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: integer }
+        platform: { type: string, enum: [facebook, tiktok, google] }
+        weekStart: { type: ["string", "null"], format: date }
+        spendEur: { type: ["string", "null"] }
+        reach: { type: ["integer", "null"] }
+        impressions: { type: ["integer", "null"] }
+        clicks: { type: ["integer", "null"] }
+        ctr: { type: ["string", "null"] }
+        cpm: { type: ["string", "null"] }
+        cpc: { type: ["string", "null"] }
+        roas: { type: ["string", "null"] }
+        topCreativeId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, brandId, platform, createdAt]
+
+    WeeklyReport:
+      type: object
+      properties:
+        id: { type: integer }
+        weekNumber: { type: integer }
+        weekStart: { type: ["string", "null"], format: date }
+        kpiData:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        sections:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        trendAnalysis: { type: ["string", "null"] }
+        chatLog: { type: array, items: { type: object, additionalProperties: true } }
+        approvedByUser: { type: boolean }
+        autoApproved: { type: boolean }
+        approvedAt: { type: ["string", "null"], format: date-time }
+        telegramSent: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required:
+        - id
+        - weekNumber
+        - approvedByUser
+        - autoApproved
+        - telegramSent
+        - createdAt
+
+    MarketIntelligenceItem:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: ["integer", "null"] }
+        weekNumber: { type: ["integer", "null"] }
+        source: { type: string }
+        category: { type: ["string", "null"] }
+        title: { type: string }
+        content:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        relevanceScore: { type: ["integer", "null"] }
+        urgency: { type: ["string", "null"] }
+        incorporated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required:
+        - id
+        - brandId
+        - source
+        - title
+        - incorporated
+        - createdAt
+
+    BrandMemory:
+      type: object
+      properties:
+        id: { type: integer }
+        brandId: { type: integer }
+        version: { type: integer }
+        topFormats: { type: array, items: { type: object, additionalProperties: true } }
+        topTopics: { type: array, items: { type: object, additionalProperties: true } }
+        bestHours: { type: array, items: { type: integer } }
+        provenHashtags: { type: array, items: { type: string } }
+        topIntentKeywords: { type: array, items: { type: object, additionalProperties: true } }
+        trendAlignments: { type: array, items: { type: object, additionalProperties: true } }
+        audienceIca:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        adsPerformanceHistory: { type: array, items: { type: object, additionalProperties: true } }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - brandId
+        - version
+        - updatedAt

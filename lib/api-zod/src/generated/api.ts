@@ -24,6 +24,7 @@ export const RunPipelineBody = zod.object({
   platform: zod.string(),
   contentCount: zod.number().optional(),
   storeSituation: zod.string().optional(),
+  contentFormat: zod.string().optional(),
 });
 
 export const RunPipelineResponse = zod.object({
@@ -34,6 +35,7 @@ export const RunPipelineResponse = zod.object({
   goal: zod.string(),
   platform: zod.string(),
   contentCount: zod.number(),
+  storeSituation: zod.string().nullish(),
   status: zod.string(),
   trendData: zod
     .union([
@@ -108,6 +110,7 @@ export const ListPipelineRunsResponseItem = zod.object({
   goal: zod.string(),
   platform: zod.string(),
   contentCount: zod.number(),
+  storeSituation: zod.string().nullish(),
   status: zod.string(),
   trendData: zod
     .union([
@@ -183,6 +186,7 @@ export const GetPipelineRunResponse = zod.object({
   goal: zod.string(),
   platform: zod.string(),
   contentCount: zod.number(),
+  storeSituation: zod.string().nullish(),
   status: zod.string(),
   trendData: zod
     .union([
@@ -553,6 +557,7 @@ export const ListContentPlansResponseItem = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -604,6 +609,7 @@ export const GenerateContentPlanResponseItem = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -635,6 +641,7 @@ export const GetContentPlanResponse = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -678,6 +685,7 @@ export const UpdateContentPlanResponse = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -713,6 +721,7 @@ export const ApproveContentPlanResponse = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -745,6 +754,7 @@ export const RejectContentPlanResponse = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -773,6 +783,7 @@ export const PublishContentPlanResponse = zod.object({
   hashtags: zod.string().nullable(),
   imagePrompt: zod.string().nullable(),
   videoPrompt: zod.string().nullable(),
+  imageUrl: zod.string().nullish(),
   topic: zod.string(),
   status: zod.string(),
   rejectReason: zod.string().nullable(),
@@ -1314,3 +1325,964 @@ export const GetAdsCostSummaryResponseItem = zod.object({
 export const GetAdsCostSummaryResponse = zod.array(
   GetAdsCostSummaryResponseItem,
 );
+
+/**
+ * @summary List unified inbox rows (Google reviews + FB/IG comments)
+ */
+export const listReplyQueueQueryLimitDefault = 50;
+export const listReplyQueueQueryLimitMax = 200;
+
+export const ListReplyQueueQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+  platform: zod
+    .enum(["google", "facebook", "instagram", "messenger"])
+    .optional(),
+  status: zod
+    .enum(["pending", "auto_sent", "manual_sent", "escalated", "skipped"])
+    .optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listReplyQueueQueryLimitMax)
+    .default(listReplyQueueQueryLimitDefault),
+});
+
+export const ListReplyQueueResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  platform: zod.enum(["google", "facebook", "instagram", "messenger"]),
+  externalId: zod.string().nullish(),
+  reviewId: zod.number().nullish(),
+  authorName: zod.string().nullish(),
+  rating: zod.number().nullish(),
+  originalMessage: zod.string().nullish(),
+  suggestedReply: zod.string().nullish(),
+  replyMode: zod
+    .union([zod.literal("public"), zod.literal("private"), zod.literal(null)])
+    .nullish(),
+  intent: zod
+    .union([
+      zod.enum(["booking", "price", "complaint", "compliment", "other"]),
+      zod.null(),
+    ])
+    .optional(),
+  sentiment: zod
+    .string()
+    .nullish()
+    .describe("Decimal(3,2) as string, -1.00..1.00"),
+  status: zod.enum([
+    "pending",
+    "auto_sent",
+    "manual_sent",
+    "escalated",
+    "skipped",
+  ]),
+  statusReason: zod.string().nullish(),
+  sentReply: zod.string().nullish(),
+  sentAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListReplyQueueResponse = zod.array(ListReplyQueueResponseItem);
+
+/**
+ * @summary Edit the suggested reply or change status (skip) on a queue row
+ */
+export const UpdateReplyQueueItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateReplyQueueItemBody = zod.object({
+  suggestedReply: zod.string().nullish(),
+  status: zod
+    .union([zod.literal("pending"), zod.literal("skipped"), zod.literal(null)])
+    .nullish()
+    .describe("Only manual transitions are allowed here (e.g. skip a row)"),
+});
+
+export const UpdateReplyQueueItemResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  platform: zod.enum(["google", "facebook", "instagram", "messenger"]),
+  externalId: zod.string().nullish(),
+  reviewId: zod.number().nullish(),
+  authorName: zod.string().nullish(),
+  rating: zod.number().nullish(),
+  originalMessage: zod.string().nullish(),
+  suggestedReply: zod.string().nullish(),
+  replyMode: zod
+    .union([zod.literal("public"), zod.literal("private"), zod.literal(null)])
+    .nullish(),
+  intent: zod
+    .union([
+      zod.enum(["booking", "price", "complaint", "compliment", "other"]),
+      zod.null(),
+    ])
+    .optional(),
+  sentiment: zod
+    .string()
+    .nullish()
+    .describe("Decimal(3,2) as string, -1.00..1.00"),
+  status: zod.enum([
+    "pending",
+    "auto_sent",
+    "manual_sent",
+    "escalated",
+    "skipped",
+  ]),
+  statusReason: zod.string().nullish(),
+  sentReply: zod.string().nullish(),
+  sentAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Send a queued/escalated reply (pushes to Google or Meta), marks manual_sent
+ */
+export const SendReplyQueueItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendReplyQueueItemBody = zod.object({
+  replyText: zod
+    .string()
+    .nullish()
+    .describe("Override text to send. Defaults to the stored suggestedReply."),
+});
+
+export const SendReplyQueueItemResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  platform: zod.enum(["google", "facebook", "instagram", "messenger"]),
+  externalId: zod.string().nullish(),
+  reviewId: zod.number().nullish(),
+  authorName: zod.string().nullish(),
+  rating: zod.number().nullish(),
+  originalMessage: zod.string().nullish(),
+  suggestedReply: zod.string().nullish(),
+  replyMode: zod
+    .union([zod.literal("public"), zod.literal("private"), zod.literal(null)])
+    .nullish(),
+  intent: zod
+    .union([
+      zod.enum(["booking", "price", "complaint", "compliment", "other"]),
+      zod.null(),
+    ])
+    .optional(),
+  sentiment: zod
+    .string()
+    .nullish()
+    .describe("Decimal(3,2) as string, -1.00..1.00"),
+  status: zod.enum([
+    "pending",
+    "auto_sent",
+    "manual_sent",
+    "escalated",
+    "skipped",
+  ]),
+  statusReason: zod.string().nullish(),
+  sentReply: zod.string().nullish(),
+  sentAt: zod.date().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Inbox stats — auto-replied today, pending, escalated, avg response time
+ */
+export const GetAutoReplyStatsQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+});
+
+export const GetAutoReplyStatsResponse = zod.object({
+  autoRepliedToday: zod.number(),
+  pending: zod.number(),
+  escalated: zod.number(),
+  avgResponseMinutes: zod.number().nullable(),
+});
+
+/**
+ * @summary Get per-brand auto-reply toggles + guards (defaults if no row yet)
+ */
+export const GetAutoReplySettingsParams = zod.object({
+  brandId: zod.coerce.number(),
+});
+
+export const GetAutoReplySettingsResponse = zod.object({
+  brandId: zod.number(),
+  googleEnabled: zod.boolean(),
+  fbCommentsEnabled: zod.boolean(),
+  igCommentsEnabled: zod.boolean(),
+  dailyCap: zod.number(),
+  escalateThreshold: zod.number(),
+});
+
+/**
+ * @summary Update per-brand auto-reply toggles + guards (upsert)
+ */
+export const UpdateAutoReplySettingsParams = zod.object({
+  brandId: zod.coerce.number(),
+});
+
+export const updateAutoReplySettingsBodyDailyCapMax = 500;
+
+export const updateAutoReplySettingsBodyEscalateThresholdMin = 0;
+export const updateAutoReplySettingsBodyEscalateThresholdMax = 5;
+
+export const UpdateAutoReplySettingsBody = zod.object({
+  googleEnabled: zod.boolean().optional(),
+  fbCommentsEnabled: zod.boolean().optional(),
+  igCommentsEnabled: zod.boolean().optional(),
+  dailyCap: zod
+    .number()
+    .min(1)
+    .max(updateAutoReplySettingsBodyDailyCapMax)
+    .optional(),
+  escalateThreshold: zod
+    .number()
+    .min(updateAutoReplySettingsBodyEscalateThresholdMin)
+    .max(updateAutoReplySettingsBodyEscalateThresholdMax)
+    .optional(),
+});
+
+export const UpdateAutoReplySettingsResponse = zod.object({
+  brandId: zod.number(),
+  googleEnabled: zod.boolean(),
+  fbCommentsEnabled: zod.boolean(),
+  igCommentsEnabled: zod.boolean(),
+  dailyCap: zod.number(),
+  escalateThreshold: zod.number(),
+});
+
+/**
+ * @summary List strategy inbox items (filterable)
+ */
+export const listStrategyInboxItemsQueryLimitDefault = 50;
+export const listStrategyInboxItemsQueryLimitMax = 200;
+
+export const ListStrategyInboxItemsQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+  status: zod
+    .enum(["pending", "analyzed", "incorporated", "archived"])
+    .optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listStrategyInboxItemsQueryLimitMax)
+    .default(listStrategyInboxItemsQueryLimitDefault),
+});
+
+export const ListStrategyInboxItemsResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  inputType: zod.enum([
+    "campaign_idea",
+    "company_goal",
+    "format_test",
+    "feedback",
+    "other",
+  ]),
+  content: zod.string(),
+  priority: zod.enum(["high", "medium", "low"]),
+  deadline: zod.date().nullish(),
+  claudeAnalysis: zod
+    .union([
+      zod.object({
+        summary: zod.string(),
+        feasibility: zod.object({
+          rating: zod.enum(["high", "medium", "low"]),
+          rationale: zod.string(),
+        }),
+        timeline: zod.string(),
+        resources: zod.array(zod.string()),
+        risks: zod.array(zod.string()),
+        recommendedWeek: zod.string(),
+        alignsWithTrends: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  status: zod.enum(["pending", "analyzed", "incorporated", "archived"]),
+  incorporatedInWeek: zod.number().nullish(),
+  tokensInput: zod.number().nullish(),
+  tokensOutput: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListStrategyInboxItemsResponse = zod.array(
+  ListStrategyInboxItemsResponseItem,
+);
+
+/**
+ * @summary Submit an item — runs Claude analysis synchronously and saves it
+ */
+
+export const CreateStrategyInboxItemBody = zod.object({
+  brandId: zod.number().nullish().describe("null = applies to all brands"),
+  inputType: zod.enum([
+    "campaign_idea",
+    "company_goal",
+    "format_test",
+    "feedback",
+    "other",
+  ]),
+  content: zod.string().min(1),
+  priority: zod.enum(["high", "medium", "low"]).optional(),
+  deadline: zod.date().nullish(),
+});
+
+export const GetStrategyInboxItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStrategyInboxItemResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  inputType: zod.enum([
+    "campaign_idea",
+    "company_goal",
+    "format_test",
+    "feedback",
+    "other",
+  ]),
+  content: zod.string(),
+  priority: zod.enum(["high", "medium", "low"]),
+  deadline: zod.date().nullish(),
+  claudeAnalysis: zod
+    .union([
+      zod.object({
+        summary: zod.string(),
+        feasibility: zod.object({
+          rating: zod.enum(["high", "medium", "low"]),
+          rationale: zod.string(),
+        }),
+        timeline: zod.string(),
+        resources: zod.array(zod.string()),
+        risks: zod.array(zod.string()),
+        recommendedWeek: zod.string(),
+        alignsWithTrends: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  status: zod.enum(["pending", "analyzed", "incorporated", "archived"]),
+  incorporatedInWeek: zod.number().nullish(),
+  tokensInput: zod.number().nullish(),
+  tokensOutput: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Update status / incorporated week
+ */
+export const UpdateStrategyInboxItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateStrategyInboxItemBody = zod.object({
+  status: zod
+    .enum(["pending", "analyzed", "incorporated", "archived"])
+    .optional(),
+  incorporatedInWeek: zod.number().nullish(),
+  priority: zod.enum(["high", "medium", "low"]).optional(),
+});
+
+export const UpdateStrategyInboxItemResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  inputType: zod.enum([
+    "campaign_idea",
+    "company_goal",
+    "format_test",
+    "feedback",
+    "other",
+  ]),
+  content: zod.string(),
+  priority: zod.enum(["high", "medium", "low"]),
+  deadline: zod.date().nullish(),
+  claudeAnalysis: zod
+    .union([
+      zod.object({
+        summary: zod.string(),
+        feasibility: zod.object({
+          rating: zod.enum(["high", "medium", "low"]),
+          rationale: zod.string(),
+        }),
+        timeline: zod.string(),
+        resources: zod.array(zod.string()),
+        risks: zod.array(zod.string()),
+        recommendedWeek: zod.string(),
+        alignsWithTrends: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  status: zod.enum(["pending", "analyzed", "incorporated", "archived"]),
+  incorporatedInWeek: zod.number().nullish(),
+  tokensInput: zod.number().nullish(),
+  tokensOutput: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+export const DeleteStrategyInboxItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Re-run Claude analysis for an existing item
+ */
+export const ReanalyzeStrategyInboxItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ReanalyzeStrategyInboxItemResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  inputType: zod.enum([
+    "campaign_idea",
+    "company_goal",
+    "format_test",
+    "feedback",
+    "other",
+  ]),
+  content: zod.string(),
+  priority: zod.enum(["high", "medium", "low"]),
+  deadline: zod.date().nullish(),
+  claudeAnalysis: zod
+    .union([
+      zod.object({
+        summary: zod.string(),
+        feasibility: zod.object({
+          rating: zod.enum(["high", "medium", "low"]),
+          rationale: zod.string(),
+        }),
+        timeline: zod.string(),
+        resources: zod.array(zod.string()),
+        risks: zod.array(zod.string()),
+        recommendedWeek: zod.string(),
+        alignsWithTrends: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  status: zod.enum(["pending", "analyzed", "incorporated", "archived"]),
+  incorporatedInWeek: zod.number().nullish(),
+  tokensInput: zod.number().nullish(),
+  tokensOutput: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Run Grok trend scan for a brand, score + persist insights
+ */
+export const ScanTrendIntelligenceBody = zod.object({
+  brandId: zod.number(),
+  regionFocus: zod.string().nullish(),
+});
+
+export const ScanTrendIntelligenceResponse = zod.object({
+  inserted: zod.array(
+    zod.object({
+      id: zod.number(),
+      brandId: zod.number().nullable(),
+      trendName: zod.string(),
+      description: zod.string().nullish(),
+      source: zod.string().nullish(),
+      trendScore: zod.string().describe("Decimal(6,1) as string"),
+      factors: zod
+        .union([
+          zod.object({
+            trendStrength: zod.number(),
+            relevance: zod.number(),
+            strategyAlignment: zod.number(),
+            productionDifficulty: zod.number(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      momentum: zod.string().nullish(),
+      estimatedWindowDays: zod.number().nullish(),
+      suggestedAngle: zod.string().nullish(),
+      suggestedKeywords: zod.array(zod.string()).nullish(),
+      strategyAlignmentNote: zod.string().nullish(),
+      recommendedAction: zod.string().nullish(),
+      status: zod.enum(["new", "proposed", "backlog", "skipped", "actioned"]),
+      weekNumber: zod.number().nullish(),
+      createdAt: zod.date(),
+      updatedAt: zod.date(),
+    }),
+  ),
+  costEur: zod.string().nullish(),
+  region: zod.string(),
+});
+
+/**
+ * @summary List scored trend insights (highest score first)
+ */
+export const listTrendInsightsQueryLimitDefault = 50;
+export const listTrendInsightsQueryLimitMax = 200;
+
+export const ListTrendInsightsQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+  status: zod
+    .enum(["new", "proposed", "backlog", "skipped", "actioned"])
+    .optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listTrendInsightsQueryLimitMax)
+    .default(listTrendInsightsQueryLimitDefault),
+});
+
+export const ListTrendInsightsResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  trendName: zod.string(),
+  description: zod.string().nullish(),
+  source: zod.string().nullish(),
+  trendScore: zod.string().describe("Decimal(6,1) as string"),
+  factors: zod
+    .union([
+      zod.object({
+        trendStrength: zod.number(),
+        relevance: zod.number(),
+        strategyAlignment: zod.number(),
+        productionDifficulty: zod.number(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  momentum: zod.string().nullish(),
+  estimatedWindowDays: zod.number().nullish(),
+  suggestedAngle: zod.string().nullish(),
+  suggestedKeywords: zod.array(zod.string()).nullish(),
+  strategyAlignmentNote: zod.string().nullish(),
+  recommendedAction: zod.string().nullish(),
+  status: zod.enum(["new", "proposed", "backlog", "skipped", "actioned"]),
+  weekNumber: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const ListTrendInsightsResponse = zod.array(
+  ListTrendInsightsResponseItem,
+);
+
+/**
+ * @summary Update insight status
+ */
+export const UpdateTrendInsightParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTrendInsightBody = zod.object({
+  status: zod.enum(["new", "proposed", "backlog", "skipped", "actioned"]),
+});
+
+export const UpdateTrendInsightResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  trendName: zod.string(),
+  description: zod.string().nullish(),
+  source: zod.string().nullish(),
+  trendScore: zod.string().describe("Decimal(6,1) as string"),
+  factors: zod
+    .union([
+      zod.object({
+        trendStrength: zod.number(),
+        relevance: zod.number(),
+        strategyAlignment: zod.number(),
+        productionDifficulty: zod.number(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  momentum: zod.string().nullish(),
+  estimatedWindowDays: zod.number().nullish(),
+  suggestedAngle: zod.string().nullish(),
+  suggestedKeywords: zod.array(zod.string()).nullish(),
+  strategyAlignmentNote: zod.string().nullish(),
+  recommendedAction: zod.string().nullish(),
+  status: zod.enum(["new", "proposed", "backlog", "skipped", "actioned"]),
+  weekNumber: zod.number().nullish(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+export const DeleteTrendInsightParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get the learning memory for a brand
+ */
+export const GetBrandMemoryParams = zod.object({
+  brandId: zod.coerce.number(),
+});
+
+export const GetBrandMemoryResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  version: zod.number(),
+  topFormats: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  topTopics: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  bestHours: zod.array(zod.number()).optional(),
+  provenHashtags: zod.array(zod.string()).optional(),
+  topIntentKeywords: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  trendAlignments: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  audienceIca: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  adsPerformanceHistory: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Rebuild a brand's memory from current signals
+ */
+export const RebuildBrandMemoryParams = zod.object({
+  brandId: zod.coerce.number(),
+});
+
+export const RebuildBrandMemoryResponse = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  version: zod.number(),
+  topFormats: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  topTopics: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  bestHours: zod.array(zod.number()).optional(),
+  provenHashtags: zod.array(zod.string()).optional(),
+  topIntentKeywords: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  trendAlignments: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  audienceIca: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  adsPerformanceHistory: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .optional(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Run all collectors for a brand and persist signals
+ */
+export const ScanMarketIntelligenceBody = zod.object({
+  brandId: zod.number(),
+});
+
+export const ScanMarketIntelligenceResponse = zod.object({
+  inserted: zod.array(
+    zod.object({
+      id: zod.number(),
+      brandId: zod.number().nullable(),
+      weekNumber: zod.number().nullish(),
+      source: zod.string(),
+      category: zod.string().nullish(),
+      title: zod.string(),
+      content: zod
+        .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+        .optional(),
+      relevanceScore: zod.number().nullish(),
+      urgency: zod.string().nullish(),
+      incorporated: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary List collected market signals
+ */
+export const listMarketIntelligenceQueryLimitDefault = 100;
+export const listMarketIntelligenceQueryLimitMax = 300;
+
+export const ListMarketIntelligenceQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+  source: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listMarketIntelligenceQueryLimitMax)
+    .default(listMarketIntelligenceQueryLimitDefault),
+});
+
+export const ListMarketIntelligenceResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number().nullable(),
+  weekNumber: zod.number().nullish(),
+  source: zod.string(),
+  category: zod.string().nullish(),
+  title: zod.string(),
+  content: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  relevanceScore: zod.number().nullish(),
+  urgency: zod.string().nullish(),
+  incorporated: zod.boolean(),
+  createdAt: zod.date(),
+});
+export const ListMarketIntelligenceResponse = zod.array(
+  ListMarketIntelligenceResponseItem,
+);
+
+export const DeleteMarketIntelligenceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List weekly reports (most recent first)
+ */
+export const listWeeklyReportsQueryLimitDefault = 20;
+export const listWeeklyReportsQueryLimitMax = 100;
+
+export const ListWeeklyReportsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listWeeklyReportsQueryLimitMax)
+    .default(listWeeklyReportsQueryLimitDefault),
+});
+
+export const ListWeeklyReportsResponseItem = zod.object({
+  id: zod.number(),
+  weekNumber: zod.number(),
+  weekStart: zod.date().nullish(),
+  kpiData: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  sections: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  trendAnalysis: zod.string().nullish(),
+  chatLog: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  approvedByUser: zod.boolean(),
+  autoApproved: zod.boolean(),
+  approvedAt: zod.date().nullish(),
+  telegramSent: zod.boolean(),
+  createdAt: zod.date(),
+});
+export const ListWeeklyReportsResponse = zod.array(
+  ListWeeklyReportsResponseItem,
+);
+
+export const GetWeeklyReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetWeeklyReportResponse = zod.object({
+  id: zod.number(),
+  weekNumber: zod.number(),
+  weekStart: zod.date().nullish(),
+  kpiData: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  sections: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  trendAnalysis: zod.string().nullish(),
+  chatLog: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  approvedByUser: zod.boolean(),
+  autoApproved: zod.boolean(),
+  approvedAt: zod.date().nullish(),
+  telegramSent: zod.boolean(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Mark a weekly report approved
+ */
+export const ApproveWeeklyReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ApproveWeeklyReportResponse = zod.object({
+  id: zod.number(),
+  weekNumber: zod.number(),
+  weekStart: zod.date().nullish(),
+  kpiData: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  sections: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  trendAnalysis: zod.string().nullish(),
+  chatLog: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  approvedByUser: zod.boolean(),
+  autoApproved: zod.boolean(),
+  approvedAt: zod.date().nullish(),
+  telegramSent: zod.boolean(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Run ad-platform readers for a brand (inactive readers reported, not saved)
+ */
+export const ScanAdsPerformanceBody = zod.object({
+  brandId: zod.number(),
+});
+
+export const ScanAdsPerformanceResponse = zod.object({
+  weekStart: zod.string(),
+  statuses: zod.array(
+    zod.object({
+      platform: zod.string(),
+      active: zod.boolean(),
+      reason: zod.string().nullish(),
+    }),
+  ),
+  inserted: zod.array(
+    zod.object({
+      id: zod.number(),
+      brandId: zod.number(),
+      platform: zod.enum(["facebook", "tiktok", "google"]),
+      weekStart: zod.date().nullish(),
+      spendEur: zod.string().nullish(),
+      reach: zod.number().nullish(),
+      impressions: zod.number().nullish(),
+      clicks: zod.number().nullish(),
+      ctr: zod.string().nullish(),
+      cpm: zod.string().nullish(),
+      cpc: zod.string().nullish(),
+      roas: zod.string().nullish(),
+      topCreativeId: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary List ads performance rows
+ */
+export const listAdsPerformanceQueryLimitDefault = 100;
+export const listAdsPerformanceQueryLimitMax = 300;
+
+export const ListAdsPerformanceQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+  platform: zod.enum(["facebook", "tiktok", "google"]).optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAdsPerformanceQueryLimitMax)
+    .default(listAdsPerformanceQueryLimitDefault),
+});
+
+export const ListAdsPerformanceResponseItem = zod.object({
+  id: zod.number(),
+  brandId: zod.number(),
+  platform: zod.enum(["facebook", "tiktok", "google"]),
+  weekStart: zod.date().nullish(),
+  spendEur: zod.string().nullish(),
+  reach: zod.number().nullish(),
+  impressions: zod.number().nullish(),
+  clicks: zod.number().nullish(),
+  ctr: zod.string().nullish(),
+  cpm: zod.string().nullish(),
+  cpc: zod.string().nullish(),
+  roas: zod.string().nullish(),
+  topCreativeId: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const ListAdsPerformanceResponse = zod.array(
+  ListAdsPerformanceResponseItem,
+);
+
+/**
+ * @summary Cross-platform blended ROAS + reallocation suggestion
+ */
+export const GetAdsPerformanceSummaryQueryParams = zod.object({
+  brandId: zod.coerce.number().optional(),
+});
+
+export const GetAdsPerformanceSummaryResponse = zod.object({
+  summary: zod.record(zod.string(), zod.unknown()),
+  suggestion: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+});
+
+/**
+ * @summary Generate a caption + image/video prompts draft (optional Metricool push)
+ */
+export const generateContentPipelineBodyPushMetricoolDefault = false;
+
+export const GenerateContentPipelineBody = zod.object({
+  brandId: zod.number(),
+  topic: zod.string(),
+  platform: zod.string().nullish(),
+  trendInsightId: zod.number().nullish(),
+  strategyInboxId: zod.number().nullish(),
+  pushMetricool: zod
+    .boolean()
+    .default(generateContentPipelineBodyPushMetricoolDefault),
+});
+
+/**
+ * @summary List the AI KOL characters
+ */
+export const ListKolCharactersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  handle: zod.string(),
+  brandIds: zod.array(zod.number()).nullish(),
+  personality: zod.string().nullish(),
+  voiceId: zod.string().nullish(),
+  visualSeed: zod.string().nullish(),
+  language: zod.string().nullish(),
+  active: zod.boolean(),
+  createdAt: zod.date(),
+});
+export const ListKolCharactersResponse = zod.array(
+  ListKolCharactersResponseItem,
+);
+
+/**
+ * @summary List generated KOL posts
+ */
+export const listKolPostsQueryLimitDefault = 50;
+export const listKolPostsQueryLimitMax = 200;
+
+export const ListKolPostsQueryParams = zod.object({
+  characterId: zod.coerce.number().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listKolPostsQueryLimitMax)
+    .default(listKolPostsQueryLimitDefault),
+});
+
+export const ListKolPostsResponseItem = zod.object({
+  id: zod.number(),
+  characterId: zod.number(),
+  contentPlanId: zod.number().nullish(),
+  script: zod.string().nullish(),
+  caption: zod.string().nullish(),
+  hashtags: zod.array(zod.string()).nullish(),
+  imageUrl: zod.string().nullish(),
+  audioUrl: zod.string().nullish(),
+  videoUrl: zod.string().nullish(),
+  metricoolPostId: zod.string().nullish(),
+  status: zod.string(),
+  createdAt: zod.date(),
+});
+export const ListKolPostsResponse = zod.array(ListKolPostsResponseItem);
+
+/**
+ * @summary Generate a KOL post (script + caption + media prompts; TTS/video gated by keys)
+ */
+export const GenerateKolPostBody = zod.object({
+  characterId: zod.number(),
+  topic: zod.string(),
+});

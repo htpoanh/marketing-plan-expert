@@ -19,6 +19,8 @@ export interface PipelineRun {
   goal: string;
   platform: string;
   contentCount: number;
+  /** @nullable */
+  storeSituation?: string | null;
   status: string;
   trendData?: TrendData | null;
   strategyData?: StrategyData | null;

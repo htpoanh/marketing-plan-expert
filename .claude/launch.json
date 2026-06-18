@@ -6,7 +6,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "DATABASE_URL=postgresql://marketing:marketing123@localhost:5432/marketing_plan PORT=3001 AI_INTEGRATIONS_ANTHROPIC_BASE_URL=https://api.anthropic.com AI_INTEGRATIONS_ANTHROPIC_API_KEY=placeholder AI_INTEGRATIONS_GEMINI_BASE_URL=https://generativelanguage.googleapis.com AI_INTEGRATIONS_GEMINI_API_KEY=AIzaSyABN0J1IfjgV6KVb1nIkmeaipgcKa5HhbM OPENAI_API_KEY=placeholder GROK_API_KEY=xai-Pp9OzDQEMhUXvHD6fLbkigTYHxh6LZbUTtPJ2cZktTgXo0jOpe1awCF4WfShKBMIxGkldCjsgO0VVqDH ADMIN_PASSWORD=admin SESSION_SECRET=local-dev-secret /usr/local/lib/node_modules/corepack/shims/pnpm --dir /Users/phuongoanhwaldegger/Downloads/Marketing-Plan-Expert --filter @workspace/api-server run dev"
+        "DATABASE_URL=postgresql://marketing:marketing123@localhost:5432/marketing_plan PORT=3001 AI_INTEGRATIONS_ANTHROPIC_BASE_URL=https://api.anthropic.com AI_INTEGRATIONS_ANTHROPIC_API_KEY=placeholder AI_INTEGRATIONS_GEMINI_BASE_URL=https://generativelanguage.googleapis.com AI_INTEGRATIONS_GEMINI_API_KEY=AIzaSyABN0J1IfjgV6KVb1nIkmeaipgcKa5HhbM OPENAI_API_KEY=placeholder META_APP_SECRET=dev-meta-app-secret ADMIN_PASSWORD=admin SESSION_SECRET=local-dev-secret /usr/local/lib/node_modules/corepack/shims/pnpm --dir /Users/phuongoanhwaldegger/Downloads/Marketing-Plan-Expert --filter @workspace/api-server run dev"
       ],
       "port": 3001
     },
@@ -18,6 +18,15 @@
         "PORT=5173 BASE_PATH=/ VITE_API_PORT=3001 /usr/local/lib/node_modules/corepack/shims/pnpm --dir /Users/phuongoanhwaldegger/Downloads/Marketing-Plan-Expert --filter @workspace/marketing-platform run dev"
       ],
       "port": 5173
+    },
+    {
+      "name": "Frontend (this checkout)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=5174 BASE_PATH=/ VITE_API_PORT=3002 pnpm --dir /Users/phuongoanhwaldegger/Documents/PW-Projects/marketing/marketing-plan-expert --filter @workspace/marketing-platform run dev"
+      ],
+      "port": 5174
     }
   ]
 }
